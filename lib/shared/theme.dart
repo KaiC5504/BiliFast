@@ -273,8 +273,6 @@ abstract final class BiliMetrics {
   static const hudGap = 19 / 3;
   static const hudFont = 14.0;
 
-  /// MiSans sits higher in its line than the official app's PingFang; this brings the labels level with 25's.
-  static const hudLabelDrop = 0.0;
   static const hudArrowWidth = 31 / 3;
   static const hudArrowHeight = 41 / 3;
   static const hudArrowStep = 22 / 3;
@@ -356,8 +354,6 @@ abstract final class BiliMetrics {
   static const endCaptionFont = 12.0;
   static const endCaptionGap = 3.8;
 
-  /// MiSans draws 推荐视频 higher in its line than PingFang; this brings it level with 26's.
-  static const endCaptionDrop = 0.0;
   static const endCoverWidth = 128.0;
   static const endCoverHeight = 72.0;
   static const endCoverRadius = 5.0;
@@ -388,8 +384,6 @@ abstract final class BiliMetrics {
   static const endButtonWidth = 78.0;
   static const endButtonHeight = 30.0;
 
-  /// MiSans sits higher in its line than the official app's PingFang; this centres 立即播放 in its pill as on 26.
-  static const endButtonTextDrop = 0.0;
   static const endButtonTrailing = 12.0;
   static const endActionsLeading = 13.7;
   static const endActionFont = 14.0;
@@ -462,8 +456,6 @@ abstract final class BiliMetrics {
   static const chromeFieldFill = Color(0xCCFFFFFF);
   static const chromeFieldInk = Color(0x99000000);
 
-  /// MiSans sits higher in its line than PingFang; this brings the field's text level with 04's.
-  static const chromeFieldDrop = 0.0;
   static const chromeSpeedGap = 14.0;
   static const chromeQualityGap = 23.0;
   static const chromeTextPad = 8.0;
@@ -766,14 +758,10 @@ abstract final class BiliMetrics {
   static const sheetPlayingGap = 6.5;
   static const sheetMetaText = 12.0;
 
-  /// MiSans digits are narrower than the official PingFang's.
-  static const sheetMetaSpacing = 0.0;
   static const sheetMetaLine = 16.0;
   static const sheetDateCentre = 51.1;
   static const sheetCountsCentre = 69.7;
 
-  /// MiSans digits sit higher in their line than PingFang's, which centre on the count glyphs.
-  static const sheetCountTextDrop = 0.0;
   static const sheetCountGlyphWidth = 13.4;
   static const sheetCountLead = 1.0;
   static const sheetCountGlyphHeight = 11.4;
@@ -1017,17 +1005,6 @@ abstract final class IntroTheme {
   static const tagsBottom = 23 / 3;
 
   static const expandDuration = Duration(milliseconds: 280);
-
-  /// MiSans's Chinese is about 2% wider than the official PingFang, which in turn spaces digits and Latin letters
-  /// away from Chinese; these bring each line to the official width, so the description wraps where 18's does. The
-  /// title's two differences cancel out.
-  static const nameSpacing = 0.0;
-  static const fansSpacing = 0.0;
-  static const metaSpacing = 0.0;
-  static const proseSpacing = 0.0;
-
-  /// MiSans sets the counts half a point higher in their line than PingFang.
-  static const fansDrop = 0.0;
 
   /// 个人观点，仅供参考 (font-check 02 and 03): a 16 pt line 2 under the meta line, its ⓘ (a ring 13.33 across) where the
   /// meta line's ▶ is and the text 3.2 after it. Collapsed, the actions sit only 16 lower for it, so the line's last
@@ -1483,7 +1460,6 @@ abstract final class VerticalActionTheme {
   static const fieldInset = 14.6;
   static const fieldText = 12.0;
   static const fieldInk = Color(0xFF939393);
-  static const fieldDrop = 0.0;
 
   /// 09's column: 44 wide, centred 27 in from the right edge, items 69 apart with the icon centre 27.5 above its
   /// count's; the last count's line ends 62.5 above the bottom row's bottom, about where the bar's touch starts.
@@ -1516,17 +1492,12 @@ abstract final class VerticalActionTheme {
   static const fansText = 11.5;
   static const fans = Color(0xE6FFFFFF);
 
-  /// MiSans sits higher in its line than the official app's PingFang; these bring the name and 粉丝 level with 09's.
-  static const nameDrop = 0.0;
-  static const fansDrop = 0.0;
-
   /// + 关注: 60 × 24 on 09, 8.7 after the name.
   static const followGap = 8.7;
   static const followHeight = 24.0;
   static const followLead = 11.5;
   static const followTrailing = 10.0;
   static const followText = 13.0;
-  static const followTextDrop = 0.0;
   static const followPlus = 9.0;
   static const followPlusStroke = 1.3;
   static const followPlusGap = 5.0;
@@ -1555,8 +1526,6 @@ abstract final class VerticalActionTheme {
   static const sheetStarGap = 2.5;
   static const sheetPillText = 13.0;
 
-  /// MiSans sits higher in its line than PingFang; this centres 收藏 in its pill as on 19.
-  static const sheetPillTextDrop = 0.0;
   static const sheetPill = Color(0xFFED7098);
   static const sheetPillLabel = Color(0xFFFFFFFF);
   static const sheetSubscribedFill = BiliColors.pageGrey;
@@ -1973,9 +1942,6 @@ abstract final class CommentRowTheme {
     leadingDistribution: TextLeadingDistribution.even,
     color: color,
   );
-
-  /// MiSans sets the meta line's text a point higher in its line than PingFang does on 13.
-  static const metaDrop = 0.0;
 }
 
 /// 评论's list, its sort header, footers and 发条评论 bar, and 评论详情's header and band (10-13), measured at 3 px per
@@ -2065,13 +2031,6 @@ abstract final class CommentListTheme {
 
   /// The band starts 20 below the root's meta text's centre, where a reply's hairline does (13 and font-check 04).
   static const bandGap = 20 - CommentRowTheme.metaTextRise - CommentRowTheme.metaHeight / 2;
-
-  /// MiSans sets Chinese wider than the official PingFang (热门评论 37.3 px a character on 10, MiSans 38.7; 按热度 33
-  /// against 36); these close most of it without crowding the glyphs.
-  static const sortTitleSpacing = 0.0;
-  static const sortSpacing = 0.0;
-  static const fieldSpacing = 0.0;
-  static const threadTitleSpacing = 0.0;
 }
 
 /// A comment's rich text and the picture viewer.
@@ -2796,8 +2755,6 @@ abstract final class DanmakuPanelTheme {
   static const resetGap = 3.0;
   static const resetTrailing = 1.0;
 
-  /// MiSans sets 重置弹幕设置 a point wider than 08's PingFang, which would push ↻ left of where 08 has it.
-  static const resetSpacing = 0.0;
   static const endGap = 6.0;
 
   /// The portrait sheet's content starts this far under its grabber.
@@ -2882,10 +2839,6 @@ abstract final class BlockWordsTheme {
   static const fieldRadius = 3.5;
   static const fieldPadX = 10.0;
   static const fieldText = 12.0;
-
-  /// MiSans's Chinese is about 5% wider than 30's PingFang at 12 pt; this brings the placeholder and the tabs to its
-  /// widths.
-  static const smallSpacing = 0.0;
 
   /// 添加 and 同步: white at 20% over the dim.
   static const buttonFill = Color(0x33FFFFFF);
@@ -2995,9 +2948,6 @@ abstract final class DanmakuSendTheme {
   static const verticalFieldPad = 12.0;
   static const placeholder = Color(0xFFC9CCCF);
 
-  /// MiSans sets Chinese a touch wider than the official PingFang: this ends the placeholder where 22's and 36's do.
-  static const placeholderSpacing = 0.0;
-
   /// 竖屏's placeholder is smaller and darker than the text it gives way to (36, 37).
   static const verticalPlaceholder = Color(0xFF95999F);
   static const verticalPlaceholderFont = 13.0;
@@ -3028,7 +2978,6 @@ abstract final class DanmakuSendTheme {
   static const rowHeight = 54.0;
   static const labelWidth = 64.0;
   static const labelFont = 12.0;
-  static const labelSpacing = 0.0;
   static const darkSecondary = Color(0xFF95999F);
   static const lightSecondary = Color(0xFF9499A0);
   static const option = 94.0;
@@ -3282,9 +3231,6 @@ abstract final class HistoryTheme {
   /// Every other word on the page and its sheet is regular (45, 47, 48).
   static const textWeight = FontWeight.w400;
 
-  /// MiSans sets 历史记录 1 pt lower in the bar than 45's.
-  static const titleDrop = 0.0;
-
   /// 今天, 昨天 and 更早: 46 tall, pinned while their rows scroll under them.
   static const headerHeight = 46.0;
   static const headerText = 16.0;
@@ -3320,8 +3266,6 @@ abstract final class HistoryTheme {
   static const metaGap = 2.3;
   static const metaBottom = 1.6;
 
-  /// MiSans digits are narrower than PingFang's, so the time would end 9 pt short of 45's.
-  static const timeSpacing = 0.0;
   static const meta = BiliColors.secondaryText;
   static const glyphBox = 41 / 3;
   static const glyphGap = 3.3;
@@ -3359,8 +3303,6 @@ abstract final class HistoryTheme {
   /// The time on the cover: a 14 tall pill of half black, 3.7 from the right and 4 from the bottom.
   static const pillText = 11.0;
 
-  /// MiSans digits stand taller and wider than the official app's; this size matches 45's ink.
-  static const pillFont = pillText;
   static const pillHeight = 14.0;
   static const pillPadX = 14 / 3;
   static const pillRight = 11 / 3;
@@ -3427,9 +3369,6 @@ abstract final class HistoryTheme {
   static const sheetCancelHeight = 55.0;
   static const sheetCancelText = 16.0;
   static const sheetCancelInk = Color(0xFF505050);
-
-  /// MiSans sets its text higher in the line than PingFang; this brings the sheet's words level with 48's.
-  static const sheetTextDrop = 0.0;
 }
 
 /// The login page and its bar.
@@ -3485,9 +3424,6 @@ abstract final class SettingsTheme {
   static const barTitleWeight = FontWeight.w600;
   static const barTitle = BiliColors.text;
 
-  /// MiSans sits lower than 50's PingFang: the bar's title rides up 1.5 px and the rows' titles 2.5 px.
-  static const barTitleDrop = 0.0;
-  static const rowTitleDrop = 0.0;
   static const backLeft = 79 / 3;
   static const backGlyphWidth = 25 / 3;
   static const backGlyphHeight = 47 / 3;
@@ -5023,7 +4959,6 @@ abstract final class FavouritesTheme {
   static const sheetCancelHeight = HistoryTheme.sheetCancelHeight;
   static const sheetCancelText = HistoryTheme.sheetCancelText;
   static const sheetCancelInk = HistoryTheme.sheetCancelInk;
-  static double get sheetTextDrop => HistoryTheme.sheetTextDrop;
 
   /// The layout toggle in 99's list: two rows of a box 7 wide and two bars, the upper one long, 16 × 15.33.
   static const toolLayoutListWidth = 16.0;
