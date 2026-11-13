@@ -10,7 +10,6 @@ import 'package:bilifast/playback/playback_controller.dart';
 import 'package:bilifast/search/fake_search_api.dart';
 import 'package:bilifast/search/search_history_store.dart';
 import 'package:bilifast/search/search_page.dart';
-import 'package:bilifast/settings/font_store.dart';
 import 'package:bilifast/shared/loading_tv.dart';
 import 'package:bilifast/shared/theme.dart';
 import 'package:bilifast/video/fake_page_api.dart';
@@ -150,7 +149,6 @@ void main() {
       pageApi: FakePageApi(),
       searchApi: search,
       searchHistory: SearchHistoryStore.memory(),
-      fonts: FontStore.memory()..select(FontChoice.system),
     );
     // The services' font store sets the family, so the system font comes after them.
     BiliFonts.family = BiliFonts.system;

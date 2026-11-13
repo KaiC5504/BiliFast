@@ -26,7 +26,6 @@ import '../playback/playback_controller.dart';
 import '../playback/shared_engine.dart';
 import '../search/search_api.dart';
 import '../search/search_history_store.dart';
-import '../settings/font_store.dart';
 import '../sideload/sideload_model.dart';
 import '../shared/image_disk_cache.dart';
 import '../skin/skin_api.dart';
@@ -151,7 +150,7 @@ class AppPlayback with WidgetsBindingObserver {
 }
 
 /// What every page reaches: the account and API client, the official API's token, the players, 最近打开, the phone's
-/// rotation and levels, the font, the page body's, 搜索's, UP主空间's, 我的收藏's, 稍后再看's and 我的's calls, 我的's last
+/// rotation and levels, the page body's, 搜索's, UP主空间's, 我的收藏's, 稍后再看's and 我的's calls, 我的's last
 /// account, 关注 changes, 搜索历史, the login page, the watch reports waiting for the network, the log kept on the phone,
 /// and the log forwarder in dev builds (null otherwise).
 class AppServices {
@@ -160,7 +159,6 @@ class AppServices {
     required this.playback,
     required this.recents,
     PlayerDevice? device,
-    FontStore? fonts,
     PageApi? pageApi,
     this._searchApi,
     this._spaceApi,
@@ -194,7 +192,6 @@ class AppServices {
        offline = offline ?? FakeOfflineLibrary(),
        sideload = sideload ?? SideloadModel.none(),
        loginGate = loginGate ?? LoginPageGate(environment),
-       fonts = fonts ?? FontStore.memory(),
        pageApi = pageApi ?? ClientPageApi(environment.client),
        searchHistory = searchHistory ?? SearchHistoryStore.memory(),
        meProfile = meProfile ?? MeProfileStore.memory(),
@@ -257,7 +254,6 @@ class AppServices {
   final AppPlayback playback;
   final RecentStore recents;
   final PlayerDevice device;
-  final FontStore fonts;
   final PageApi pageApi;
   final SearchApi? _searchApi;
 

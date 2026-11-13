@@ -14,7 +14,6 @@ import 'package:bilifast/home/avatar_page.dart';
 import 'package:bilifast/home/recent_store.dart';
 import 'package:bilifast/offline/pages/offline_list_page.dart';
 import 'package:bilifast/playback/playback_controller.dart';
-import 'package:bilifast/settings/font_store.dart';
 import 'package:bilifast/settings/settings_page.dart';
 import 'package:bilifast/shared/loading_tv.dart';
 import 'package:bilifast/shared/release_refresh.dart';
@@ -84,7 +83,6 @@ void main() {
     bool checkAccount = true,
     LoginGate? loginGate,
     ThemeData? theme,
-    FontStore? fonts,
   }) async {
     tester.view.physicalSize = const Size(440, 956);
     tester.view.devicePixelRatio = 1;
@@ -123,7 +121,6 @@ void main() {
       recents: recents,
       loginGate: loginGate ?? gate,
       pageApi: api,
-      fonts: fonts,
     );
     await tester.pumpWidget(
       MaterialApp(
@@ -164,7 +161,7 @@ void main() {
 
   testWidgets("under the system font the shortcuts' labels keep the PingFang fallback and no tracking", (tester) async {
     await useSystemFont(tester);
-    await show(tester, theme: appTheme(), fonts: FontStore.memory()..select(FontChoice.system));
+    await show(tester, theme: appTheme());
     for (final label in ['离线缓存', '历史记录', '我的收藏', '稍后再看']) {
       final style = tester.renderObject<RenderParagraph>(find.text(label)).text.style!;
       expect(style.fontFamilyFallback, isNotNull, reason: label);
@@ -212,7 +209,7 @@ void main() {
     expect(api.calls, isEmpty, reason: "logged out, the account's history is never asked");
   });
 
-  testWidgets('with nothing opened yet the card says so, in the 字体 chosen', (tester) async {
+  testWidgets('with nothing opened yet the card says so, in the family styles name', (tester) async {
     await show(tester);
     expect(find.text('还没有打开过视频'), findsOneWidget);
     expect(tester.widget<Text>(find.text('还没有打开过视频')).style?.fontFamily, BiliFonts.system);
@@ -262,7 +259,7 @@ void main() {
       duration: 0,
       cover: null,
     );
-    await show(tester, opened: [video], theme: appTheme(), fonts: FontStore.memory()..select(FontChoice.system));
+    await show(tester, opened: [video], theme: appTheme());
     expectOnChineseLine(tester, find.text(mixedLines));
     expectOnChineseLine(tester, find.text('2小时前播放'));
 
@@ -297,7 +294,6 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('avatar-settings')));
     await settle(tester, 20);
     expect(find.byType(SettingsPage), findsOneWidget);
-    expect(find.byKey(const ValueKey('settings-font')), findsOneWidget);
   });
 
   testWidgets('离线缓存 and 历史记录 open their pages', (tester) async {

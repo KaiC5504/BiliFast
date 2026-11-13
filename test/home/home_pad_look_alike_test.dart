@@ -9,7 +9,6 @@ import 'package:bilifast/home/home_tab_bar.dart';
 import 'package:bilifast/home/main_shell.dart';
 import 'package:bilifast/home/recent_store.dart';
 import 'package:bilifast/search/fake_search_api.dart';
-import 'package:bilifast/settings/font_store.dart';
 import 'package:bilifast/shared/cover_placeholder.dart';
 import 'package:bilifast/shared/remote_image.dart';
 import 'package:bilifast/shared/theme.dart';
@@ -68,7 +67,6 @@ Future<void> _showHome(WidgetTester tester, FeedHttp http, {required bool landsc
     environment: environment,
     playback: playback,
     recents: await RecentStore.load(null, logger: logger),
-    fonts: FontStore.memory()..select(FontChoice.system),
     searchApi: FakeSearchApi(defaultWord: _word),
   );
   BiliFonts.family = BiliFonts.system;

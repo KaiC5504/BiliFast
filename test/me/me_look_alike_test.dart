@@ -2,7 +2,6 @@ import 'dart:io';
 
 import 'package:bilifast/home/shortcut_glyphs.dart';
 import 'package:bilifast/me/me_model.dart';
-import 'package:bilifast/settings/font_store.dart';
 import 'package:bilifast/shared/loading_tv.dart';
 import 'package:bilifast/shared/theme.dart';
 import 'package:flutter/widgets.dart';
@@ -28,7 +27,7 @@ void main() {
     addTearDown(() => BiliFonts.family = saved);
     await tester.runAsync(loadSystemFontStandIns);
     BiliFonts.family = BiliFonts.system;
-    await showMe(tester, pixelRatio: 3, theme: appTheme(), fonts: FontStore.memory()..select(FontChoice.system));
+    await showMe(tester, pixelRatio: 3, theme: appTheme());
 
     Rect rect(String key) => tester.getRect(find.byKey(ValueKey(key)));
     expect(rect('me-vip-card').top, 266);
@@ -48,7 +47,7 @@ void main() {
     addTearDown(() => BiliFonts.family = saved);
     await tester.runAsync(loadSystemFontStandIns);
     BiliFonts.family = BiliFonts.system;
-    await showMe(tester, pixelRatio: 3, theme: appTheme(), fonts: FontStore.memory()..select(FontChoice.system));
+    await showMe(tester, pixelRatio: 3, theme: appTheme());
 
     final finger = await tester.startGesture(tester.getCenter(find.byKey(const ValueKey('me-settings'))));
     for (var i = 0; i < 20 && tester.getCenter(_shortcutIcon).dy > 330; i++) {
@@ -73,7 +72,6 @@ void main() {
       tester,
       pixelRatio: 3,
       theme: appTheme(),
-      fonts: FontStore.memory()..select(FontChoice.system),
     );
 
     final finger = await tester.startGesture(tester.getCenter(_list));
@@ -110,7 +108,6 @@ void main() {
       view: const MeLoggedOut(),
       pixelRatio: 3,
       theme: appTheme(),
-      fonts: FontStore.memory()..select(FontChoice.system),
     );
 
     final head = tester.getRect(find.byKey(const ValueKey('me-avatar')));

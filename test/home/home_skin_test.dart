@@ -17,7 +17,6 @@ import 'package:bilifast/home/tab_bar_icons.dart';
 import 'package:bilifast/me/fake_me_api.dart';
 import 'package:bilifast/me/me_page.dart';
 import 'package:bilifast/search/fake_search_api.dart';
-import 'package:bilifast/settings/font_store.dart';
 import 'package:bilifast/shared/theme.dart';
 import 'package:bilifast/skin/skin.dart';
 import 'package:bilifast/skin/skin_video.dart';
@@ -87,7 +86,6 @@ void main() {
       environment: environment,
       playback: playback,
       recents: await RecentStore.load(null, logger: logger),
-      fonts: FontStore.memory()..select(FontChoice.system),
       searchApi: FakeSearchApi(defaultWord: _word),
       meApi: FakeMeApi.demo(),
       loginGate: FakeLoginGate(),

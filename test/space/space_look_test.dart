@@ -10,7 +10,6 @@ import 'package:bilifast/app/swipe_back_route.dart';
 import 'package:bilifast/dynamic/fake_dynamic_api.dart';
 import 'package:bilifast/home/recent_store.dart';
 import 'package:bilifast/playback/playback_controller.dart';
-import 'package:bilifast/settings/font_store.dart';
 import 'package:bilifast/shared/remote_image.dart';
 import 'package:bilifast/shared/theme.dart';
 import 'package:bilifast/space/fake_space_api.dart';
@@ -145,7 +144,6 @@ Future<void> _show(
     environment: environment,
     playback: playback,
     recents: await RecentStore.load(null, logger: logger),
-    fonts: FontStore.memory()..select(FontChoice.system),
     pageApi: FakePageApi(
       uploader: UploaderCard(
         mid: profile.mid,

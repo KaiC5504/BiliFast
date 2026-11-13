@@ -11,7 +11,6 @@ import 'package:bilifast/app/app_scope.dart';
 import 'package:bilifast/devtools/node_probe_section.dart';
 import 'package:bilifast/home/recent_store.dart';
 import 'package:bilifast/playback/playback_controller.dart';
-import 'package:bilifast/settings/font_store.dart';
 import 'package:bilifast/video/fake_page_api.dart';
 import 'package:bilifast/video/player_prefs.dart';
 import 'package:flutter/material.dart';
@@ -348,7 +347,6 @@ void main() {
         environment: _ClientEnvironment(client),
         playback: playback,
         recents: recents,
-        fonts: FontStore.memory(logger: logger),
         pageApi: FakePageApi(),
         loginGate: FakeLoginGate(),
       );

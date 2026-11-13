@@ -9,7 +9,6 @@ import 'package:bilifast/dynamic/card/dynamic_open.dart';
 import 'package:bilifast/dynamic/fake_dynamic_api.dart';
 import 'package:bilifast/home/recent_store.dart';
 import 'package:bilifast/playback/playback_controller.dart';
-import 'package:bilifast/settings/font_store.dart';
 import 'package:bilifast/shared/theme.dart';
 import 'package:bilifast/video/fake_page_api.dart';
 import 'package:bilifast/video/video_route.dart';
@@ -87,7 +86,6 @@ Future<CardHost> pumpCardHost(
     pageApi: pageApi,
     dynamicApi: dynamicApi,
     loginGate: gate,
-    fonts: systemFont ? (FontStore.memory()..select(FontChoice.system)) : null,
   );
   before?.call(services);
   if (systemFont) {

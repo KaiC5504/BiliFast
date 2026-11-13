@@ -23,6 +23,7 @@ import 'package:bilifast/home/recent_store.dart';
 import 'package:bilifast/search/fake_search_api.dart';
 import 'package:bilifast/search/search_api.dart';
 import 'package:bilifast/search/search_page.dart';
+import 'package:bilifast/settings/settings_page.dart';
 import 'package:bilifast/shared/cover_placeholder.dart';
 import 'package:bilifast/shared/image_disk_cache.dart';
 import 'package:bilifast/shared/loading_tv.dart';
@@ -747,15 +748,14 @@ void main() {
     expect(find.text('推荐'), findsOneWidget);
   });
 
-  testWidgets('⚙ on the avatar page opens 设置 with the font in use', (tester) async {
+  testWidgets('⚙ on the avatar page opens 设置', (tester) async {
     await show(tester);
     await settle(tester);
     await tester.tap(find.byKey(const ValueKey('home-avatar')));
     await settle(tester, 20);
     await tester.tap(find.byKey(const ValueKey('avatar-settings')));
     await settle(tester, 20);
-    expect(find.byKey(const ValueKey('settings-font')), findsOneWidget);
-    expect(find.text('系统字体'), findsOneWidget);
+    expect(find.byType(SettingsPage), findsOneWidget);
   });
 
   testWidgets('back on home from the avatar page, an account check that failed is tried again', (tester) async {

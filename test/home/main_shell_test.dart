@@ -14,7 +14,6 @@ import 'package:bilifast/home/tab_bar_icons.dart';
 import 'package:bilifast/me/fake_me_api.dart';
 import 'package:bilifast/me/me_page.dart';
 import 'package:bilifast/search/fake_search_api.dart';
-import 'package:bilifast/settings/font_store.dart';
 import 'package:bilifast/shared/loading_tv.dart';
 import 'package:bilifast/shared/theme.dart';
 import 'package:flutter/material.dart';
@@ -66,7 +65,6 @@ void main() {
       environment: environment,
       playback: playback,
       recents: await RecentStore.load(null, logger: logger),
-      fonts: FontStore.memory()..select(FontChoice.system),
       searchApi: FakeSearchApi(defaultWord: '崩铁新版本即将上线'),
       meApi: FakeMeApi.demo(),
       loginGate: FakeLoginGate(),

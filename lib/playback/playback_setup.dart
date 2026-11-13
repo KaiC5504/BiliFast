@@ -63,7 +63,6 @@ String? _iosSupportFolder;
 const _supportFiles = [
   'player_prefs.json',
   'recents.json',
-  'font.json',
   'search_history.json',
   'danmaku_settings.json',
   'emotes_recent.json',

@@ -15,7 +15,6 @@ import 'package:bilifast/home/recent_store.dart';
 import 'package:bilifast/me/fake_me_api.dart';
 import 'package:bilifast/me/me_model.dart';
 import 'package:bilifast/me/me_page.dart';
-import 'package:bilifast/settings/font_store.dart';
 import 'package:bilifast/shared/theme.dart';
 import 'package:bilifast/skin/fake_skin_api.dart';
 import 'package:bilifast/skin/skin.dart';
@@ -177,7 +176,6 @@ Future<MeHarness> showMe(
   LoginGate? loginGate,
   double pixelRatio = 1,
   ThemeData? theme,
-  FontStore? fonts,
   bool openSucceeds = true,
   bool officialAppThere = true,
   Future<bool> Function(Uri link)? open,
@@ -209,7 +207,6 @@ Future<MeHarness> showMe(
     environment: environment,
     playback: playback,
     recents: await RecentStore.load(null, logger: logger),
-    fonts: fonts ?? FontStore.memory(),
     loginGate: loginGate,
     pageApi: FakePageApi(),
     spaceApi: FakeSpaceApi(),

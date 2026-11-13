@@ -10,7 +10,6 @@ import 'package:bilifast/playback/playback_controller.dart';
 import 'package:bilifast/search/fake_search_api.dart';
 import 'package:bilifast/search/search_history_store.dart';
 import 'package:bilifast/search/search_page.dart';
-import 'package:bilifast/settings/font_store.dart';
 import 'package:bilifast/shared/theme.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -122,9 +121,7 @@ void main() {
         suggest: (term) => [for (final word in _suggestions) _suggestion(word)],
       ),
       searchHistory: store,
-      fonts: FontStore.memory()..select(FontChoice.system),
     );
-    // After the services: their FontStore sets the family.
     BiliFonts.family = BiliFonts.system;
     await tester.pumpWidget(
       MaterialApp(
