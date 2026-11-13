@@ -217,24 +217,13 @@ double opacityOf(WidgetTester tester, String key) => tester
     .fold(1.0, (opacity, fade) => opacity * fade.opacity);
 
 void main() {
-  testWidgets("under the system font the title and the uploader's name fall back to PingFang SC; MiSans "
-      'names none', (tester) async {
-    final saved = BiliFonts.family;
-    addTearDown(() => BiliFonts.family = saved);
+  testWidgets("under the system font the title and the uploader's name fall back to PingFang SC", (tester) async {
     List<String>? fallbackOf(String key) =>
         tester.renderObject<RenderParagraph>(find.byKey(ValueKey(key))).text.style?.fontFamilyFallback;
 
-    BiliFonts.family = BiliFonts.system;
     await rig09().mount(tester);
     expect(fallbackOf('vertical-title'), ['PingFang SC']);
     expect(fallbackOf('vertical-name'), ['PingFang SC']);
-
-    BiliFonts.family = BiliFonts.miSans;
-    await rig09().mount(tester);
-    // The name's style animates, so it settles on the new font's first.
-    await tester.pumpAndSettle();
-    expect(fallbackOf('vertical-title'), isNull);
-    expect(fallbackOf('vertical-name'), isNull);
   });
 
   testWidgets('lays out as 09: back and ⋮ under the island, the title over the bar, the bottom row', (tester) async {
@@ -423,8 +412,7 @@ void main() {
       final text = find.text('发弹幕');
       expect(text, findsOneWidget);
       expect(tester.getTopLeft(text).dx, closeTo(27, 1));
-      // Centred on the field, then dropped to put MiSans's ink where 09's is.
-      expect(tester.getCenter(text).dy, closeTo(901 + VerticalActionTheme.fieldDrop, 0.5));
+      expect(tester.getCenter(text).dy, closeTo(901, 0.5));
       await tester.tap(field());
       expect(rig.danmaku!.session.sendOpen.value, isTrue);
       expect(rig.chrome.shows, 1);
