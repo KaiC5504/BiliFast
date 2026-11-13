@@ -128,10 +128,7 @@ class _HistorySheetState extends State<HistorySheet> with SingleTickerProviderSt
   }
 }
 
-Widget _text(String text, double size, Color color) => Transform.translate(
-  offset: Offset(0, HistoryTheme.sheetTextDrop),
-  child: Text(text, style: _style(size, color)),
-);
+Widget _text(String text, double size, Color color) => Text(text, style: _style(size, color));
 
 TextStyle _style(double size, Color color) => TextStyle(
   fontFamily: BiliFonts.family,

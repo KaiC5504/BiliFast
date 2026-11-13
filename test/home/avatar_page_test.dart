@@ -215,12 +215,12 @@ void main() {
   testWidgets('with nothing opened yet the card says so, in the 字体 chosen', (tester) async {
     await show(tester);
     expect(find.text('还没有打开过视频'), findsOneWidget);
-    expect(tester.widget<Text>(find.text('还没有打开过视频')).style?.fontFamily, BiliFonts.miSans);
-    BiliFonts.family = BiliFonts.system;
-    addTearDown(() => BiliFonts.family = BiliFonts.miSans);
+    expect(tester.widget<Text>(find.text('还没有打开过视频')).style?.fontFamily, BiliFonts.system);
+    BiliFonts.family = 'imported-test';
+    addTearDown(() => BiliFonts.family = BiliFonts.system);
     recents.clear();
     await settle(tester);
-    expect(tester.widget<Text>(find.text('还没有打开过视频')).style?.fontFamily, BiliFonts.system);
+    expect(tester.widget<Text>(find.text('还没有打开过视频')).style?.fontFamily, 'imported-test');
   });
 
   testWidgets('a row opened again is stamped now and goes first, its progress kept', (tester) async {

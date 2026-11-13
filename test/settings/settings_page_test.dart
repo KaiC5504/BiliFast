@@ -6,7 +6,6 @@ import 'package:bili_core/engine.dart';
 import 'package:bilifast/app/app_environment.dart';
 import 'package:bilifast/app/app_scope.dart';
 import 'package:bilifast/settings/font_page.dart';
-import 'package:bilifast/settings/font_store.dart';
 import 'package:bilifast/settings/node_page.dart';
 import 'package:bilifast/settings/settings_page.dart';
 import 'package:bilifast/shared/image_disk_cache.dart';
@@ -83,9 +82,6 @@ void main() {
       'the Chinese line', (tester) async {
     await useSystemFont(tester);
     await show(tester, account: const LoggedIn(name: mixedLine, vip: false), theme: appTheme());
-    // The world's own font store starts on this platform's MiSans.
-    world.services.fonts.select(FontChoice.system);
-    await tester.pumpAndSettle();
     expectOnChineseLine(tester, find.text(mixedLine));
     expectOnChineseLine(tester, find.text('CDN 节点'));
     expectOnChineseLine(tester, find.text('BTR 加速（默认）'));
@@ -101,7 +97,6 @@ void main() {
   testWidgets('under the system font the system row\'s sample on 字体 sits on the Chinese line', (tester) async {
     await useSystemFont(tester);
     await show(tester, theme: appTheme());
-    world.services.fonts.select(FontChoice.system);
     await tapRow(tester, 'settings-font');
     expectOnChineseLine(
       tester,

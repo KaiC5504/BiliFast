@@ -8,10 +8,10 @@ void main() {
   setUp(() => saved = BiliFonts.family);
   tearDown(() => BiliFonts.family = saved);
 
-  test('in tests the system font falls back to the PingFang stand-in; MiSans needs no fallback', () {
+  test('in tests the system font falls back to the PingFang stand-in; an imported font needs no fallback', () {
     BiliFonts.family = BiliFonts.system;
     expect(BiliFonts.fallback, ['PingFang SC']);
-    BiliFonts.family = BiliFonts.miSans;
+    BiliFonts.family = 'imported-test';
     expect(BiliFonts.fallback, isNull);
   });
 
@@ -38,16 +38,10 @@ void main() {
     expect(BiliFonts.chooseSystemFallback((fallback) => fallback == null ? 120 : 131), isNull);
   });
 
-  test('sizes measured off the official app under the system font (font-check 02, 04); MiSans keeps its own', () {
-    BiliFonts.family = BiliFonts.system;
+  test('sizes measured off the official app under the system font (font-check 02, 04)', () {
     expect(PageTheme.tabLabelText, 12.75);
     expect(PageTheme.danmakuFieldText, 12.75);
     expect(IntroTheme.titleText, 15.25);
     expect(CommentListTheme.threadTitleText, 13.75);
-    BiliFonts.family = BiliFonts.miSans;
-    expect(PageTheme.tabLabelText, 13.5);
-    expect(PageTheme.danmakuFieldText, 13.5);
-    expect(IntroTheme.titleText, 16);
-    expect(CommentListTheme.threadTitleText, 15);
   });
 }

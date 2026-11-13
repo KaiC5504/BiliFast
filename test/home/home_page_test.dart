@@ -30,7 +30,6 @@ import 'package:bilifast/shared/release_refresh.dart';
 import 'package:bilifast/shared/remote_image.dart';
 import 'package:bilifast/shared/theme.dart';
 import 'package:bilifast/playback/playback_controller.dart';
-import 'package:bilifast/settings/font_store.dart';
 import 'package:bilifast/skin/skin_loading_view.dart';
 import 'package:bilifast/skin/skin_model.dart';
 import 'package:bilifast/video/intro/title_block.dart';
@@ -50,9 +49,6 @@ import 'fake_login_gate.dart';
 import 'feed_fakes.dart';
 
 const _watchLaterPath = '/x/v2/history/toview/add';
-
-/// A store that keeps the system font on, where the default one would turn this platform's MiSans back on.
-FontStore _systemFont() => FontStore.memory()..select(FontChoice.system);
 
 /// The fingerprint cookies alone: logged out, with no `spi` call.
 const _loggedOutCookies = {'buvid3': 'b3', 'buvid4': 'b4'};
@@ -134,7 +130,6 @@ void main() {
     bool still = false,
     Map<String, String> cookies = Canned.cookies,
     ThemeData? theme,
-    FontStore? fonts,
     SearchApi? search,
     String? initialLink,
     SkinModel Function(AppEnvironment environment)? skin,
@@ -178,7 +173,6 @@ void main() {
       playback: playback,
       recents: recents,
       loginGate: gate,
-      fonts: fonts,
       searchApi: search ?? FakeSearchApi(defaultWord: _word),
       skin: skin?.call(environment),
     );
@@ -234,7 +228,7 @@ void main() {
     testWidgets('a card\'s title over both lines, its uploader and its reason', (tester) async {
       await useSystemFont(tester);
       http.pages[1] = [feedItem('BV1aaa', title: mixedLines, reason: '1万点赞'), feedItem('BV1bbb')];
-      await show(tester, theme: appTheme(), fonts: _systemFont());
+      await show(tester, theme: appTheme());
       await settle(tester);
       expectOnChineseLine(tester, find.text('$mixedLines BV1aaa'));
       expectOnChineseLine(tester, find.text('UP BV1bbb'));
@@ -243,12 +237,7 @@ void main() {
 
     testWidgets("the search entry's default word", (tester) async {
       await useSystemFont(tester);
-      await show(
-        tester,
-        theme: appTheme(),
-        fonts: _systemFont(),
-        search: FakeSearchApi(defaultWord: mixedLine),
-      );
+      await show(tester, theme: appTheme(), search: FakeSearchApi(defaultWord: mixedLine));
       await settle(tester);
       expectOnChineseLine(tester, find.text(mixedLine));
     });
@@ -256,7 +245,7 @@ void main() {
     testWidgets('a failed feed\'s message', (tester) async {
       await useSystemFont(tester);
       http.failing.add(1);
-      await show(tester, theme: appTheme(), fonts: _systemFont());
+      await show(tester, theme: appTheme());
       await settle(tester);
       expectOnChineseLine(tester, find.byKey(const ValueKey('feed-error')));
     });
@@ -766,7 +755,7 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('avatar-settings')));
     await settle(tester, 20);
     expect(find.byKey(const ValueKey('settings-font')), findsOneWidget);
-    expect(find.text('MiSans'), findsOneWidget);
+    expect(find.text('系统字体'), findsOneWidget);
   });
 
   testWidgets('back on home from the avatar page, an account check that failed is tried again', (tester) async {

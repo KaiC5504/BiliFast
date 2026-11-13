@@ -172,7 +172,7 @@ void main() {
       await tester.runAsync(loadSystemFontStandIns);
     }
 
-    testWidgets('digits sit a pixel apart and a point from Chinese under the system font only', (tester) async {
+    testWidgets('digits sit a pixel apart and a point from Chinese', (tester) async {
       List<(String, double?)> runs(String id) => [
         for (final span
             in (tester.widget<Text>(find.descendant(of: find.byKey(_chip(id)), matching: find.byType(Text))).textSpan!
@@ -181,9 +181,6 @@ void main() {
                 .cast<TextSpan>())
           (span.text!, span.style?.letterSpacing),
       ];
-      await _show(tester);
-      expect(runs('length-over120'), [('120分钟+', null)]);
-
       await useSystemFont(tester);
       await _show(tester);
       expect(runs('length-over120'), [('12', 1 / 3), ('0', 1 / 3 + 1), ('分', null), ('钟', 1.0), ('+', null)]);
