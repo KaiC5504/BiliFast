@@ -15,6 +15,8 @@ import '../shared/toast.dart';
 import '../sideload/sideload_section.dart';
 import '../video/intro/collection_row.dart' show Chevron;
 import '../video/player_prefs.dart';
+import 'app_icon.dart';
+import 'app_icon_page.dart';
 import 'btr_page.dart';
 import 'playback/autoplay_settings_page.dart' show AutoplayLabels;
 import 'playback/home_feed_settings_page.dart';
@@ -97,6 +99,9 @@ class _SettingsPageState extends State<SettingsPage> with SingleTickerProviderSt
   int? _imageBytes;
   bool _imageBytesAsked = false;
 
+  /// The home screen icon, once read.
+  AppIconChoice? _appIcon;
+
   PlayerPrefs get _prefs => widget.prefs ?? PlayerPrefs.shared;
 
   @override
@@ -110,8 +115,24 @@ class _SettingsPageState extends State<SettingsPage> with SingleTickerProviderSt
       _imageBytesAsked = true;
       final images = AppScope.of(context).imageCache;
       if (images != null) unawaited(_readImageBytes(images));
+      unawaited(_readAppIcon(AppScope.of(context).appIcons));
     }
   }
+
+  Future<void> _readAppIcon(AppIconHost host) async {
+    try {
+      final choice = await host.current();
+      if (mounted) setState(() => _appIcon = choice);
+    } catch (error) {
+      Logger.shared.warn(LogCategory.app, 'app icon not read', {'error': '${error.runtimeType}'});
+    }
+  }
+
+  void _openAppIcons(AppIconHost host) => unawaited(
+    Navigator.of(context)
+        .push(SwipeBackPageRoute<void>(builder: (_) => AppIconPage(host: host)))
+        .then((_) => _readAppIcon(host)),
+  );
 
   Future<void> _readImageBytes(ImageDiskCache images) async {
     final bytes = await images.sizeBytes();
@@ -252,6 +273,16 @@ class _SettingsPageState extends State<SettingsPage> with SingleTickerProviderSt
                         title: 'BTR',
                         value: _prefs.btr ? '开启' : '关闭',
                         onTap: () => _push((_) => BtrPage(prefs: _prefs)),
+                      ),
+                    ],
+                  ),
+                  SettingsSection(
+                    children: [
+                      SettingsRow(
+                        key: const ValueKey('settings-app-icon'),
+                        title: '应用图标',
+                        value: _appIcon?.label,
+                        onTap: () => _openAppIcons(services.appIcons),
                       ),
                     ],
                   ),

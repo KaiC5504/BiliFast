@@ -104,14 +104,14 @@ void main() {
     expectOnChineseLine(tester, find.text(licence));
   });
 
-  testWidgets('the order: 首页推荐设置, 播放设置, BTR, the clearing rows, 开发者, 退出登录, then the version', (tester) async {
+  testWidgets('the order: 首页推荐设置, 播放设置, BTR, 应用图标, the clearing rows, 开发者, 退出登录, then the version', (tester) async {
     await show(
       tester,
       account: const LoggedIn(name: '小明', vip: true),
       developerPage: (_) => const Scaffold(body: Text('开发者页面')),
       imageCache: FakeImageDiskCache(1024),
     );
-    expect(rowTitles(tester), ['首页推荐设置', '播放设置', 'BTR', '清除最近观看', '清除图片缓存', '开发者', '退出登录']);
+    expect(rowTitles(tester), ['首页推荐设置', '播放设置', 'BTR', '应用图标', '清除最近观看', '清除图片缓存', '开发者', '退出登录']);
     await tester.ensureVisible(row('settings-version'));
     await tester.pumpAndSettle();
     final version = tester.getRect(row('settings-version'));
