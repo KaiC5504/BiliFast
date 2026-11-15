@@ -104,7 +104,7 @@ class _IconRow extends StatelessWidget {
             padding: const EdgeInsets.fromLTRB(SettingsTheme.rowInset, _iconPadding, 0, _iconPadding),
             child: Row(
               children: [
-                ClipRRect(
+                ClipRSuperellipse(
                   borderRadius: BorderRadius.circular(_iconRadius),
                   child: Image.asset(
                     choice.preview,
@@ -122,7 +122,11 @@ class _IconRow extends StatelessWidget {
                   width: check.width,
                   height: check.height,
                   child: chosen
-                      ? CustomPaint(key: const ValueKey('app-icon-check'), size: check, painter: const _CheckPainter())
+                      ? CustomPaint(
+                          key: const ValueKey('app-icon-check'),
+                          size: check,
+                          painter: SettingsCheckPainter(_look.checkShort, _look.checkLong, _look.checkStroke),
+                        )
                       : null,
                 ),
                 const SizedBox(width: SettingsListTheme.feedCheckEnd),
@@ -133,31 +137,4 @@ class _IconRow extends StatelessWidget {
       ),
     );
   }
-}
-
-/// 设置's pink ✓ (SettingsPickRow's), at 首页推荐设置's size.
-class _CheckPainter extends CustomPainter {
-  const _CheckPainter();
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    const half = SettingsListTheme.feedCheckStroke / 2;
-    const short = SettingsListTheme.feedCheckShort;
-    const long = SettingsListTheme.feedCheckLong;
-    canvas.drawPath(
-      Path()
-        ..moveTo(half, half + long - short)
-        ..lineTo(half + short, half + long)
-        ..lineTo(half + short + long, half),
-      Paint()
-        ..color = BiliColors.pink
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = SettingsListTheme.feedCheckStroke
-        ..strokeCap = StrokeCap.round
-        ..strokeJoin = StrokeJoin.round,
-    );
-  }
-
-  @override
-  bool shouldRepaint(_CheckPainter old) => false;
 }

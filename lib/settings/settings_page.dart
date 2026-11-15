@@ -975,7 +975,7 @@ class SettingsPickRow extends StatelessWidget {
                     child: CustomPaint(
                       key: const ValueKey('settings-check'),
                       size: check,
-                      painter: _CheckPainter(look.checkShort, look.checkLong, look.checkStroke),
+                      painter: SettingsCheckPainter(look.checkShort, look.checkLong, look.checkStroke),
                     ),
                   ),
               ],
@@ -988,8 +988,8 @@ class SettingsPickRow extends StatelessWidget {
 }
 
 /// The ✓: a short arm down to the corner and a long one up, both at 45°, with round ends.
-class _CheckPainter extends CustomPainter {
-  const _CheckPainter(this.short, this.long, this.stroke);
+class SettingsCheckPainter extends CustomPainter {
+  const SettingsCheckPainter(this.short, this.long, this.stroke);
 
   final double short;
   final double long;
@@ -1013,5 +1013,5 @@ class _CheckPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(_CheckPainter old) => old.short != short || old.long != long || old.stroke != stroke;
+  bool shouldRepaint(SettingsCheckPainter old) => old.short != short || old.long != long || old.stroke != stroke;
 }
