@@ -196,6 +196,14 @@ final class DeviceHostApiImpl: DeviceHostApi {
     UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: [Self.reminder])
   }
 
+  func alternateIconName() throws -> String? {
+    nil
+  }
+
+  func setAlternateIconName(name: String?) async throws {
+    throw DeviceApiError(code: "unimplemented", message: nil, details: nil)
+  }
+
   /// The one signature reminder: a request added under an identifier already pending replaces it.
   private static let reminder = "com.kaichuan.bilifast.signature.reminder"
 

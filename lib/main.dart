@@ -46,6 +46,7 @@ import 'space/fake_space_api.dart';
 import 'shared/image_disk_cache.dart';
 import 'shared/theme.dart';
 import 'sideload/fake_sideload.dart';
+import 'settings/ios_app_icon_host.dart';
 import 'sideload/ios_sideload.dart';
 import 'sideload/sideload_model.dart';
 import 'video/fake_page_api.dart';
@@ -176,6 +177,7 @@ Future<void> main(List<String> args) async {
     imageCache: imageCache,
     offline: offline,
     sideload: sideload,
+    appIcons: Platform.isIOS ? IosAppIconHost() : null,
     historyOutbox: historyOutbox,
     logFiles: logFiles,
     logs: logs,

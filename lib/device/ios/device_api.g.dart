@@ -508,6 +508,47 @@ class DeviceHostApi {
     )
     ;
   }
+
+  /// The alternate icon the home screen shows (an icon set named in ASSETCATALOG_COMPILER_ALTERNATE_APPICON_NAMES),
+  /// or null for the primary one.
+  Future<String?> alternateIconName() async {
+    final pigeonVar_channelName = 'dev.flutter.pigeon.bilifast.DeviceHostApi.alternateIconName$pigeonVar_messageChannelSuffix';
+    final pigeonVar_channel = BasicMessageChannel<Object?>(
+      pigeonVar_channelName,
+      pigeonChannelCodec,
+      binaryMessenger: pigeonVar_binaryMessenger,
+    );
+    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(null);
+    final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
+
+    final Object? pigeonVar_replyValue = _extractReplyValueOrThrow(
+        pigeonVar_replyList,
+        pigeonVar_channelName,
+        isNullValid: true,
+    )
+    ;
+    return pigeonVar_replyValue as String?;
+  }
+
+  /// Sets the home screen's icon; null goes back to the primary one. iOS shows its own alert after a change. Throws
+  /// when iOS refuses (no alternate icons on this device, or an unknown name).
+  Future<void> setAlternateIconName(String? name) async {
+    final pigeonVar_channelName = 'dev.flutter.pigeon.bilifast.DeviceHostApi.setAlternateIconName$pigeonVar_messageChannelSuffix';
+    final pigeonVar_channel = BasicMessageChannel<Object?>(
+      pigeonVar_channelName,
+      pigeonChannelCodec,
+      binaryMessenger: pigeonVar_binaryMessenger,
+    );
+    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(<Object?>[name]);
+    final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
+
+    _extractReplyValueOrThrow(
+        pigeonVar_replyList,
+        pigeonVar_channelName,
+        isNullValid: true,
+    )
+    ;
+  }
 }
 
 abstract class DeviceEventApi {

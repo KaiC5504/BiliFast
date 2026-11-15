@@ -55,6 +55,7 @@ flutter:
     - assets/images/friends/
     - assets/images/space/
     - assets/lottie/
+    - assets/app_icons/
   fonts:
     - family: custom_icon
       fonts:

@@ -26,6 +26,7 @@ import '../playback/playback_controller.dart';
 import '../playback/shared_engine.dart';
 import '../search/search_api.dart';
 import '../search/search_history_store.dart';
+import '../settings/app_icon.dart';
 import '../sideload/sideload_model.dart';
 import '../shared/image_disk_cache.dart';
 import '../skin/skin_api.dart';
@@ -180,6 +181,7 @@ class AppServices {
     PipKeeper? pipKeeper,
     OfflineLibrary? offline,
     SideloadModel? sideload,
+    AppIconHost? appIcons,
     HistoryOutbox? historyOutbox,
     NetworkMonitor? network,
     this.logFiles = const NoLogFiles(),
@@ -191,6 +193,7 @@ class AppServices {
        pipKeeper = pipKeeper ?? PipKeeper(),
        offline = offline ?? FakeOfflineLibrary(),
        sideload = sideload ?? SideloadModel.none(),
+       appIcons = appIcons ?? MemoryAppIconHost(),
        loginGate = loginGate ?? LoginPageGate(environment),
        pageApi = pageApi ?? ClientPageApi(environment.client),
        searchHistory = searchHistory ?? SearchHistoryStore.memory(),
@@ -338,6 +341,9 @@ class AppServices {
 
   /// A sideloaded install's signature, updates and reminder; empty otherwise.
   final SideloadModel sideload;
+
+  /// 设置 → 应用图标: the home screen icon (iOS's alternate icons; held in memory elsewhere).
+  final AppIconHost appIcons;
 
   /// Watch reports that got no answer, sent again when the network may be back (`history_outbox.json`).
   final HistoryOutbox historyOutbox;

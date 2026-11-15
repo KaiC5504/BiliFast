@@ -2,7 +2,7 @@
 
 The art in this folder is not covered by the repository's GPL-3.0 license. The official app's art belongs to
 Bilibili; it is used here only so a personal, non-commercial client looks like the official app. Everything else the
-app shows is drawn in code.
+app shows is drawn in code, apart from `app_icons/`: BiliFast's own home screen icons, shown small in 设置 → 应用图标.
 
 ## From PiliPlus
 

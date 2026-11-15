@@ -220,6 +220,12 @@ protocol DeviceHostApi {
   /// Replaces the one pending signature reminder with one delivered at [epochMs] (milliseconds since the epoch).
   func scheduleReminder(epochMs: Int64, title: String, body: String) async throws
   func cancelReminder() throws
+  /// The alternate icon the home screen shows (an icon set named in ASSETCATALOG_COMPILER_ALTERNATE_APPICON_NAMES),
+  /// or null for the primary one.
+  func alternateIconName() throws -> String?
+  /// Sets the home screen's icon; null goes back to the primary one. iOS shows its own alert after a change. Throws
+  /// when iOS refuses (no alternate icons on this device, or an unknown name).
+  func setAlternateIconName(name: String?) async throws
 }
 
 /// Generated setup class from Pigeon to handle messages through the `binaryMessenger`.
@@ -516,6 +522,40 @@ class DeviceHostApiSetup {
       }
     } else {
       cancelReminderChannel.setMessageHandler(nil)
+    }
+    /// The alternate icon the home screen shows (an icon set named in ASSETCATALOG_COMPILER_ALTERNATE_APPICON_NAMES),
+    /// or null for the primary one.
+    let alternateIconNameChannel = FlutterBasicMessageChannel(name: "dev.flutter.pigeon.bilifast.DeviceHostApi.alternateIconName\(channelSuffix)", binaryMessenger: binaryMessenger, codec: codec)
+    if let api = api {
+      alternateIconNameChannel.setMessageHandler { _, reply in
+        do {
+          let result = try api.alternateIconName()
+          reply(wrapResult(result))
+        } catch {
+          reply(wrapError(error))
+        }
+      }
+    } else {
+      alternateIconNameChannel.setMessageHandler(nil)
+    }
+    /// Sets the home screen's icon; null goes back to the primary one. iOS shows its own alert after a change. Throws
+    /// when iOS refuses (no alternate icons on this device, or an unknown name).
+    let setAlternateIconNameChannel = FlutterBasicMessageChannel(name: "dev.flutter.pigeon.bilifast.DeviceHostApi.setAlternateIconName\(channelSuffix)", binaryMessenger: binaryMessenger, codec: codec)
+    if let api = api {
+      setAlternateIconNameChannel.setMessageHandler { message, reply in
+        let args = message as! [Any?]
+        let nameArg: String? = nilOrValue(args[0])
+        Task { @MainActor in
+          do {
+            try await api.setAlternateIconName(name: nameArg)
+            reply(wrapResult(nil))
+          } catch {
+            reply(wrapError(error))
+          }
+        }
+      }
+    } else {
+      setAlternateIconNameChannel.setMessageHandler(nil)
     }
   }
 }

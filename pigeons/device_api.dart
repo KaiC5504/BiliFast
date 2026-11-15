@@ -80,6 +80,15 @@ abstract class DeviceHostApi {
   void scheduleReminder(int epochMs, String title, String body);
 
   void cancelReminder();
+
+  /// The alternate icon the home screen shows (an icon set named in ASSETCATALOG_COMPILER_ALTERNATE_APPICON_NAMES),
+  /// or null for the primary one.
+  String? alternateIconName();
+
+  /// Sets the home screen's icon; null goes back to the primary one. iOS shows its own alert after a change. Throws
+  /// when iOS refuses (no alternate icons on this device, or an unknown name).
+  @async
+  void setAlternateIconName(String? name);
 }
 
 @FlutterApi()
