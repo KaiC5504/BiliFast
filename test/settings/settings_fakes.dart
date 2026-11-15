@@ -9,6 +9,7 @@ import 'package:bilifast/home/recent_store.dart';
 import 'package:bilifast/playback/codec_memory.dart';
 import 'package:bilifast/playback/playback_controller.dart';
 import 'package:bilifast/playback/shared_engine.dart';
+import 'package:bilifast/settings/app_icon.dart';
 import 'package:bilifast/shared/image_disk_cache.dart';
 import 'package:bilifast/video/fake_page_api.dart';
 import 'package:flutter/foundation.dart' show ValueListenable;
@@ -124,6 +125,32 @@ class FakeImageDiskCache extends ImageDiskCache {
   }
 }
 
+/// The home screen icon, without a home screen: [chosen] records every [choose]; a [currentGate] holds [current]'s
+/// answer and a [chooseGate] its change until the test completes them, and a [refusal] is thrown instead of changing.
+class FakeAppIconHost implements AppIconHost {
+  FakeAppIconHost([this.choice = AppIconChoice.standard]);
+
+  AppIconChoice choice;
+  final chosen = <AppIconChoice>[];
+  Completer<void>? currentGate;
+  Completer<void>? chooseGate;
+  Object? refusal;
+
+  @override
+  Future<AppIconChoice> current() async {
+    await currentGate?.future;
+    return choice;
+  }
+
+  @override
+  Future<void> choose(AppIconChoice choice) async {
+    chosen.add(choice);
+    await chooseGate?.future;
+    if (refusal case final refusal?) throw refusal;
+    this.choice = choice;
+  }
+}
+
 /// 设置's world: the app's players, with no page open, on the [shared] engine (the fake [engine], running unless a
 /// [startGate] holds its start until the test completes it) and the codec [memory]; an empty 最近打开 and the fakes
 /// above.
@@ -134,6 +161,7 @@ class SettingsWorld {
     Account account = const LoggedOut(),
     Completer<void>? startGate,
     ImageDiskCache? imageCache,
+    AppIconHost? appIcons,
   }) async {
     final environment = FakeEnvironment(account);
     final gate = FakeLoginGate();
@@ -160,6 +188,7 @@ class SettingsWorld {
       loginGate: gate,
       imageCache: imageCache,
       logFiles: logFiles,
+      appIcons: appIcons,
     );
     return SettingsWorld._(services, environment, gate, logFiles, engine, shared, memory);
   }
