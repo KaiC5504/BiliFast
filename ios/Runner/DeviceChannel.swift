@@ -197,11 +197,25 @@ final class DeviceHostApiImpl: DeviceHostApi {
   }
 
   func alternateIconName() throws -> String? {
-    nil
+    MainActor.assumeIsolated { UIApplication.shared.alternateIconName }
   }
 
   func setAlternateIconName(name: String?) async throws {
-    throw DeviceApiError(code: "unimplemented", message: nil, details: nil)
+    try await Self.setIcon(name)
+  }
+
+  @MainActor private static func setIcon(_ name: String?) async throws {
+    let application = UIApplication.shared
+    guard application.supportsAlternateIcons else {
+      throw DeviceApiError(code: "alternate-icons", message: "unsupported", details: nil)
+    }
+    do {
+      try await application.setAlternateIconName(name)
+    } catch {
+      // As for notifications: only the domain and code reach Dart.
+      let failure = error as NSError
+      throw DeviceApiError(code: "alternate-icons", message: "\(failure.domain) \(failure.code)", details: nil)
+    }
   }
 
   /// The one signature reminder: a request added under an identifier already pending replaces it.
