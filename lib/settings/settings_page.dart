@@ -99,7 +99,6 @@ class _SettingsPageState extends State<SettingsPage> with SingleTickerProviderSt
   int? _imageBytes;
   bool _imageBytesAsked = false;
 
-  /// The home screen icon, once read.
   AppIconChoice? _appIcon;
 
   PlayerPrefs get _prefs => widget.prefs ?? PlayerPrefs.shared;
@@ -129,9 +128,16 @@ class _SettingsPageState extends State<SettingsPage> with SingleTickerProviderSt
   }
 
   void _openAppIcons(AppIconHost host) => unawaited(
-    Navigator.of(context)
-        .push(SwipeBackPageRoute<void>(builder: (_) => AppIconPage(host: host)))
-        .then((_) => _readAppIcon(host)),
+    Navigator.of(context).push(
+      SwipeBackPageRoute<void>(
+        builder: (_) => AppIconPage(
+          host: host,
+          onChanged: (choice) {
+            if (mounted) setState(() => _appIcon = choice);
+          },
+        ),
+      ),
+    ),
   );
 
   Future<void> _readImageBytes(ImageDiskCache images) async {

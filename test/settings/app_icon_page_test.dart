@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:bili_core/devlog.dart';
 import 'package:bilifast/app/app_scope.dart';
@@ -10,6 +11,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'settings_fakes.dart';
+
+class _Unreadable extends FakeAppIconHost {
+  @override
+  Future<AppIconChoice> current() async => throw _Refused();
+}
 
 class _Refused implements Exception {
   @override
@@ -107,6 +113,21 @@ void main() {
       expect(find.semantics.byLabel(RegExp(r'^应用图标\s+猫猫$')), findsOne);
       semantics.dispose();
     });
+
+    testWidgets('a change that lands after the page has gone still shows on its row', (tester) async {
+      final host = FakeAppIconHost()..chooseGate = Completer<void>();
+      await showSettings(tester, host);
+      await tester.tap(settingsRow);
+      await tester.pumpAndSettle();
+      await tapRow(tester, AppIconChoice.cat);
+      await tester.tap(find.byKey(const ValueKey('settings-back')));
+      await tester.pumpAndSettle();
+      expect(find.descendant(of: settingsRow, matching: find.text('默认')), findsOneWidget);
+
+      host.chooseGate!.complete();
+      await tester.pumpAndSettle();
+      expect(find.descendant(of: settingsRow, matching: find.text('猫猫')), findsOneWidget);
+    });
   });
 
   testWidgets('a row per icon with its picture and name, the tick only once the current one is known', (tester) async {
@@ -183,5 +204,33 @@ void main() {
     expect(host.chosen, isEmpty);
     expect(tick(AppIconChoice.cat), findsOneWidget);
     expect(find.text('更换失败'), findsNothing);
+  });
+
+  testWidgets('an unreadable current icon shows no tick, and the rows still change it', (tester) async {
+    final host = _Unreadable();
+    await showPage(tester, host);
+    expect(anyTick, findsNothing);
+
+    await tapRow(tester, AppIconChoice.cat);
+    expect(host.chosen, [AppIconChoice.cat]);
+    expect(tick(AppIconChoice.cat), findsOneWidget);
+  });
+
+  test('every alternate icon has its icon set, named in each of the app build configurations', () {
+    final project = File('ios/Runner.xcodeproj/project.pbxproj').readAsStringSync();
+    final named = RegExp(r'ASSETCATALOG_COMPILER_ALTERNATE_APPICON_NAMES = "?([^";]+)"?;')
+        .allMatches(project)
+        .map((match) => match[1]!.split(' ').toSet())
+        .toList();
+    expect(named, hasLength(RegExp('ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;').allMatches(project).length));
+    for (final choice in AppIconChoice.values) {
+      expect(File(choice.preview).existsSync(), isTrue, reason: choice.preview);
+      final iconSet = choice.iconSet;
+      if (iconSet == null) continue;
+      expect(File('ios/Runner/Assets.xcassets/$iconSet.appiconset/Contents.json').existsSync(), isTrue);
+      for (final names in named) {
+        expect(names, contains(iconSet));
+      }
+    }
   });
 }

@@ -17,9 +17,12 @@ const _iconGap = 12.0;
 
 /// 设置 → 应用图标: a row per [AppIconChoice] with its picture, its name and a tick on the current one.
 class AppIconPage extends StatefulWidget {
-  const AppIconPage({super.key, required this.host});
+  const AppIconPage({super.key, required this.host, this.onChanged});
 
   final AppIconHost host;
+
+  /// Called when a change lands, even after the page has gone (iOS answers only once its alert is shown).
+  final ValueChanged<AppIconChoice>? onChanged;
 
   @override
   State<AppIconPage> createState() => _AppIconPageState();
@@ -50,6 +53,7 @@ class _AppIconPageState extends State<AppIconPage> {
     _changing = true;
     try {
       await widget.host.choose(choice);
+      widget.onChanged?.call(choice);
       if (mounted) setState(() => _current = choice);
     } catch (error) {
       Logger.shared.warn(LogCategory.app, 'app icon change failed', {

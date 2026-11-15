@@ -212,7 +212,7 @@ final class DeviceHostApiImpl: DeviceHostApi {
     do {
       try await application.setAlternateIconName(name)
     } catch {
-      // As for notifications: only the domain and code reach Dart.
+      // Only the domain and code reach Dart: the localized description is the system's text, not ours to log.
       let failure = error as NSError
       throw DeviceApiError(code: "alternate-icons", message: "\(failure.domain) \(failure.code)", details: nil)
     }
