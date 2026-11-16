@@ -300,6 +300,7 @@ void main() {
           ]),
           author: '测试UP甲',
           mid: 7000001,
+          face: 'https://i1.hdslb.com/bfs/face/made-up-face-0101.jpg',
           cover: 'https://i1.hdslb.com/bfs/archive/made-up-cover-0101.jpg',
           play: 12345,
           danmaku: 67,

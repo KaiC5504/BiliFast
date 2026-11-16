@@ -115,6 +115,8 @@ void main() {
             title: '历史视频一',
             cover: 'https://i0.hdslb.com/bfs/archive/his-0001.jpg',
             ownerName: 'UP主甲',
+            ownerMid: 511,
+            ownerFace: 'https://i0.hdslb.com/bfs/face/face-0511.jpg',
             progress: 65,
             duration: 212,
             viewAt: 1760700000,
@@ -123,6 +125,7 @@ void main() {
     expect(first.items[1].aid, 90000002, reason: 'without a kid, the aid comes from history.oid');
     expect(first.items[1].progress, -1);
     expect(first.items[1].part, isNull);
+    expect((first.items[1].ownerMid, first.items[1].ownerFace), (512, ''), reason: 'a row without a face');
     expect(first.items.map((item) => item.device), [1, 2, 33]);
     expect(first.items.map((item) => item.id).toSet().length, 3);
     expect(first.next, const HistoryCursor(max: 90000003, viewAt: 1760600000));
@@ -172,6 +175,15 @@ void main() {
     final page = await client.history();
     expect(page.items, isEmpty);
     expect(page.next, const HistoryCursor(max: 6470274, viewAt: 1760650000));
+  });
+
+  test('a history row without author_mid or author_face', () {
+    final item = HistoryItem.fromJson({
+      'title': '没有作者',
+      'author_name': 'UP',
+      'history': {'oid': 1, 'bvid': 'BV1x', 'business': 'archive'},
+    });
+    expect((item.ownerMid, item.ownerFace), (0, ''));
   });
 
   test('history needs a login', () async {

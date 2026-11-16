@@ -260,7 +260,10 @@ class _UploaderName extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    void open() => openUploader(context, UploaderRef(mid: video.mid, name: video.author));
+    void open() => openUploader(
+      context,
+      UploaderRef(mid: video.mid, name: video.author, face: video.face.isEmpty ? null : video.face),
+    );
     return LayoutBuilder(
       builder: (context, constraints) => Semantics(
         button: true,

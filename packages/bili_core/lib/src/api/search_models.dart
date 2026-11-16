@@ -204,6 +204,7 @@ final class SearchVideo {
     required this.title,
     required this.author,
     required this.mid,
+    this.face = '',
     required this.cover,
     required this.play,
     required this.danmaku,
@@ -225,6 +226,7 @@ final class SearchVideo {
       title: HighlightedText.parse(object.text('title') ?? ''),
       author: object.text('author') ?? '',
       mid: object.count('mid'),
+      face: _secure(object.text('upic') ?? ''),
       cover: _secure(object.text('pic') ?? ''),
       play: object.count('play'),
       danmaku: object.count('video_review', 'danmaku'),
@@ -238,6 +240,9 @@ final class SearchVideo {
   final HighlightedText title;
   final String author;
   final int mid;
+
+  /// The uploader's, an https URL.
+  final String face;
 
   /// An https URL; the answer's are protocol-relative.
   final String cover;
@@ -269,6 +274,7 @@ final class SearchVideo {
       other.title == title &&
       other.author == author &&
       other.mid == mid &&
+      other.face == face &&
       other.cover == cover &&
       other.play == play &&
       other.danmaku == danmaku &&
@@ -276,7 +282,7 @@ final class SearchVideo {
       other.published == published;
 
   @override
-  int get hashCode => Object.hash(aid, bvid, title, author, mid, cover, play, danmaku, duration, published);
+  int get hashCode => Object.hash(aid, bvid, title, author, mid, face, cover, play, danmaku, duration, published);
 }
 
 /// An uploader row of 用户 (60).
