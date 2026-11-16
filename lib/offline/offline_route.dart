@@ -16,5 +16,6 @@ VideoRoute offlineRoute(OfflineItem item) =>
 Future<void> openOfflinePage(BuildContext context, OfflineItem item) => Navigator.of(context).push(
   SwipeBackPageRoute<void>(
     builder: (_) => VideoPage(route: offlineRoute(item), createSession: offlinePageSession),
+    settings: VideoRoute.pageSettings,
   ),
 );

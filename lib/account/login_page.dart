@@ -13,8 +13,8 @@ import 'qr_login.dart';
 import 'web_cookies.dart';
 
 /// 登录: Bilibili's own login page in a web view (BiliNative `LoginView.swift`); on the PC, which has no web view, the
-/// website's QR login (`qr_login.dart`) in a `--real-account` run, else a note to log in on the phone. Pops true once
-/// the account is logged in.
+/// website's QR login (`qr_login.dart`) in a `--real-account` run, else a note to log in on the phone. Leaves with true
+/// once the account is logged in.
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
 
@@ -23,6 +23,17 @@ class LoginPage extends StatefulWidget {
 }
 
 class _LoginPageState extends State<LoginPage> {
+  /// A page can be pushed over this one while the account is checked (a notification's tap waits on that check), and
+  /// a pop would close that page instead: so this page removes its own route, still answering the gate true.
+  void _loggedIn() {
+    final route = ModalRoute.of(context);
+    if (route == null || route.isCurrent) {
+      Navigator.of(context).pop(true);
+    } else if (route.isActive) {
+      Navigator.of(context).removeRoute(route, true);
+    }
+  }
+
   @override
   Widget build(BuildContext context) => Scaffold(
     backgroundColor: LoginTheme.page,
@@ -37,12 +48,12 @@ class _LoginPageState extends State<LoginPage> {
     body: Platform.isIOS
         ? _WebLogin(
             environment: AppScope.of(context).environment,
-            onLoggedIn: () => Navigator.of(context).pop(true),
+            onLoggedIn: _loggedIn,
           )
         : AppScope.of(context).environment.pcLogin
         ? QrLogin(
             environment: AppScope.of(context).environment,
-            onLoggedIn: () => Navigator.of(context).pop(true),
+            onLoggedIn: _loggedIn,
           )
         : Center(
             child: Text('请在手机上登录', key: const ValueKey('login-on-phone'), style: LoginTheme.messageStyle),

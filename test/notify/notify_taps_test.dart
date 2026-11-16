@@ -76,12 +76,10 @@ class _Pages extends NotifyPages {
   final posts = <(String, bool)>[];
 
   @override
-  bool isVideoPage(Widget widget) => widget is _Video;
-
-  @override
   Future<void> openVideo(BuildContext context, VideoRoute route) {
     videos.add(('open', route));
-    return Navigator.of(context).push(SwipeBackPageRoute<void>(builder: (_) => _Video(route)));
+    return Navigator.of(context)
+        .push(SwipeBackPageRoute<void>(builder: (_) => _Video(route), settings: VideoRoute.pageSettings));
   }
 
   @override
@@ -226,16 +224,56 @@ void main() {
     expect(find.byKey(const ValueKey('home')), findsOneWidget);
   });
 
-  testWidgets('a dialog over the video page gets the new page over it', (tester) async {
+  testWidgets('two taps in one frame leave one video page, the second', (tester) async {
+    taps().start();
+    await mount(tester);
+    await tester.pumpAndSettle();
+    host.tap(const NotifyVideo(bvid: 'BV1first'));
+    host.tap(const NotifyVideo(bvid: 'BV1second'));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('video-BV1first'), skipOffstage: false), findsNothing);
+    expect(find.byKey(const ValueKey('video-BV1second')), findsOneWidget);
+    navigator.currentState!.pop();
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('home')), findsOneWidget);
+    expect(navigator.currentState!.canPop(), isFalse);
+  });
+
+  testWidgets('a dialog over the video page closes, and the new page replaces the old', (tester) async {
+    taps().start();
+    await mount(tester);
+    await tester.pumpAndSettle();
+    host.tap(const NotifyVideo(bvid: 'BV1first'));
+    await tester.pumpAndSettle();
+    var closed = false;
+    unawaited(
+      showDialog<void>(
+        context: tester.element(find.byKey(const ValueKey('video-BV1first'))),
+        builder: (_) => const Center(child: Text('dialog')),
+      ).then((_) => closed = true),
+    );
+    await tester.pumpAndSettle();
+    host.tap(const NotifyVideo(bvid: 'BV1second'));
+    await tester.pumpAndSettle();
+    expect(closed, isTrue);
+    expect([for (final (how, route) in pages.videos) '$how ${route.bvid}'], ['open BV1first', 'replace BV1second']);
+    expect(find.text('dialog'), findsNothing);
+    expect(find.byKey(const ValueKey('video-BV1first'), skipOffstage: false), findsNothing);
+    expect(find.byKey(const ValueKey('video-BV1second')), findsOneWidget);
+    navigator.currentState!.pop();
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('home')), findsOneWidget);
+  });
+
+  testWidgets('a page over the video page stays, with the new video page over it', (tester) async {
     taps().start();
     await mount(tester);
     await tester.pumpAndSettle();
     host.tap(const NotifyVideo(bvid: 'BV1first'));
     await tester.pumpAndSettle();
     unawaited(
-      showDialog<void>(
-        context: tester.element(find.byKey(const ValueKey('video-BV1first'))),
-        builder: (_) => const Center(child: Text('dialog')),
+      navigator.currentState!.push(
+        SwipeBackPageRoute<void>(builder: (_) => const SizedBox.expand(key: ValueKey('space'))),
       ),
     );
     await tester.pumpAndSettle();
@@ -244,7 +282,7 @@ void main() {
     expect([for (final (how, route) in pages.videos) '$how ${route.bvid}'], ['open BV1first', 'open BV1second']);
     navigator.currentState!.pop();
     await tester.pumpAndSettle();
-    expect(find.text('dialog'), findsOneWidget);
+    expect(find.byKey(const ValueKey('space')), findsOneWidget);
   });
 
   testWidgets('a post\'s route opens the post', (tester) async {

@@ -54,8 +54,14 @@ final class VideoRoute {
   /// The feed card's cover and the page's player box share it, so the cover flies into the player.
   static String coverTag(String bvid) => 'cover-$bvid';
 
+  /// The settings of every route a video page is pushed in, which [isVideoPageRoute] reads.
+  static const pageSettings = RouteSettings(name: '/video');
+
   String get heroTag => coverTag(bvid);
 }
+
+/// Whether [route] holds a video page, told by its settings: a route pushed this frame has built no page yet.
+bool isVideoPageRoute(Route<dynamic> route) => route.settings.name == VideoRoute.pageSettings.name;
 
 /// A comment thread to open with the page: its root, and the reply in it to show.
 @immutable
@@ -73,8 +79,8 @@ Future<void> openVideoPage(BuildContext context, VideoRoute route) {
   Widget page(BuildContext _) => VideoPage(route: route);
   final zoom = FormFactor.of(context).isPad ? null : route.zoomSource;
   return Navigator.of(context).push(switch (zoom) {
-    final source? => ZoomBackPageRoute<void>(builder: page, source: source),
-    null => SwipeBackPageRoute<void>(builder: page),
+    final source? => ZoomBackPageRoute<void>(builder: page, source: source, settings: VideoRoute.pageSettings),
+    null => SwipeBackPageRoute<void>(builder: page, settings: VideoRoute.pageSettings),
   });
 }
 
@@ -84,7 +90,7 @@ Future<void> openVideoPage(BuildContext context, VideoRoute route) {
 Future<void> replaceVideoPage(BuildContext context, VideoRoute route, {Widget Function(VideoRoute route)? page}) {
   if (route.cover case final cover? when cover.isNotEmpty) VideoPage.precacheCover(context, cover);
   final build = page ?? (route) => VideoPage(route: route);
-  final next = SwipeBackPageRoute<void>(builder: (_) => build(route));
+  final next = SwipeBackPageRoute<void>(builder: (_) => build(route), settings: VideoRoute.pageSettings);
   final navigator = Navigator.of(context);
   // pushReplacement replaces whatever route is on top; with anything over the page it goes on top instead.
   if (ModalRoute.of(context)?.isCurrent ?? false) return navigator.pushReplacement(next);

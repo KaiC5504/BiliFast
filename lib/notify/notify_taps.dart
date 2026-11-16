@@ -6,13 +6,12 @@ import 'package:flutter/widgets.dart';
 import '../app/app_environment.dart';
 import '../app/app_scope.dart';
 import '../dynamic/post/post_route.dart';
-import '../video/video_page.dart';
 import '../video/video_route.dart';
 import 'notify_host.dart';
 
 /// Opens what a tapped notification names, and logs the background checks NotifyHost.swift ran since the last launch.
-/// A tap opens its page over whatever is on top, as a pasted link does; only a video page on top is replaced, since
-/// video pages never stack. Logged out, a tap opens nothing.
+/// A tap closes the sheets and dialogs on top and opens its page over the page under them, as a pasted link does; only
+/// a video page there is replaced, since video pages never stack. Logged out, a tap opens nothing.
 class NotifyTaps {
   NotifyTaps({
     required this.host,
@@ -120,14 +119,22 @@ class NotifyTaps {
   }
 
   void _show(NavigatorState navigator, NotifyRoute route) {
+    final top = _closePopups(navigator);
     switch (route) {
       case NotifyVideo(:final bvid, :final commentRoot, :final comment):
         final video = VideoRoute(
           bvid: bvid,
           comment: commentRoot == null ? null : CommentFocus(root: commentRoot, reply: comment),
         );
-        final shown = _videoPageOnTop(navigator);
-        unawaited(shown == null ? pages.openVideo(navigator.context, video) : pages.replaceVideo(shown, video));
+        if (top is! ModalRoute<Object?> || !isVideoPageRoute(top)) {
+          unawaited(pages.openVideo(navigator.context, video));
+        } else if (top.subtreeContext case final shown?) {
+          unawaited(pages.replaceVideo(shown, video));
+        } else {
+          // Pushed this frame (a tap just before), so nothing in it is built to replace it from, nor shown yet.
+          navigator.removeRoute(top);
+          unawaited(pages.openVideo(navigator.context, video));
+        }
       case NotifyDynamicPost(:final id, :final toComments):
         unawaited(pages.openPost(navigator.context, id: id, toComments: toComments));
       case NotifyApp():
@@ -135,37 +142,22 @@ class NotifyTaps {
     }
   }
 
-  /// A context inside the top route when that route is a video page's; a sheet or dialog over the page is on top.
-  BuildContext? _videoPageOnTop(NavigatorState navigator) {
+  /// Pops the sheets and dialogs on top and returns the page route then showing. Over a video page they would
+  /// otherwise get the new page over them, with the old page still under both.
+  Route<dynamic>? _closePopups(NavigatorState navigator) {
     Route<dynamic>? top;
-    // A predicate that holds at once pops nothing: the navigator names its top route no other way.
+    // The navigator names its top route no other way: each route the predicate turns down is popped.
     navigator.popUntil((route) {
       top = route;
-      return true;
+      return route is! PopupRoute;
     });
-    final route = top;
-    final context = route is ModalRoute<Object?> ? route.subtreeContext : null;
-    if (context == null) return null;
-    var found = false;
-    void visit(Element element) {
-      if (found) return;
-      if (pages.isVideoPage(element.widget)) {
-        found = true;
-      } else {
-        element.visitChildElements(visit);
-      }
-    }
-
-    context.visitChildElements(visit);
-    return found ? context : null;
+    return top;
   }
 }
 
 /// The pages a tap opens; tests stand in for the video page, which needs a player.
 class NotifyPages {
   const NotifyPages();
-
-  bool isVideoPage(Widget widget) => widget is VideoPage;
 
   Future<void> openVideo(BuildContext context, VideoRoute route) => openVideoPage(context, route);
 

@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:bili_core/api.dart';
 import 'package:bili_core/devlog.dart';
 import 'package:bilifast/account/keychain_store.dart';
+import 'package:bilifast/account/login_gate.dart';
 import 'package:bilifast/account/login_page.dart';
 import 'package:bilifast/account/qr_login.dart';
 import 'package:bilifast/app/app_environment.dart';
@@ -494,11 +495,15 @@ void main() {
     const confirmed =
         '{"code":0,"message":"0","data":{"url":"https://passport.biligame.com/x/passport-login/web/crossDomain?DedeUserID=12345&DedeUserID__ckMd5=ab&SESSDATA=s%2C1%2Cx%2A1&bili_jct=j&gourl=x","refresh_token":"r","timestamp":0,"code":0,"message":""}}';
 
-    testWidgets('the client\'s calls show the code, and a confirmed login pops the page with true', (tester) async {
-      final http = Canned.http()
+    late CannedHttp http;
+    late AppEnvironment environment;
+    late BuildContext host;
+
+    Future<void> mount(WidgetTester tester) async {
+      http = Canned.http()
         ..routes['/x/passport-login/web/qrcode/generate'] = (200, generated)
         ..routes['/x/passport-login/web/qrcode/poll'] = (200, waiting);
-      final environment = await AppEnvironment.load(
+      environment = await AppEnvironment.load(
         keychain: FakeKeychain(const StoredCookies({'buvid3': 'b3', 'buvid4': 'b4'})),
         webCookies: FakeWebCookies(),
         http: http,
@@ -512,18 +517,21 @@ void main() {
         pageApi: FakePageApi(),
       );
       addTearDown(services.playback.dispose);
-      late BuildContext host;
       await tester.pumpWidget(
         MaterialApp(
           builder: (context, child) => AppScope(services: services, child: child!),
           home: Builder(
             builder: (context) {
               host = context;
-              return const SizedBox.expand();
+              return const SizedBox.expand(key: ValueKey('home'));
             },
           ),
         ),
       );
+    }
+
+    testWidgets('the client\'s calls show the code, and a confirmed login pops the page with true', (tester) async {
+      await mount(tester);
       bool? answer;
       unawaited(
         Navigator.of(host).push<bool>(MaterialPageRoute(builder: (_) => const LoginPage())).then((v) => answer = v),
@@ -544,6 +552,39 @@ void main() {
       expect(environment.account, isA<LoggedIn>());
       expect(environment.cookies.value('SESSDATA'), 's%2C1%2Cx%2A1');
       expect(http.to('/x/passport-login/web/qrcode/poll'), hasLength(2));
+    });
+
+    testWidgets('a page pushed over it while the account is checked stays, and the gate still hears true', (
+      tester,
+    ) async {
+      await mount(tester);
+      bool? answer;
+      unawaited(LoginPageGate(environment).request(host).then((v) => answer = v));
+      await tester.pumpAndSettle();
+      final check = Completer<void>();
+      http
+        ..gates[Canned.navPath] = check
+        ..routes['/x/passport-login/web/qrcode/poll'] = (200, confirmed);
+      await tester.pump(const Duration(seconds: 2));
+      await tester.pump();
+      expect(environment.account, isA<AccountUnknown>());
+
+      // A notification's tap waits on this check, and pushes its page before the login page hears the answer.
+      unawaited(
+        Navigator.of(host).push(MaterialPageRoute<void>(builder: (_) => const SizedBox.expand(key: ValueKey('over')))),
+      );
+      await tester.pumpAndSettle();
+      check.complete();
+      await tester.pumpAndSettle();
+      expect(environment.account, isA<LoggedIn>());
+      expect(answer, isTrue);
+      expect(find.byKey(const ValueKey('over')), findsOneWidget);
+      expect(find.byType(LoginPage, skipOffstage: false), findsNothing);
+
+      Navigator.of(host).pop();
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('home')), findsOneWidget);
+      expect(Navigator.of(host).canPop(), isFalse);
     });
   });
 }
