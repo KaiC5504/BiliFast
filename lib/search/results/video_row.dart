@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:bili_core/api.dart';
 import 'package:bili_core/logic.dart';
 import 'package:flutter/widgets.dart';
@@ -8,6 +10,7 @@ import '../../shared/cover_preset.dart';
 import '../../shared/menu.dart' show PressHighlight;
 import '../../shared/remote_image.dart';
 import '../../shared/theme.dart';
+import '../../space/uploader_tap.dart';
 import '../search_glyphs.dart';
 
 /// How 搜索's rows word counts, dates and lengths (56, 60, 61).
@@ -178,6 +181,17 @@ class SearchVideoRow extends StatelessWidget {
               ),
             ),
           ),
+          if (video.mid > 0)
+            Positioned(
+              left: textLeft,
+              right: metaRight,
+              top: metaTop - _nameSlopAbove,
+              height: _nameSlopAbove + SearchResultTheme.metaLine + _nameSlopBelow,
+              child: Align(
+                alignment: Alignment.topLeft,
+                child: _UploaderName(video: video),
+              ),
+            ),
           Positioned(
             right: SearchResultTheme.moreCentreRight - SearchResultTheme.moreTarget / 2,
             width: SearchResultTheme.moreTarget,
@@ -208,6 +222,60 @@ class SearchVideoRow extends StatelessWidget {
             child: ColoredBox(color: SearchResultTheme.rowHairlineInk),
           ),
         ],
+      ),
+    );
+  }
+}
+
+const _nameSlopAbove = 6.0;
+
+// Half the gap, so the plays line under it stays the row's.
+const _nameSlopBelow = SearchResultTheme.metaGap / 2;
+
+/// The uploader's UP glyph and name as one target over the drawn line, as wide as the name: the uploader's space.
+class _UploaderName extends StatelessWidget {
+  const _UploaderName({required this.video});
+
+  final SearchVideo video;
+
+  static const _lead = SearchResultTheme.metaGlyphSlot + SearchResultTheme.metaGlyphGap;
+
+  /// The width [SearchMetaLine] gives the name, measured the way its Text lays it out.
+  double _nameWidth(BuildContext context, double room) {
+    final style = DefaultTextStyle.of(context).style
+        .merge(searchStyle(SearchResultTheme.metaText, SearchResultTheme.metaInk, line: SearchResultTheme.metaLine));
+    final painter = TextPainter(
+      text: TextSpan(style: style, children: [dotted(video.author)]),
+      textDirection: Directionality.of(context),
+      textScaler: MediaQuery.textScalerOf(context),
+      locale: Localizations.maybeLocaleOf(context),
+      strutStyle: BiliFonts.strut(style),
+      maxLines: 1,
+      ellipsis: '…',
+    )..layout(maxWidth: room);
+    final width = painter.width;
+    painter.dispose();
+    return width;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    void open() => openUploader(context, UploaderRef(mid: video.mid, name: video.author));
+    return LayoutBuilder(
+      builder: (context, constraints) => Semantics(
+        button: true,
+        label: video.author,
+        onTap: open,
+        excludeSemantics: true,
+        child: GestureDetector(
+          key: ValueKey('search-uploader-${video.bvid}'),
+          behavior: HitTestBehavior.opaque,
+          onTap: open,
+          child: SizedBox(
+            width: _lead + _nameWidth(context, math.max(0, constraints.maxWidth - _lead)),
+            height: _nameSlopAbove + SearchResultTheme.metaLine + _nameSlopBelow,
+          ),
+        ),
       ),
     );
   }
