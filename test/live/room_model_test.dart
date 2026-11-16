@@ -19,6 +19,12 @@ final _t0 = DateTime(2026, 11, 17, 20);
 
 const _viewer = LiveUser(uid: _viewerUid, name: '我自己');
 
+/// The socket's refusal: `refused` once bili_core has it, `failed` before.
+final _refused = LiveSocketState.values.firstWhere(
+  (state) => state.name == 'refused',
+  orElse: () => LiveSocketState.failed,
+);
+
 LivePlayInfo _playInfo({LiveStatus status = LiveStatus.live, int qn = 10000}) => LivePlayInfo(
   roomId: _realId,
   shortId: _shortId,
@@ -434,6 +440,131 @@ void main() {
       expect(room.channel.starts, 2);
       // The channel (and its token) is asked once and kept.
       expect(room.callsNamed('channel'), ['channel 7007']);
+      room.model.dispose();
+    });
+  });
+
+  test('after a hide past 30 min, show asks a fresh channel (its token likely expired)', () {
+    fakeAsync((async) {
+      final room = _Room(async);
+      room.start();
+      room.model.setShown(false);
+      async.elapse(const Duration(minutes: 31));
+      expect(room.channel.closes, 1);
+
+      room.model.setShown(true);
+      async.flushMicrotasks();
+      expect(room.callsNamed('channel'), ['channel 7007', 'channel 7007']);
+      expect(room.channel.starts, 2);
+      expect(room.channel.closes, 1, reason: 'the old one was already closed');
+      room.model.dispose();
+    });
+  });
+
+  test('a refused socket asks a fresh channel once; refused again, the chat says so and nothing more is asked', () {
+    fakeAsync((async) {
+      final room = _Room(async);
+      room.start();
+      expect(room.callsNamed('channel'), hasLength(1));
+
+      room.channel.setState(_refused);
+      async.flushMicrotasks();
+      expect(room.callsNamed('channel'), hasLength(2));
+      expect(room.channel.closes, 1);
+      expect(room.channel.starts, 2);
+
+      // The fresh channel's events still reach the chat.
+      room.emit(LiveDanmakuEvent(_message('d0')));
+      expect(_describe(room.chat.last), 'dm d0');
+
+      room.channel.setState(_refused);
+      async.flushMicrotasks();
+      expect(room.callsNamed('channel'), hasLength(2));
+      expect(room.channel.closes, 2);
+      expect((room.chat.last as LiveChatNotice).text, '弹幕连接失败，请稍后重试');
+
+      unawaited(room.model.setQuality(400));
+      async.elapse(const Duration(minutes: 1));
+      room.channel.setState(_refused);
+      async.flushMicrotasks();
+      expect(room.callsNamed('channel'), hasLength(2));
+      expect(room.chat.whereType<LiveChatNotice>(), hasLength(2), reason: '系统提示 and the one notice');
+
+      // Shown again, it may try once more.
+      room.model.setShown(false);
+      async.elapse(const Duration(seconds: 2));
+      room.model.setShown(true);
+      async.flushMicrotasks();
+      expect(room.callsNamed('channel'), hasLength(3));
+      expect(room.channel.starts, 3);
+      room.model.dispose();
+    });
+  });
+
+  test('a failed channel ask waits for the next show: a quality switch asks nothing', () {
+    fakeAsync((async) {
+      final room = _Room(async);
+      room.api.failures['channel'] = StateError('down');
+      room.start();
+      expect(room.callsNamed('channel'), hasLength(1));
+
+      unawaited(room.model.setQuality(400));
+      unawaited(room.model.refreshStream());
+      async.elapse(const Duration(minutes: 1));
+      expect(room.callsNamed('channel'), hasLength(1));
+      expect(room.channel.starts, 0);
+
+      room.api.failures.clear();
+      room.model.setShown(false);
+      async.elapse(const Duration(seconds: 2));
+      room.model.setShown(true);
+      async.flushMicrotasks();
+      expect(room.callsNamed('channel'), hasLength(2));
+      expect(room.channel.starts, 1);
+      room.model.dispose();
+    });
+  });
+
+  test('a failed 点赞 takes its taps back and reports the error for the page', () {
+    fakeAsync((async) {
+      final room = _Room(async);
+      room.start();
+      final failures = <Object>[];
+      room.model.writeFailures.listen(failures.add);
+      const notLoggedIn = BiliAPIError(code: -101, message: '账号未登录');
+      room.api.failures['like'] = notLoggedIn;
+
+      room.model
+        ..like()
+        ..like();
+      expect(room.model.likeCount, 102);
+      async.elapse(const Duration(seconds: 1));
+      expect(room.model.likeCount, 100);
+      expect(failures, [notLoggedIn]);
+      room.model.dispose();
+    });
+  });
+
+  test('endedNotices rises once for a room offline at open, and once for each PREPARING', () {
+    fakeAsync((async) {
+      final offline = _Room(async, play: _playInfo(status: LiveStatus.offline));
+      offline.start();
+      expect(offline.model.endedNotices.value, 1);
+      unawaited(offline.model.refreshStream());
+      async.flushMicrotasks();
+      expect(offline.model.endedNotices.value, 1, reason: 'still the same end');
+      offline.model.dispose();
+
+      final room = _Room(async);
+      room.start();
+      expect(room.model.endedNotices.value, 0);
+      room.emit(const LiveStatusEvent(live: false));
+      room.emit(const LiveStatusEvent(live: false));
+      expect(room.model.endedNotices.value, 1);
+      room.emit(const LiveStatusEvent(live: true));
+      room.emit(const LiveStatusEvent(live: false));
+      expect(room.model.endedNotices.value, 2);
+      expect(room.chat.whereType<LiveChatRoomCard>(), hasLength(1), reason: 'the chat stays');
       room.model.dispose();
     });
   });

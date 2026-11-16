@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:io';
 
 import 'package:bili_core/api.dart';
 import 'package:bili_core/devlog.dart';
@@ -63,11 +62,8 @@ void main() {
     expect(play.currentQn, 10000);
     expect((await api.playInfo(play.roomId, qn: 400)).currentQn, 400);
     expect((await api.playInfo(play.roomId, qn: 1)).currentQn, 10000);
-    if (Platform.isWindows) {
-      expect(File(play.url!.toFilePath()).existsSync(), isTrue);
-    } else {
-      expect(play.url, isNull);
-    }
+    // The Windows demo's loopback stream stays out of tests.
+    expect(play.url, isNull);
 
     final info = await api.roomInfo(card.roomId);
     expect(info.anchorName, '演示主播');

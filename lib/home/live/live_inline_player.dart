@@ -1,7 +1,7 @@
 import 'dart:async';
 
 import 'package:bili_core/devlog.dart';
-import 'package:flutter/foundation.dart';
+import 'package:flutter/widgets.dart';
 
 import '../../app/app_scope.dart';
 import '../../live/live_api.dart';
@@ -13,10 +13,11 @@ import '../../shared/theme.dart';
 import '../feed_inline_player.dart' show FeedInlineChoices;
 
 /// The carousel card's stream, played muted on a player of its own while [FeedInlineHost] picks the card: a
-/// [LiveRoomModel] asks the stream and feeds the danmaku over it, and is shown only while the card plays. Paused it keeps
-/// both for [FeedBigCardTheme.releaseAfter]; back within [LiveTabTheme.resumeReloadAfter] it plays on, later it asks the
-/// stream again from the live edge.
-class LiveInlinePlayback extends ChangeNotifier {
+/// [LiveRoomModel] asks the stream and feeds the danmaku over it, its socket open only while the card plays with 弹 on.
+/// Paused (or the app away) it keeps both for [FeedBigCardTheme.releaseAfter]; back within
+/// [LiveTabTheme.resumeReloadAfter] it plays on, later it asks the stream again from the live edge. A player failure or
+/// a [stallLimit] without a picture asks a fresh stream once; after that the card shows its cover until released.
+class LiveInlinePlayback extends ChangeNotifier with WidgetsBindingObserver {
   LiveInlinePlayback({
     required this._services,
     required this._api,
@@ -27,11 +28,16 @@ class LiveInlinePlayback extends ChangeNotifier {
   }) : _now = now ?? DateTime.now,
        _logger = logger ?? Logger.shared {
     FeedInlineChoices.sound.addListener(_applySound);
+    FeedInlineChoices.danmaku.addListener(_syncRoom);
+    WidgetsBinding.instance.addObserver(this);
+    _away = _isAway(WidgetsBinding.instance.lifecycleState);
   }
 
   /// Makes the card's player; tests hand out fakes.
   @visibleForTesting
   static Future<BiliPlayer> Function() createPlayer = players.createPlayer;
+
+  static const stallLimit = Duration(seconds: 15);
 
   final AppServices _services;
   final LiveApi _api;
@@ -51,6 +57,12 @@ class LiveInlinePlayback extends ChangeNotifier {
   bool _playing = false;
   bool _failed = false;
   bool _disposed = false;
+  bool _away = false;
+  PlayerStatus? _status;
+  Timer? _stall;
+
+  /// The one fresh stream a failure or a stall may ask for until released.
+  bool _recovered = false;
 
   /// Asked to play, whether it does yet or is loading.
   bool get wanted => _wanted;
@@ -69,45 +81,34 @@ class LiveInlinePlayback extends ChangeNotifier {
   bool get failed => _failed;
 
   void play() {
-    _release?.cancel();
-    _release = null;
-    if (_wanted || _disposed) return;
-    _wanted = true;
-    final room = _room ??= _makeRoom();
-    room.setShown(true);
-    final player = _player;
-    if (player == null) {
-      _creating ??= _create();
-    } else {
-      final pausedAt = _pausedAt;
-      final stale = pausedAt != null && _now().difference(pausedAt) >= LiveTabTheme.resumeReloadAfter;
-      if (stale) {
-        _loaded = null;
-        _load();
-      } else if (_loaded != null) {
-        _quietly(player.play, 'play');
-      }
+    if (_disposed) return;
+    if (_wanted) {
+      if (!_away) _cancelRelease();
+      return;
     }
-    _pausedAt = null;
+    _wanted = true;
+    _room ??= _makeRoom();
+    if (!_away) _resume();
+    _syncRoom();
     _changed();
   }
 
   void pause() {
     if (!_wanted || _disposed) return;
     _wanted = false;
-    _pausedAt = _now();
-    if (_player case final player?) _quietly(player.pause, 'pause');
-    _room?.setShown(false);
-    _release = Timer(FeedBigCardTheme.releaseAfter, release);
+    if (!_away) _hold();
+    _syncRoom();
     _changed();
   }
 
   /// Stops and frees the player and the room; a later play starts afresh.
   void release() {
-    _release?.cancel();
-    _release = null;
+    _cancelRelease();
+    _stall?.cancel();
+    _stall = null;
     _wanted = false;
     _pausedAt = null;
+    _recovered = false;
     final hadAny = _player != null || _room != null;
     _dropPlayer();
     final room = _room;
@@ -122,6 +123,55 @@ class LiveInlinePlayback extends ChangeNotifier {
     if (hadAny) _logger.info(LogCategory.player, 'live inline released', {'room': entry.roomId});
     _changed();
   }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    final away = _isAway(state);
+    if (away == _away || _disposed) return;
+    _away = away;
+    if (_wanted) away ? _hold() : _resume();
+    _syncRoom();
+    _changed();
+  }
+
+  static bool _isAway(AppLifecycleState? state) =>
+      state == AppLifecycleState.hidden || state == AppLifecycleState.paused;
+
+  /// Plays on where it was held, or from the live edge after [LiveTabTheme.resumeReloadAfter].
+  void _resume() {
+    _cancelRelease();
+    final player = _player;
+    if (player == null) {
+      _creating ??= _create();
+    } else {
+      final pausedAt = _pausedAt;
+      final stale = pausedAt != null && _now().difference(pausedAt) >= LiveTabTheme.resumeReloadAfter;
+      if (stale) {
+        _loaded = null;
+        _load();
+      } else if (_loaded != null) {
+        _quietly(player.play, 'play');
+      }
+    }
+    _pausedAt = null;
+    _watchStall();
+  }
+
+  void _hold() {
+    _pausedAt = _now();
+    _stall?.cancel();
+    _stall = null;
+    if (_player case final player?) _quietly(player.pause, 'pause');
+    _release ??= Timer(FeedBigCardTheme.releaseAfter, release);
+  }
+
+  void _cancelRelease() {
+    _release?.cancel();
+    _release = null;
+  }
+
+  /// The room's socket follows the card playing with 弹 on; the model closes it after its grace.
+  void _syncRoom() => _room?.setShown(_wanted && !_away && FeedInlineChoices.danmaku.value);
 
   LiveRoomModel _makeRoom() {
     _logger.info(LogCategory.player, 'live inline start', {'room': entry.roomId});
@@ -159,10 +209,7 @@ class LiveInlinePlayback extends ChangeNotifier {
     final room = _room;
     if (room == null) return;
     if (room.state == LiveRoomState.ended || room.state == LiveRoomState.failed) {
-      if (!_failed) {
-        _failed = true;
-        _changed();
-      }
+      if (!_failed) _fail();
       return;
     }
     _load();
@@ -177,24 +224,77 @@ class LiveInlinePlayback extends ChangeNotifier {
     _loaded = url;
     _playing = false;
     _failed = false;
-    _quietly(() => player.load(PlayerSource(master: url, headers: _api.streamHeaders, autoplay: _wanted)), 'load');
+    _status = null;
+    _quietly(
+      () => player.load(PlayerSource(master: url, headers: _api.streamHeaders, autoplay: _wanted && !_away)),
+      'load',
+    );
+    _watchStall();
     _changed();
   }
 
   void _event(PlayerEvent event) {
     switch (event) {
       case StatusChanged(:final status):
-        final playing = status == PlayerStatus.playing;
-        if (playing && !_playing) {
+        _status = status;
+        if (status == PlayerStatus.playing && !_playing) {
           _playing = true;
           _changed();
         }
+        _watchStall();
       case PlayerFailed(:final message):
         _logger.warn(LogCategory.player, 'live inline failed', {'error': message});
-        _failed = true;
-        _changed();
+        _recover('failed');
       default:
     }
+  }
+
+  /// Times a stream that is loaded and wanted but not playing.
+  void _watchStall() {
+    final stalled = _wanted && !_away && !_failed && _loaded != null && _status != PlayerStatus.playing;
+    if (!stalled) {
+      _stall?.cancel();
+      _stall = null;
+      return;
+    }
+    _stall ??= Timer(stallLimit, () {
+      _stall = null;
+      _recover('stall');
+    });
+  }
+
+  /// A fresh play info once, the stream loaded again from it; a second failure leaves the cover.
+  void _recover(String reason) {
+    _stall?.cancel();
+    _stall = null;
+    final room = _room;
+    if (_disposed || room == null || _failed) return;
+    if (_recovered) {
+      _fail();
+      return;
+    }
+    _recovered = true;
+    _logger.info(LogCategory.player, 'live inline fresh stream', {'room': entry.roomId, 'reason': reason});
+    _loaded = null;
+    _playing = false;
+    unawaited(
+      room.refreshStream().then(
+        (_) {
+          if (identical(room, _room)) _load();
+        },
+        onError: (Object error) {
+          if (identical(room, _room)) _fail();
+        },
+      ),
+    );
+    _changed();
+  }
+
+  void _fail() {
+    _stall?.cancel();
+    _stall = null;
+    _failed = true;
+    _changed();
   }
 
   void _applySound() {
@@ -211,6 +311,7 @@ class LiveInlinePlayback extends ChangeNotifier {
     _player = null;
     _loaded = null;
     _playing = false;
+    _status = null;
     if (player != null) _quietly(player.dispose, 'dispose');
   }
 
@@ -223,6 +324,8 @@ class LiveInlinePlayback extends ChangeNotifier {
     release();
     _disposed = true;
     FeedInlineChoices.sound.removeListener(_applySound);
+    FeedInlineChoices.danmaku.removeListener(_syncRoom);
+    WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }
 

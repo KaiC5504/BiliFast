@@ -54,12 +54,26 @@ class LiveRoomModel extends ChangeNotifier {
 
   static const likeTip = '试试双击点赞，让主播被更多人看到吧～';
 
+  /// The chat's row when the danmaku channel was refused twice in one showing.
+  static const channelFailedNotice = '弹幕连接失败，请稍后重试';
+
   static const maxRows = 500;
   static const _trimRows = 100;
   static const _tipAfter = Duration(seconds: 30);
   static const _hideGrace = Duration(seconds: 1);
   static const _likeGather = Duration(milliseconds: 800);
   static const _echoWindow = Duration(seconds: 10);
+
+  /// Hidden longer than this, the channel's token is taken as expired and a fresh one is asked on show.
+  static const _channelStaleAfter = Duration(minutes: 30);
+  static const _channelAsksPerShow = 2;
+
+  /// The socket's word for a token it was refused with. `refused` where bili_core has it; until then every `failed`
+  /// counts, which costs at most one more ask per showing.
+  static final _refusal = LiveSocketState.values.firstWhere(
+    (state) => state.name == 'refused',
+    orElse: () => LiveSocketState.failed,
+  );
 
   final LiveApi api;
   final LiveRoomEntry entry;
@@ -140,6 +154,16 @@ class LiveRoomModel extends ChangeNotifier {
   Stream<LiveChatMessage> get flying => _flying.stream;
   final _flying = StreamController<LiveChatMessage>.broadcast();
 
+  /// A write that failed after its taps were already shown (点赞), with the error, so the page can toast it or open
+  /// the login gate on -101. The count has already gone back.
+  Stream<Object> get writeFailures => _writeFailures.stream;
+  final _writeFailures = StreamController<Object>.broadcast();
+
+  /// Rises by one each time the room ends: not live when opened, or PREPARING while watched. Each rise is one
+  /// 直播已结束; a listener that comes later sees a count above 0 for an end it missed.
+  ValueListenable<int> get endedNotices => _endedNotices;
+  final _endedNotices = ValueNotifier<int>(0);
+
   bool _disposed = false;
   Future<void>? _starting;
   Future<void>? _retrying;
@@ -149,10 +173,16 @@ class LiveRoomModel extends ChangeNotifier {
   Timer? _expiryTimer;
 
   bool _shown = true;
+  DateTime? _hiddenAt;
   LiveChannel? _channel;
   Future<LiveChannel>? _channelAsk;
   StreamSubscription<LiveEvent>? _events;
+  StreamSubscription<LiveSocketState>? _socketStates;
   bool _socketOn = false;
+
+  /// Channel asks since the page was last shown; a failed ask or a second refusal holds them until the next show.
+  int _channelAsks = 0;
+  bool _channelHeld = false;
 
   /// Moves on with every open and close, so a channel that answers after its page went away isn't started.
   int _socketGeneration = 0;
@@ -233,8 +263,20 @@ class LiveRoomModel extends ChangeNotifier {
     _notify();
   }
 
-  /// The page is on screen (true) or covered / the app away (false): the socket closes away and comes back on return.
+  /// The page is on screen (true) or covered / the app away (false): the socket closes away and comes back on return,
+  /// on a fresh channel after a long absence.
   void setShown(bool shown) {
+    if (shown != _shown && !_disposed) {
+      if (shown) {
+        final hiddenAt = _hiddenAt;
+        _hiddenAt = null;
+        _channelAsks = 0;
+        _channelHeld = false;
+        if (hiddenAt != null && now().difference(hiddenAt) > _channelStaleAfter) _dropChannel();
+      } else {
+        _hiddenAt = now();
+      }
+    }
     _shown = shown;
     _syncSocket();
   }
@@ -309,8 +351,11 @@ class LiveRoomModel extends ChangeNotifier {
     _graceTimer?.cancel();
     _socketGeneration++;
     unawaited(_events?.cancel());
+    unawaited(_socketStates?.cancel());
     if (_channel case final channel?) unawaited(_closeChannel(channel));
     unawaited(_flying.close());
+    unawaited(_writeFailures.close());
+    _endedNotices.dispose();
     _chat.dispose();
     _superChats.dispose();
     super.dispose();
@@ -337,7 +382,7 @@ class LiveRoomModel extends ChangeNotifier {
   void _takePlay(LivePlayInfo play) {
     _play = play;
     if (play.roomId != 0) _roomId = play.roomId;
-    _state = play.status == LiveStatus.live ? LiveRoomState.live : LiveRoomState.ended;
+    _setState(play.status == LiveStatus.live ? LiveRoomState.live : LiveRoomState.ended);
     if (!_cardAdded) {
       _cardAdded = true;
       _append([LiveChatRoomCard(title: title, description: _info?.description ?? '', liveTime: play.liveTime)]);
@@ -347,6 +392,11 @@ class LiveRoomModel extends ChangeNotifier {
       unawaited(_try('enter', () => api.enter(roomId)));
     }
     _syncSocket();
+  }
+
+  void _setState(LiveRoomState state) {
+    if (state == LiveRoomState.ended && _state != LiveRoomState.ended) _endedNotices.value++;
+    _state = state;
   }
 
   int? get _currentQn {
@@ -390,7 +440,7 @@ class LiveRoomModel extends ChangeNotifier {
   }
 
   // The socket stays up through an end (PREPARING), so the room hears LIVE when it comes back.
-  bool get _wantsSocket => _shown && !_disposed && (_state == LiveRoomState.live || _channel != null);
+  bool get _wantsSocket => _shown && !_disposed && !_channelHeld && (_state == LiveRoomState.live || _channel != null);
 
   void _syncSocket() {
     if (_disposed) return;
@@ -437,22 +487,59 @@ class LiveRoomModel extends ChangeNotifier {
     }
   }
 
-  /// The room's channel, asked once and kept between hide and show (its token with it).
+  /// The room's channel, kept between hide and show (its token with it) until the socket is refused or the page was
+  /// away past [_channelStaleAfter]. A failed ask isn't repeated before the next show.
   Future<LiveChannel?> _ensureChannel() async {
     if (_channel case final channel?) return channel;
+    var ask = _channelAsk;
+    if (ask == null) {
+      _channelAsks++;
+      ask = _channelAsk = api.channel(roomId);
+    }
     try {
-      final channel = await (_channelAsk ??= api.channel(roomId));
-      if (_disposed) return null;
+      final channel = await ask;
+      if (_disposed || !identical(_channelAsk, ask)) return null;
       if (_channel == null) {
         _channel = channel;
         _events = channel.events.listen(_onEvent);
+        _socketStates = channel.states.listen((state) => _onSocketState(channel, state));
       }
       return _channel;
     } catch (error) {
-      _channelAsk = null;
+      if (identical(_channelAsk, ask)) {
+        _channelAsk = null;
+        _channelHeld = true;
+      }
       _logger.warn(LogCategory.api, 'live socket info failed', {'room': roomId, 'error': _reason(error)});
       return null;
     }
+  }
+
+  void _onSocketState(LiveChannel channel, LiveSocketState state) {
+    if (_disposed || state != _refusal || !identical(channel, _channel)) return;
+    final giveUp = _channelAsks >= _channelAsksPerShow;
+    _logger.warn(LogCategory.api, 'live socket refused', {'room': roomId, 'asks': _channelAsks, 'give_up': giveUp});
+    _dropChannel();
+    if (giveUp) {
+      _channelHeld = true;
+      _append([const LiveChatNotice(channelFailedNotice)]);
+    }
+    _syncSocket();
+  }
+
+  /// Forgets the channel and its token, closing it if it is on; the next open asks a new one.
+  void _dropChannel() {
+    final channel = _channel;
+    _channel = null;
+    _channelAsk = null;
+    unawaited(_events?.cancel());
+    _events = null;
+    unawaited(_socketStates?.cancel());
+    _socketStates = null;
+    if (!_socketOn) return;
+    _socketOn = false;
+    _socketGeneration++;
+    if (channel != null) unawaited(_closeChannel(channel));
   }
 
   void _onEvent(LiveEvent event) {
@@ -498,7 +585,7 @@ class LiveRoomModel extends ChangeNotifier {
         _notify();
       case LiveStatusEvent(live: false):
         if (_state != LiveRoomState.live) return;
-        _state = LiveRoomState.ended;
+        _setState(LiveRoomState.ended);
         _logger.info(LogCategory.app, 'live room ended', {'room': roomId});
         _notify();
       case LiveStatusEvent(live: true):
@@ -590,6 +677,7 @@ class LiveRoomModel extends ChangeNotifier {
       if (_disposed) return;
       _likeCount = math.max(0, _likeCount - clicks);
       _notify();
+      _writeFailures.add(error);
     }
   }
 
