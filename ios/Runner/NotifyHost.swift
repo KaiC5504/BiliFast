@@ -759,7 +759,7 @@ enum NotifyItems {
     let likers = NotifyJSON.int(json["counts"]) ?? Int64(users.count)
     return NotifyItem(kind: .likes, key: "\(id)@\(time)", time: time, who: NotifyJSON.text(users.first?["nickname"]),
                       text: NotifyJSON.text(item["title"]), business: NotifyJSON.text(item["business"]),
-                      others: max(likers - 1, 0), route: .app)
+                      others: max(likers - 1, 0), route: NativeNotifyRoute(target: .likes, toComments: false))
   }
 
   /// A 视频 card of the polymer feed, as bili_core's dynamic decode reads it (dynamic_models.dart).
@@ -811,7 +811,7 @@ enum NotifyWording {
 
   /// One 私信 notification at a time: a newer count replaces the one before.
   static func messages(_ count: Int64) -> NotifyPost {
-    NotifyPost(kind: .messages, title: "私信", body: "你有 \(count) 条新私信", route: .app,
+    NotifyPost(kind: .messages, title: "私信", body: "你有 \(count) 条新私信", route: NativeNotifyRoute(target: .messages, toComments: false),
                identifier: "com.kaichuan.bilifast.notify.messages")
   }
 
@@ -823,7 +823,12 @@ enum NotifyWording {
     case .uploads: ("关注的UP主投稿", "还有 \(more) 个新视频")
     case .messages: ("私信", "还有 \(more) 条新私信")
     }
-    return NotifyPost(kind: kind, title: title, body: body, route: .app)
+    let route = switch kind {
+    case .likes: NativeNotifyRoute(target: .likes, toComments: false)
+    case .messages: NativeNotifyRoute(target: .messages, toComments: false)
+    default: NativeNotifyRoute.app
+    }
+    return NotifyPost(kind: kind, title: title, body: body, route: route)
   }
 }
 

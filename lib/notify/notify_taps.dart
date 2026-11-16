@@ -87,6 +87,8 @@ class NotifyTaps {
       NotifyVideo(commentRoot: null) => 'video',
       NotifyVideo() => 'comment',
       NotifyDynamicPost() => 'post',
+      NotifyLikes() => 'likes',
+      NotifyMessages() => 'messages',
       NotifyApp() => 'app',
     };
     if (route is NotifyApp) {
@@ -146,7 +148,7 @@ class NotifyTaps {
         }
       case NotifyDynamicPost(:final id, :final toComments):
         unawaited(pages.openPost(navigator.context, id: id, toComments: toComments));
-      case NotifyApp():
+      case NotifyLikes() || NotifyMessages() || NotifyApp():
         break;
     }
   }

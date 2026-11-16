@@ -198,6 +198,8 @@ enum NativeNotifyTarget: Int, CaseIterable {
   case video = 0
   case dynamicPost = 1
   case app = 2
+  case likes = 3
+  case messages = 4
 }
 
 /// 推送设置's switches. Kept natively, so a background check needs no Dart.
@@ -263,7 +265,7 @@ struct NativeNotifyKinds: Hashable, CustomStringConvertible {
 }
 
 /// Where a tapped notification leads: a video (its page, with a comment thread open when [commentRoot] is set), a
-/// 动态 post, or just the app.
+/// 动态 post, 收到喜欢, 消息, or just the app.
 ///
 /// Generated class from Pigeon that represents data sent in messages.
 struct NativeNotifyRoute: Hashable, CustomStringConvertible {

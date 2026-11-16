@@ -235,7 +235,7 @@ void main() {
     expect(SystemChrome.latestStyle?.statusBarIconBrightness, Brightness.dark);
   });
 
-  testWidgets('+ and 消息 say 暂未开放 and change nothing, from either tab', (tester) async {
+  testWidgets('+ says 暂未开放 and changes nothing, from either tab', (tester) async {
     await show(tester);
     await settle(tester, 40);
     final asked = List.of(http.asked);
@@ -244,13 +244,11 @@ void main() {
         await tapTab(tester, from);
         await settle(tester, 20);
       }
-      for (final tab in [HomeTab.post, HomeTab.messages]) {
-        await tapTab(tester, tab);
-        expect(find.text('暂未开放'), findsOneWidget, reason: tab.label);
-        await settle(tester, 60);
-        expectSelected(tester, from);
-        expect(meActive(tester), from == HomeTab.mine);
-      }
+      await tapTab(tester, HomeTab.post);
+      expect(find.text('暂未开放'), findsOneWidget);
+      await settle(tester, 60);
+      expectSelected(tester, from);
+      expect(meActive(tester), from == HomeTab.mine);
     }
     expect(http.asked, asked, reason: 'no refresh');
   });

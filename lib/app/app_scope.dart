@@ -20,6 +20,9 @@ import '../favourites/favourites_api.dart';
 import '../home/recent_store.dart';
 import '../me/me_api.dart';
 import '../me/me_profile_store.dart';
+import '../message/fake_message_api.dart';
+import '../message/message_api.dart';
+import '../message/message_model.dart';
 import '../notify/notify_host.dart';
 import '../offline/fake_offline_library.dart';
 import '../offline/offline_library.dart';
@@ -202,6 +205,8 @@ class AppServices {
     this._watchLaterApi,
     this._meApi,
     this._dynamicApi,
+    this._messageApi,
+    this._messages,
     MeProfileStore? meProfile,
     this._skinApi,
     this.skinFolder,
@@ -329,6 +334,18 @@ class AppServices {
 
   /// 我的's calls, made on first use like [searchApi].
   late final MeApi meApi = _meApi ?? ClientMeApi(environment.client);
+
+  final MessageApi? _messageApi;
+
+  /// 消息's calls, made on first use like [searchApi]; the demo's under `--fake-account`.
+  late final MessageApi messageApi =
+      _messageApi ??
+      (environment.fake ? FakeMessageApi.demo() : ClientMessageApi(environment.client, mid: () => environment.mid ?? 0));
+
+  final MessageModel? _messages;
+
+  /// 消息's counts, badge and sessions, made on first use.
+  late final MessageModel messages = _messages ?? MessageModel(api: messageApi, environment: environment);
 
   /// The account 我的 last showed, kept on the phone (`me.json`) so a launch draws it at once.
   final MeProfileStore meProfile;

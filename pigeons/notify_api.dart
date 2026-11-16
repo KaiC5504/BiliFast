@@ -38,10 +38,10 @@ class NativeNotifyKinds {
   bool uploads;
 }
 
-enum NativeNotifyTarget { video, dynamicPost, app }
+enum NativeNotifyTarget { video, dynamicPost, app, likes, messages }
 
 /// Where a tapped notification leads: a video (its page, with a comment thread open when [commentRoot] is set), a
-/// 动态 post, or just the app.
+/// 动态 post, 收到喜欢, 消息, or just the app.
 class NativeNotifyRoute {
   NativeNotifyRoute({
     required this.target,

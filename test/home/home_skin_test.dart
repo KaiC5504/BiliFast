@@ -16,6 +16,7 @@ import 'package:bilifast/home/recent_store.dart';
 import 'package:bilifast/home/tab_bar_icons.dart';
 import 'package:bilifast/me/fake_me_api.dart';
 import 'package:bilifast/me/me_page.dart';
+import 'package:bilifast/message/message_page.dart';
 import 'package:bilifast/search/fake_search_api.dart';
 import 'package:bilifast/shared/theme.dart';
 import 'package:bilifast/skin/skin.dart';
@@ -307,12 +308,13 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('home-tab-follow')));
     await settle(tester);
     expect(find.byType(FollowTabPage), findsOneWidget);
-    for (final tab in [HomeTab.post, HomeTab.messages]) {
-      await tester.tap(find.byKey(ValueKey('home-tab-${tab.name}')));
-      await tester.pump();
-      expect(find.text('暂未开放'), findsOneWidget, reason: tab.label);
-      await settle(tester, 60);
-    }
+    await tester.tap(find.byKey(const ValueKey('home-tab-post')));
+    await tester.pump();
+    expect(find.text('暂未开放'), findsOneWidget);
+    await settle(tester, 60);
+    await tester.tap(find.byKey(const ValueKey('home-tab-messages')));
+    await settle(tester);
+    expect(tester.widget<MessagePage>(find.byType(MessagePage)).active, isTrue);
     final asked = List.of(http.asked);
     await tester.tap(find.byKey(const ValueKey('home-tab-home')));
     await settle(tester);

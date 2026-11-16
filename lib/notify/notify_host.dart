@@ -74,9 +74,19 @@ final class NotifyDynamicPost extends NotifyRoute {
   final bool toComments;
 }
 
-/// 私信 and 赞 until 消息 is built: the app opens where it was.
+/// Just the app: it opens where it was.
 final class NotifyApp extends NotifyRoute {
   const NotifyApp();
+}
+
+/// 收到喜欢.
+final class NotifyLikes extends NotifyRoute {
+  const NotifyLikes();
+}
+
+/// 消息, for a 私信 count.
+final class NotifyMessages extends NotifyRoute {
+  const NotifyMessages();
 }
 
 /// One background check, as NotifyHost.swift recorded it.

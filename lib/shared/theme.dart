@@ -8139,3 +8139,33 @@ abstract final class SettingsListTheme {
   /// last none.
   static const pushGroupEnd = 1 / 3;
 }
+
+/// 首页's tab row (204): 直播 推荐 热门 动画 影视, 推荐 and 热门 side by side as pages. Filled by the tab row's builder.
+abstract final class HomeTabRowTheme {
+  static const tabCount = 5;
+}
+
+/// 首页's 热门 (204, 217). Filled by 热门's builder.
+abstract final class HotListTheme {
+  static const page = BiliColors.card;
+}
+
+/// The bottom bar's 消息 (196, 211, 212) and the tab's badge (214). Filled by 消息's builder.
+abstract final class MessageTabTheme {
+  static const page = BiliColors.card;
+}
+
+/// 回复与@, 收到喜欢 and 新增粉丝 (197-199, 213, 214). Filled by their builder.
+abstract final class MessageFeedTheme {
+  static const page = BiliColors.card;
+}
+
+/// A chat and the notice boxes (200-203, 218, 219). Filled by the chats' builder.
+abstract final class MessageChatTheme {
+  static const page = BiliColors.pageGrey;
+}
+
+/// 消息设置 and its pickers (188, 195, 215, 216). Filled by 消息设置's builder.
+abstract final class MessageSettingsTheme {
+  static const page = BiliColors.pageGrey;
+}

@@ -83,6 +83,8 @@ NotifyRoute routeOf(NativeNotifyRoute route) => switch (route.target) {
     id: route.dynamicId!,
     toComments: route.toComments,
   ),
+  NativeNotifyTarget.likes => const NotifyLikes(),
+  NativeNotifyTarget.messages => const NotifyMessages(),
   _ => const NotifyApp(),
 };
 
