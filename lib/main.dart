@@ -31,6 +31,8 @@ import 'home/main_shell.dart';
 import 'home/recent_store.dart';
 import 'me/fake_me_api.dart';
 import 'me/me_profile_store.dart';
+import 'notify/ios/ios_notify_host.dart';
+import 'notify/notify_taps.dart';
 import 'offline/fake_offline_library.dart';
 import 'offline/ios/ios_offline_host.dart';
 import 'offline/offline_host.dart';
@@ -178,6 +180,7 @@ Future<void> main(List<String> args) async {
     offline: offline,
     sideload: sideload,
     appIcons: Platform.isIOS ? IosAppIconHost() : null,
+    notify: Platform.isIOS ? IosNotifyHost() : null,
     historyOutbox: historyOutbox,
     logFiles: logFiles,
     logs: logs,
@@ -186,6 +189,7 @@ Future<void> main(List<String> args) async {
   await services.skin.start();
   unawaited(offline.start());
   unawaited(sideload.start());
+  NotifyTaps(host: services.notify, navigator: services.navigator).start();
   runApp(BiliFastApp(services: services, initialLink: _argument(args, '--play=')));
 }
 

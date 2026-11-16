@@ -17,7 +17,7 @@ import 'video_page.dart';
 /// by the small window's restore button: the page takes it over instead of opening the video. An [offline] route plays
 /// the 离线缓存 part [cid] from the phone, never asking Bilibili for it (`openOfflinePage`); without a [start] it
 /// resumes where the library saw it stop. [source] names where the page was opened from (a 推荐 card's carries its
-/// track data).
+/// track data). [comment] opens the page on 评论 with that thread up (a reply notification's).
 @immutable
 final class VideoRoute {
   const VideoRoute({
@@ -32,6 +32,7 @@ final class VideoRoute {
     this.playback,
     this.offline = false,
     this.source = PlaySource.unknown,
+    this.comment,
   });
 
   final String bvid;
@@ -48,10 +49,21 @@ final class VideoRoute {
   /// Where the page was opened from, for the official watch reports.
   final PlaySource source;
 
+  final CommentFocus? comment;
+
   /// The feed card's cover and the page's player box share it, so the cover flies into the player.
   static String coverTag(String bvid) => 'cover-$bvid';
 
   String get heroTag => coverTag(bvid);
+}
+
+/// A comment thread to open with the page: its root, and the reply in it to show.
+@immutable
+final class CommentFocus {
+  const CommentFocus({required this.root, this.reply});
+
+  final int root;
+  final int? reply;
 }
 
 /// Every way of opening a video page from elsewhere (feed cards, pasted links, 最近打开, a space) comes through here.

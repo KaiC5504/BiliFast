@@ -14,6 +14,7 @@ import UIKit
       print("audio session category failed: \(error)")
     }
     OfflineTransfers.shared.resume()
+    NotifyHost.shared.launch()
     return super.application(application, didFinishLaunchingWithOptions: launchOptions)
   }
 
@@ -69,6 +70,9 @@ import UIKit
     }
     if let registrar = engineBridge.pluginRegistry.registrar(forPlugin: "OfflineHost") {
       OfflineHost.register(with: registrar.messenger())
+    }
+    if let registrar = engineBridge.pluginRegistry.registrar(forPlugin: "NotifyHost") {
+      NotifyHost.register(with: registrar.messenger())
     }
   }
 }

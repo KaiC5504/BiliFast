@@ -27,6 +27,8 @@
 		B1F0A5E12F0000000000F302 /* OfflineHost.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1F0A5E12F0000000000F301 /* OfflineHost.swift */; };
 		B1F0A5E12F0000000000F502 /* NowPlaying.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1F0A5E12F0000000000F501 /* NowPlaying.swift */; };
 		B1F0A5E12F0000000000F402 /* OfflineApi.g.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1F0A5E12F0000000000F401 /* OfflineApi.g.swift */; };
+		B1F0A5E12F0000000000F604 /* NotifyApi.g.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1F0A5E12F0000000000F603 /* NotifyApi.g.swift */; };
+		B1F0A5E12F0000000000F602 /* NotifyHost.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1F0A5E12F0000000000F601 /* NotifyHost.swift */; };
 		B1F0A5E12F0000000000C104 /* DeviceChannel.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1F0A5E12F0000000000C103 /* DeviceChannel.swift */; };
 		B1F0A5E12F0000000000D102 /* WebCookies.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1F0A5E12F0000000000D101 /* WebCookies.swift */; };
 		B1F0A5E12F0000000000D202 /* TurnTakeover.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1F0A5E12F0000000000D201 /* TurnTakeover.swift */; };
@@ -87,6 +89,8 @@
 		B1F0A5E12F0000000000F301 /* OfflineHost.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OfflineHost.swift; sourceTree = "<group>"; };
 		B1F0A5E12F0000000000F501 /* NowPlaying.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NowPlaying.swift; sourceTree = "<group>"; };
 		B1F0A5E12F0000000000F401 /* OfflineApi.g.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OfflineApi.g.swift; sourceTree = "<group>"; };
+		B1F0A5E12F0000000000F603 /* NotifyApi.g.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotifyApi.g.swift; sourceTree = "<group>"; };
+		B1F0A5E12F0000000000F601 /* NotifyHost.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotifyHost.swift; sourceTree = "<group>"; };
 		B1F0A5E12F0000000000C103 /* DeviceChannel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceChannel.swift; sourceTree = "<group>"; };
 		B1F0A5E12F0000000000D101 /* WebCookies.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebCookies.swift; sourceTree = "<group>"; };
 		B1F0A5E12F0000000000D201 /* TurnTakeover.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TurnTakeover.swift; sourceTree = "<group>"; };
@@ -182,6 +186,8 @@
 				B1F0A5E12F0000000000F301 /* OfflineHost.swift */,
 				B1F0A5E12F0000000000F501 /* NowPlaying.swift */,
 				B1F0A5E12F0000000000F401 /* OfflineApi.g.swift */,
+				B1F0A5E12F0000000000F603 /* NotifyApi.g.swift */,
+				B1F0A5E12F0000000000F601 /* NotifyHost.swift */,
 				B1F0A5E12F0000000000C103 /* DeviceChannel.swift */,
 				B1F0A5E12F0000000000D101 /* WebCookies.swift */,
 				B1F0A5E12F0000000000D201 /* TurnTakeover.swift */,
@@ -365,6 +371,8 @@
 				B1F0A5E12F0000000000F302 /* OfflineHost.swift in Sources */,
 				B1F0A5E12F0000000000F502 /* NowPlaying.swift in Sources */,
 				B1F0A5E12F0000000000F402 /* OfflineApi.g.swift in Sources */,
+				B1F0A5E12F0000000000F604 /* NotifyApi.g.swift in Sources */,
+				B1F0A5E12F0000000000F602 /* NotifyHost.swift in Sources */,
 				B1F0A5E12F0000000000C104 /* DeviceChannel.swift in Sources */,
 				B1F0A5E12F0000000000D102 /* WebCookies.swift in Sources */,
 				B1F0A5E12F0000000000D202 /* TurnTakeover.swift in Sources */,

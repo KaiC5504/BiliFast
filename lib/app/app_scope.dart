@@ -19,6 +19,7 @@ import '../favourites/favourites_api.dart';
 import '../home/recent_store.dart';
 import '../me/me_api.dart';
 import '../me/me_profile_store.dart';
+import '../notify/notify_host.dart';
 import '../offline/fake_offline_library.dart';
 import '../offline/offline_library.dart';
 import '../playback/codec_memory.dart';
@@ -182,6 +183,7 @@ class AppServices {
     OfflineLibrary? offline,
     SideloadModel? sideload,
     AppIconHost? appIcons,
+    NotifyHost? notify,
     HistoryOutbox? historyOutbox,
     NetworkMonitor? network,
     this.logFiles = const NoLogFiles(),
@@ -194,6 +196,7 @@ class AppServices {
        offline = offline ?? FakeOfflineLibrary(),
        sideload = sideload ?? SideloadModel.none(),
        appIcons = appIcons ?? MemoryAppIconHost(),
+       notify = notify ?? NoNotifyHost(),
        loginGate = loginGate ?? LoginPageGate(environment),
        pageApi = pageApi ?? ClientPageApi(environment.client),
        searchHistory = searchHistory ?? SearchHistoryStore.memory(),
@@ -344,6 +347,9 @@ class AppServices {
 
   /// 设置 → 应用图标: the home screen icon (iOS's alternate icons; held in memory elsewhere).
   final AppIconHost appIcons;
+
+  /// 推送设置's notifications (NotifyHost.swift on the phone).
+  final NotifyHost notify;
 
   /// Watch reports that got no answer, sent again when the network may be back (`history_outbox.json`).
   final HistoryOutbox historyOutbox;
