@@ -319,7 +319,7 @@ final class LiveSocket implements LiveChannel {
     _hostIndex++;
     if (_failures >= maxAttempts) {
       _logger.warn(LogCategory.api, 'live socket gave up', {'reason': reason, 'attempts': _failures});
-      _stop(LiveSocketState.failed);
+      _stop(LiveSocketState.gaveUp);
       return;
     }
     final seconds = backoff[(_failures - 1).clamp(0, backoff.length - 1)];

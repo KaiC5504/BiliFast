@@ -208,7 +208,8 @@ class LiveInlinePlayback extends ChangeNotifier with WidgetsBindingObserver {
   void _roomChanged() {
     final room = _room;
     if (room == null) return;
-    if (room.state == LiveRoomState.ended || room.state == LiveRoomState.failed) {
+    final unsupported = room.state == LiveRoomState.live && room.play != null && room.play?.url == null;
+    if (unsupported || room.state == LiveRoomState.ended || room.state == LiveRoomState.failed) {
       if (!_failed) _fail();
       return;
     }

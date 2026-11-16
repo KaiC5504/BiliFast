@@ -22,11 +22,21 @@ class LiveEmotePanel extends StatefulWidget {
     required this.onDelete,
     this.failed = false,
     this.onRetry,
+    this.columns,
+    this.side = EdgeInsets.zero,
+    this.barBottom = LiveSendTheme.barBottom,
   });
 
   /// Null while they load.
   final List<LiveEmotePackage>? packages;
   final double height;
+
+  /// Emotes to a row, the cells sharing the width; null fits as many 52 pt cells as the width holds.
+  final int? columns;
+
+  /// Kept clear at the sides by everything but the panel's fill (full screen's safe area).
+  final EdgeInsets side;
+  final double barBottom;
   final ValueChanged<LiveEmote> onPick;
   final VoidCallback onDelete;
   final bool failed;
@@ -52,30 +62,34 @@ class _LiveEmotePanelState extends State<LiveEmotePanel> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            SizedBox(
-              height: LiveSendTheme.headerHeight,
-              child: Padding(
-                padding: const EdgeInsets.only(left: LiveSendTheme.headerLeft),
-                child: Align(
-                  alignment: Alignment.centerLeft,
-                  child: Text(
-                    // The first package is the one 227 titles 全部表情.
-                    package == null || index == 0 ? '全部表情' : package.name,
-                    key: const ValueKey('live-emote-title'),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: sendStyle(LiveSendTheme.headerText, LiveSendTheme.headerInk),
-                  ),
-                ),
-              ),
+            Padding(padding: widget.side, child: _header(package, index)),
+            Expanded(
+              child: Padding(padding: widget.side, child: package == null ? _empty() : _grid(package)),
             ),
-            Expanded(child: package == null ? _empty() : _grid(package)),
-            _bar(packages, index),
+            Padding(padding: widget.side, child: _bar(packages, index)),
           ],
         ),
       ),
     );
   }
+
+  Widget _header(LiveEmotePackage? package, int index) => SizedBox(
+    height: LiveSendTheme.headerHeight,
+    child: Padding(
+      padding: const EdgeInsets.only(left: LiveSendTheme.headerLeft),
+      child: Align(
+        alignment: Alignment.centerLeft,
+        child: Text(
+          // The first package is the one 227 titles 全部表情.
+          package == null || index == 0 ? '全部表情' : package.name,
+          key: const ValueKey('live-emote-title'),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: sendStyle(LiveSendTheme.headerText, LiveSendTheme.headerInk),
+        ),
+      ),
+    ),
+  );
 
   Widget _empty() {
     final retry = widget.onRetry;
@@ -99,8 +113,12 @@ class _LiveEmotePanelState extends State<LiveEmotePanel> {
     return LayoutBuilder(
       builder: (context, constraints) {
         final width = constraints.maxWidth;
-        final columns = math.max(((width - LiveSendTheme.gridSide * 2) / LiveSendTheme.gridCellWidth).floor(), 1);
-        final side = math.max((width - columns * LiveSendTheme.gridCellWidth) / 2, 0.0);
+        final fixed = widget.columns;
+        final columns =
+            fixed ?? math.max(((width - LiveSendTheme.gridSide * 2) / LiveSendTheme.gridCellWidth).floor(), 1);
+        final side = fixed != null
+            ? LiveSendTheme.gridSide
+            : math.max((width - columns * LiveSendTheme.gridCellWidth) / 2, 0.0);
         return Stack(
           children: [
             Positioned.fill(
@@ -155,7 +173,7 @@ class _LiveEmotePanelState extends State<LiveEmotePanel> {
   Widget _bar(List<LiveEmotePackage> packages, int chosen) => ColoredBox(
     color: LiveSendTheme.barFill,
     child: Padding(
-      padding: const EdgeInsets.only(bottom: LiveSendTheme.barBottom),
+      padding: EdgeInsets.only(bottom: widget.barBottom),
       child: SizedBox(
         height: LiveSendTheme.barCellHeight,
         child: ListView.builder(

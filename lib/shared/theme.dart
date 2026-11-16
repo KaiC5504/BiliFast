@@ -9616,6 +9616,44 @@ abstract final class LivePlayerTheme {
   static const qualityText = 41 / 3;
   static const watchCentre = 233.5;
 
+  /// 235, 弹 on: 弹幕设置 (24 pt) 48 after 弹, the quality and the last icon 48 further on; over the quality's end a
+  /// 22.67 × 11.67 原画 badge, its middle 18 above the row's, a 0.67 pt line of 60% white round 7.5 pt words.
+  static const danmakuOnShift = 48.0;
+  static const badgeWidth = 68 / 3;
+  static const badgeHeight = 35 / 3;
+  static const badgeRise = 18.0;
+  static const badgeLine = 2 / 3;
+  static const badgeLineInk = Color(0x99FFFFFF);
+  static const badgeText = 7.5;
+
+  /// 235's 弹幕 capsule, 弹 on: 36 tall from 321.67 inside the safe area's left to 147.33 inside its right, on the
+  /// capsules' fill; the input's 译 (white) 18 × 20 from 13.67 in, a 1 × 14 line of 30% white 10.33 after it, 14 pt
+  /// 80% white 弹幕支持下～ 8.67 after that; the wink face 24 across, 6.67 from the end.
+  static const sendLeft = 965 / 3;
+  static const sendRight = 442 / 3;
+  static const sendHeight = 36.0;
+  static const sendTranslateLeft = 41 / 3;
+  static const sendDividerGap = 31 / 3;
+  static const sendDivider = 1.0;
+  static const sendDividerHeight = 14.0;
+  static const sendDividerInk = Color(0x4DFFFFFF);
+  static const sendTextGap = 26 / 3;
+  static const sendText = 14.0;
+  static const sendInk = Color(0xCCFFFFFF);
+  static const sendFace = 24.0;
+  static const sendFaceEnd = 20 / 3;
+
+  /// 人气 before the gift, 弹 on: a disc as the gift's, centred 43 before it, its sticker 21.67 × 18 (drawn: neither the
+  /// APK nor PiliPlus has it) a pink tile tilted back, white words on it.
+  static const popularityStep = 43.0;
+  static const popularityWidth = 65 / 3;
+  static const popularityHeight = 18.0;
+  static const popularityTilt = -0.14;
+  static const popularityTop = Color(0xFFFFC2D4);
+  static const popularityBottom = Color(0xFFF2648F);
+  static const popularityEdge = Color(0xFFE24C7A);
+  static const popularityText = 10.0;
+
   /// The gift and the anchor's pink + at the bottom right, their middles 55.33 above the bottom edge: the gift's 35.67
   /// pt disc centred 74.17 inside the safe area's right edge, its art 22.67 wide (the APK's 108 px picture drawn 36
   /// across) and portrait's red dot, 6 across, at its top right; the + capsule 48 × 35.67 ending at the edge, the face
@@ -9810,7 +9848,12 @@ abstract final class LiveSendTheme {
   /// right and 20 above the packages bar, its glyph 20.33 × 14.67 with a 1 pt line; the bar #29272F, cells 50 × 44
   /// with 24 pt icons, the chosen one in the panel's colour, 21 pt under them.
   static const emotePanelHeight = 356.0;
-  static const emotePanelLandscape = 224.0;
+
+  /// 237: full screen's panel 232 tall (from 208 down to the screen's end), its fill across the whole width but the
+  /// rest inside the safe area: sixteen emotes to a row sharing it less 12 at each side, the bar 20 above the bottom.
+  static const emotePanelLandscape = 232.0;
+  static const columnsLandscape = 16;
+  static const barBottomLandscape = 20.0;
   static const headerHeight = 25.0;
   static const headerLeft = 16.0;
   static const headerText = 12.0;

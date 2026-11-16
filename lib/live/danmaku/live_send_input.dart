@@ -14,6 +14,7 @@ import '../../shared/toast.dart';
 import '../live_login.dart';
 import '../room/live_overlays.dart';
 import '../room/live_room_model.dart';
+import '../room/room_actions.dart' show liveNeedsLogin;
 import 'live_emote_panel.dart';
 import 'live_recent_emotes.dart';
 import 'live_send_glyphs.dart';
@@ -24,11 +25,20 @@ import 'live_send_glyphs.dart';
 /// It takes the whole screen it is given, with the keyboard's inset still in its MediaQuery: a tap above the panel
 /// closes it. Emotes whose text is bracketed ([dog]) go into the field, as 227's ⌫ shows; the others are sent at once.
 class LiveSendInput extends StatefulWidget {
-  const LiveSendInput({super.key, required this.room, required this.overlays, required this.landscape});
+  const LiveSendInput({
+    super.key,
+    required this.room,
+    required this.overlays,
+    required this.landscape,
+    this.startOnEmotes = false,
+  });
 
   final LiveRoomModel room;
   final LiveOverlays overlays;
   final bool landscape;
+
+  /// Opens with the emote panel in the keyboard's place.
+  final bool startOnEmotes;
 
   @override
   State<LiveSendInput> createState() => _LiveSendInputState();
@@ -54,6 +64,7 @@ class _LiveSendInputState extends State<LiveSendInput> {
   @override
   void initState() {
     super.initState();
+    _emotes = widget.startOnEmotes;
     _text.addListener(_textChanged);
     unawaited(_loadPackages());
     _recents = LiveRecentEmotes.loaded;
@@ -219,7 +230,7 @@ class _LiveSendInputState extends State<LiveSendInput> {
   }
 
   Future<void> _failed(Object error) async {
-    if (error is BiliError && error.needsLogin) {
+    if (liveNeedsLogin(error)) {
       await requestLiveLogin(context);
       return;
     }
@@ -230,10 +241,15 @@ class _LiveSendInputState extends State<LiveSendInput> {
   Widget build(BuildContext context) {
     final landscape = widget.landscape;
     final keyboard = MediaQuery.viewInsetsOf(context).bottom;
+    final insets = MediaQuery.paddingOf(context);
     final below = _emotes
         ? LiveEmotePanel(
             packages: _packages,
             height: landscape ? LiveSendTheme.emotePanelLandscape : LiveSendTheme.emotePanelHeight,
+            // 237: full screen's grid, ⌫ and packages keep to the safe area, sixteen to a row.
+            columns: landscape ? LiveSendTheme.columnsLandscape : null,
+            side: landscape ? EdgeInsets.only(left: insets.left, right: insets.right) : EdgeInsets.zero,
+            barBottom: landscape ? LiveSendTheme.barBottomLandscape : LiveSendTheme.barBottom,
             onPick: _pick,
             onDelete: _delete,
             failed: _packagesFailed,

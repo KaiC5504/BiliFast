@@ -10,10 +10,10 @@ import '../../player_ui/portrait_controls.dart' show BackGlyph, ChromeTap, MoreD
 import '../../shared/theme.dart';
 import '../../shared/toast.dart';
 import '../live_badges.dart';
-import '../live_login.dart';
 import '../room/live_overlays.dart';
 import '../room/live_room_model.dart';
-import '../room/room_actions.dart' show liveNeedsLogin;
+import '../room/room_actions.dart' show openRoomSend, roomWrite;
+import '../room/room_glyphs.dart' show RoomWinkPainter;
 import 'live_player_controller.dart';
 import 'live_player_view.dart';
 
@@ -318,6 +318,20 @@ class _LiveFullScreenState extends State<LiveFullScreen> {
           bottom: LivePlayerTheme.giftRowCentre - LivePlayerTheme.plusHeight / 2,
           child: _GiftAndPlus(room: room, onTap: _touch(toast)),
         ),
+        if (controller.danmakuOn) ...[
+          Positioned(
+            left: insets.left + LivePlayerTheme.sendLeft,
+            right: insets.right + LivePlayerTheme.sendRight,
+            bottom: LivePlayerTheme.giftRowCentre - LivePlayerTheme.sendHeight / 2,
+            child: _SendCapsule(overlays: overlays, toast: _touch(toast)),
+          ),
+          Positioned(
+            right:
+                insets.right + LivePlayerTheme.giftCentre + LivePlayerTheme.popularityStep - LivePlayerTheme.giftDisc / 2,
+            bottom: LivePlayerTheme.giftRowCentre - LivePlayerTheme.giftDisc / 2,
+            child: _Popularity(onTap: _touch(toast)),
+          ),
+        ],
       ],
     );
   }
@@ -388,7 +402,7 @@ class _AnchorCapsule extends StatelessWidget {
               key: const ValueKey('live-follow'),
               label: '关注',
               square: false,
-              onTap: touch(() => unawaited(followRoom(context, room))),
+              onTap: touch(() => unawaited(roomWrite(context, () => room.setFollowing(true)))),
               child: Container(
                 width: LivePlayerTheme.followWidth,
                 height: LivePlayerTheme.followHeight,
@@ -422,24 +436,6 @@ Widget _line(String text, double size, double centre, String key) => Padding(
     ),
   ),
 );
-
-/// 关注 in the header, through the login page when logged out.
-Future<void> followRoom(BuildContext context, LiveRoomModel room) async {
-  if (!room.loggedIn()) {
-    unawaited(requestLiveLogin(context));
-    return;
-  }
-  try {
-    await room.setFollowing(true);
-  } catch (error) {
-    if (!context.mounted) return;
-    if (liveNeedsLogin(error)) {
-      unawaited(requestLiveLogin(context));
-    } else {
-      showToast(context, '关注失败，请稍后重试');
-    }
-  }
-}
 
 /// The 在线榜's first three faces and the count after them, which open 高能榜.
 class _RankFaces extends StatelessWidget {
@@ -544,7 +540,8 @@ class _Chip extends StatelessWidget {
   );
 }
 
-/// ⏸ ⟳ 弹, the quality's name and 209's last icon (the APK's watch_movies, which toasts).
+/// ⏸ ⟳ 弹, the quality's name and 209's last icon (the APK's watch_movies, which toasts); with 弹 on, 弹幕设置 after 弹
+/// (235). 原画 wears its badge over the name (235's 原画 has it, 209's 1080P, taken for 蓝光, none).
 class _BottomRow extends StatelessWidget {
   const _BottomRow({required this.controller, required this.overlays, required this.touch, required this.toast});
 
@@ -560,10 +557,15 @@ class _BottomRow extends StatelessWidget {
         Image.asset(asset, width: LivePlayerTheme.bottomIcon, height: LivePlayerTheme.bottomIcon);
     Widget at(double centre, Widget child) => Positioned(left: centre - half, top: 0, child: child);
     final quality = controller.quality;
+    final words = quality?.name.split(' ') ?? const ['画质'];
+    final on = controller.danmakuOn;
+    final shift = on ? LivePlayerTheme.danmakuOnShift : 0.0;
     return SizedBox(
-      width: LivePlayerTheme.watchCentre + half,
+      width: LivePlayerTheme.watchCentre + shift + half,
       height: BiliMetrics.chromeButton,
       child: Stack(
+        // The 原画 badge rises past the row's top.
+        clipBehavior: Clip.none,
         children: [
           at(
             LivePlayerTheme.playCentre,
@@ -592,8 +594,18 @@ class _BottomRow extends StatelessWidget {
               child: icon(controller.danmakuOn ? LivePlayerAssets.danmakuOn : LivePlayerAssets.danmakuOff),
             ),
           ),
+          if (on)
+            at(
+              LivePlayerTheme.danmakuCentre + shift,
+              ChromeTap(
+                key: const ValueKey('live-danmaku-settings'),
+                label: '弹幕设置',
+                onTap: touch(() => overlays.open(LiveOverlay.danmakuSettings)),
+                child: icon(LivePlayerAssets.danmakuSettings),
+              ),
+            ),
           Positioned(
-            left: LivePlayerTheme.qualityLeft,
+            left: LivePlayerTheme.qualityLeft + shift,
             top: 0,
             bottom: 0,
             child: ChromeTap(
@@ -601,11 +613,27 @@ class _BottomRow extends StatelessWidget {
               label: '画质',
               square: false,
               onTap: touch(() => overlays.open(LiveOverlay.quality)),
-              child: Center(child: _label(quality?.name.split(' ').first ?? '画质', LivePlayerTheme.qualityText)),
+              child: Center(
+                child: Stack(
+                  clipBehavior: Clip.none,
+                  children: [
+                    _label(words.first, LivePlayerTheme.qualityText),
+                    if (words.elementAtOrNull(1) == '原画')
+                      const Positioned(
+                        right: -LivePlayerTheme.badgeWidth / 2,
+                        top:
+                            LivePlayerTheme.qualityText / 2 -
+                            LivePlayerTheme.badgeRise -
+                            LivePlayerTheme.badgeHeight / 2,
+                        child: _QualityBadge('原画'),
+                      ),
+                  ],
+                ),
+              ),
             ),
           ),
           at(
-            LivePlayerTheme.watchCentre,
+            LivePlayerTheme.watchCentre + shift,
             ChromeTap(
               key: const ValueKey('live-watch'),
               label: '观影模式',
@@ -706,6 +734,165 @@ class _GiftAndPlus extends StatelessWidget {
       ),
     );
   }
+}
+
+/// The quality's little capsule over its name (235's 原画).
+class _QualityBadge extends StatelessWidget {
+  const _QualityBadge(this.text);
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    key: const ValueKey('live-quality-badge'),
+    width: LivePlayerTheme.badgeWidth,
+    height: LivePlayerTheme.badgeHeight,
+    alignment: Alignment.center,
+    decoration: const ShapeDecoration(
+      shape: StadiumBorder(
+        side: BorderSide(color: LivePlayerTheme.badgeLineInk, width: LivePlayerTheme.badgeLine),
+      ),
+    ),
+    child: _label(text, LivePlayerTheme.badgeText),
+  );
+}
+
+/// 235's 弹幕 capsule while 弹 is on: 译 (暂未开放), the words, and the wink face; the capsule opens the 弹幕 input, the
+/// face opens it on its emote panel.
+class _SendCapsule extends StatelessWidget {
+  const _SendCapsule({required this.overlays, required this.toast});
+
+  final LiveOverlays overlays;
+  final VoidCallback toast;
+
+  @override
+  Widget build(BuildContext context) {
+    void open() => unawaited(openRoomSend(context, overlays));
+    void openEmotes() => unawaited(openRoomSend(context, overlays, emotes: true));
+    const height = LivePlayerTheme.sendHeight;
+    final style = _style(LivePlayerTheme.sendText);
+    // Three targets side by side: 译 up to the line, the words, the face to the end.
+    return Container(
+      key: const ValueKey('live-full-capsule'),
+      height: height,
+      decoration: BoxDecoration(
+        color: LivePlayerTheme.capsuleFill,
+        borderRadius: BorderRadius.circular(height / 2),
+      ),
+      child: Row(
+        children: [
+          ChromeTap(
+            key: const ValueKey('live-full-translate'),
+            label: '翻译',
+            square: false,
+            onTap: toast,
+            child: SizedBox(
+              width: LivePlayerTheme.sendTranslateLeft + LiveSendTheme.translateWidth + LivePlayerTheme.sendDividerGap,
+              height: height,
+              child: Padding(
+                padding: const EdgeInsets.only(left: LivePlayerTheme.sendTranslateLeft),
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: Image.asset(
+                    LivePlayerAssets.translate,
+                    width: LiveSendTheme.translateWidth,
+                    height: LiveSendTheme.translateHeight,
+                    excludeFromSemantics: true,
+                  ),
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(
+            width: LivePlayerTheme.sendDivider,
+            height: LivePlayerTheme.sendDividerHeight,
+            child: ColoredBox(color: LivePlayerTheme.sendDividerInk),
+          ),
+          Expanded(
+            child: ChromeTap(
+              key: const ValueKey('live-full-send'),
+              label: '弹幕支持下～',
+              square: false,
+              onTap: open,
+              child: SizedBox(
+                height: height,
+                child: Padding(
+                  padding: const EdgeInsets.only(left: LivePlayerTheme.sendTextGap),
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      '弹幕支持下～',
+                      maxLines: 1,
+                      softWrap: false,
+                      overflow: TextOverflow.clip,
+                      style: style.copyWith(color: LivePlayerTheme.sendInk),
+                      strutStyle: fullScreenStrut(style),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+          ChromeTap(
+            key: const ValueKey('live-full-emote'),
+            label: '表情',
+            square: false,
+            onTap: openEmotes,
+            child: const SizedBox(
+              width: LivePlayerTheme.sendFace + LivePlayerTheme.sendFaceEnd,
+              height: height,
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: SizedBox.square(
+                  dimension: LivePlayerTheme.sendFace,
+                  child: CustomPaint(painter: RoomWinkPainter()),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// 人气 before the gift while 弹 is on (235); it toasts 暂未开放.
+class _Popularity extends StatelessWidget {
+  const _Popularity({required this.onTap});
+
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) => ChromeTap(
+    key: const ValueKey('live-popularity'),
+    label: '人气',
+    square: false,
+    onTap: onTap,
+    child: Container(
+      width: LivePlayerTheme.giftDisc,
+      height: LivePlayerTheme.giftDisc,
+      alignment: Alignment.center,
+      decoration: const BoxDecoration(color: LivePlayerTheme.giftFill, shape: BoxShape.circle),
+      child: Transform.rotate(
+        angle: LivePlayerTheme.popularityTilt,
+        child: Container(
+          width: LivePlayerTheme.popularityWidth,
+          height: LivePlayerTheme.popularityHeight * 0.8,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            gradient: const LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [LivePlayerTheme.popularityTop, LivePlayerTheme.popularityBottom],
+            ),
+            border: Border.all(color: LivePlayerTheme.popularityEdge, width: LivePlayerTheme.badgeLine),
+            borderRadius: BorderRadius.circular(LivePlayerTheme.popularityHeight / 4),
+          ),
+          child: _label('人气', LivePlayerTheme.popularityText, weight: FontWeight.w900),
+        ),
+      ),
+    ),
+  );
 }
 
 class _PlusPainter extends CustomPainter {

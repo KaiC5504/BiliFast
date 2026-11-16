@@ -103,13 +103,14 @@ void main() {
     await tester.runAsync(() async {
       final context = tester.element(find.byType(LiveRoomPage));
       for (final asset in [
-        'assets/images/live/room_gift.png',
+        'assets/images/live/player_gift.png',
         'assets/images/live/room_more_boost.png',
         'assets/images/live/room_share_qzone.png',
         'assets/images/home/hot_share_wechat.png',
         'assets/images/home/hot_share_moments.png',
         'assets/images/home/hot_share_qq.png',
-        for (final name in ['pip', 'player', 'danmaku', 'quality', 'effects']) 'assets/images/live/room_more_$name.png',
+        for (final name in ['pip', 'settings', 'danmaku', 'effects']) 'assets/images/live/player_more_$name.png',
+        'assets/images/live/room_more_quality.png',
       ]) {
         await precacheImage(AssetImage(asset), context);
       }

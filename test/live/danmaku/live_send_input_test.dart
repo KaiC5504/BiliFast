@@ -5,6 +5,7 @@ import 'package:bilifast/live/danmaku/live_recent_emotes.dart';
 import 'package:bilifast/live/danmaku/live_send_input.dart';
 import 'package:bilifast/live/fake_live_api.dart';
 import 'package:bilifast/live/room/live_overlays.dart';
+import 'package:bilifast/live/room/live_room_model.dart' show LiveNotLoggedIn;
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -48,7 +49,12 @@ void main() {
       ValueListenableBuilder<LiveOverlay>(
         valueListenable: overlays,
         builder: (context, overlay, _) => overlay == LiveOverlay.send
-            ? LiveSendInput(room: room, overlays: overlays, landscape: landscape)
+            ? LiveSendInput(
+                room: room,
+                overlays: overlays,
+                landscape: landscape,
+                startOnEmotes: overlays.sendOnEmotes,
+              )
             : const SizedBox.expand(key: ValueKey('room')),
       ),
       size: size,
@@ -190,6 +196,17 @@ void main() {
       await tester.pump();
       expect(harness.loginGate.requests, 1);
       expect(find.text('需要登录'), findsNothing);
+      expect(field(tester).text, '你好');
+    });
+
+    testWidgets("the room's own logged-out refusal goes to the login too", (tester) async {
+      await open(tester);
+      room.failure = const LiveNotLoggedIn();
+      await tester.enterText(byKey('live-send-field'), '你好');
+      await tester.pump();
+      await tester.tap(byKey('live-send-button'));
+      await tester.pump();
+      expect(harness.loginGate.requests, 1);
       expect(field(tester).text, '你好');
     });
 
@@ -409,7 +426,7 @@ void main() {
       await tester.tap(byKey('live-send-face'));
       await tester.pump();
       expect(byKey('live-emote-panel'), findsOneWidget);
-      expect(tester.getRect(byKey('live-emote-panel')).height, 224);
+      expect(tester.getRect(byKey('live-emote-panel')).height, 232);
       await tester.tap(byKey('live-emote-emoji_2'));
       await tester.pump();
       expect(field(tester).text, '[表情2]');
@@ -418,6 +435,30 @@ void main() {
       await tester.pump();
       expect(room.sent, ['[表情2]']);
       expect(overlays.value, LiveOverlay.none);
+    });
+
+    testWidgets("opened on the emote panel, it lies as 237: the panel's parts inside the safe area, 16 to a row", (
+      tester,
+    ) async {
+      overlays.openSend(emotes: true);
+      tester.view.padding = const FakeViewPadding(left: 62, right: 62, bottom: 21);
+      await open(tester, size: _landscape, keyboard: false);
+      expect(tester.testTextInput.isVisible, isFalse, reason: 'the panel, not the keyboard');
+      expect(tester.getRect(byKey('live-emote-panel')), const Rect.fromLTRB(0, 208, 956, 440));
+      expect(tester.getRect(find.ancestor(of: byKey('live-send-field'), matching: find.byType(Container)).first).top, 140);
+      expect(tester.getTopLeft(byKey('live-emote-title')).dx, 78);
+      // Cells (832 - 24) / 16 = 50.5 wide from 74, rows 50 tall under the 25 pt title.
+      expect(tester.getCenter(byKey('live-emote-emoji_0')), const Offset(99.25, 258));
+      expect(tester.getCenter(byKey('live-emote-emoji_11')).dx, closeTo(74 + 11.5 * 50.5, 0.01));
+      final delete = tester.getRect(byKey('live-emote-delete'));
+      expect(delete.right, 884);
+      expect(delete.bottom, closeTo(356, 0.01));
+      final bar = tester.getRect(byKey('live-emote-bar'));
+      expect((bar.left, bar.right, bar.top, bar.bottom), (62, 894, 376, 420));
+
+      await tester.tap(byKey('live-send-face'));
+      await tester.pump();
+      expect(byKey('live-emote-panel'), findsNothing, reason: 'the face goes back to the keyboard');
     });
   });
 }

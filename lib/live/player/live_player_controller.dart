@@ -324,7 +324,15 @@ class LivePlayerController extends ChangeNotifier with WidgetsBindingObserver {
   /// 210's row: [quality], or 自动 (null), which asks the room's own default (qn 0).
   Future<void> pickQuality(LiveQuality? quality) async {
     final current = this.quality;
-    if (quality != null && !_autoQuality && current?.qn == quality.qn) return;
+    if (quality != null && current?.qn == quality.qn) {
+      if (!_autoQuality) return;
+      // 自动 already landed on it: the room loads nothing, so there is no switch to wait for.
+      if (!room.askingStream) {
+        _autoQuality = false;
+        notifyListeners();
+        return;
+      }
+    }
     if (quality == null && _autoQuality) return;
     notices.add('切换中，请稍候');
     _pendingQuality = quality?.name ?? '';
@@ -494,7 +502,6 @@ class LivePlayerController extends ChangeNotifier with WidgetsBindingObserver {
 
   void _roomChanged() {
     if (_disposed) return;
-    final before = phase;
     final player = _player;
     switch (room.state) {
       case LiveRoomState.live:
@@ -511,7 +518,16 @@ class LivePlayerController extends ChangeNotifier with WidgetsBindingObserver {
         break;
     }
     _updateNowPlaying();
-    if (phase != before) notifyListeners();
+    // The room has already changed when it notifies, so the phase before it is the one last told, not one read here.
+    if (phase != _toldPhase) notifyListeners();
+  }
+
+  LivePlayerPhase? _toldPhase;
+
+  @override
+  void notifyListeners() {
+    _toldPhase = phase;
+    super.notifyListeners();
   }
 
   void _load(BiliPlayer player, LivePlayInfo play) {

@@ -62,7 +62,7 @@ abstract final class LiveSocketDecode {
     final sender = _list(_at(info, 2)) ?? const <Object?>[];
 
     final uid = _int(user?['uid']) ?? _int(_at(sender, 0)) ?? 0;
-    final medal = _medalArray(_list(_at(info, 3))) ?? _medal(_map(user?['medal']));
+    final medal = _medalArray(_list(_at(info, 3))) ?? LiveDecode.medal(user?['medal']);
     final guard = _positive(_int(_at(info, 7))) ?? _int(_map(user?['guard'])?['level']) ?? medal?.guardLevel ?? 0;
     final liveUser = LiveUser(
       uid: uid,
@@ -129,7 +129,7 @@ abstract final class LiveSocketDecode {
   }
 
   static LiveUser _interactUser(Map<String, Object?> data) {
-    final medal = _medal(_map(data['fans_medal']));
+    final medal = LiveDecode.medal(data['fans_medal']);
     return LiveUser(
       uid: _int(data['uid']) ?? 0,
       name: _str(data['uname']) ?? '',
@@ -219,26 +219,6 @@ abstract final class LiveSocketDecode {
       colorEnd: _rgbOrZero(_int(_at(array, 9)) ?? color),
       border: _rgbOrZero(_int(_at(array, 7))),
       guardLevel: _int(_at(array, 10)) ?? 0,
-      lit: lit == null || lit != 0,
-    );
-  }
-
-  /// A medal object in any of its spellings: the user's `medal` (name, level, color_start…), `fans_medal` and
-  /// `medal_info` (medal_name, medal_level, medal_color_start…).
-  static LiveMedal? _medal(Map<String, Object?>? map) {
-    if (map == null) return null;
-    final name = _nonEmpty(_str(map['name'])) ?? _nonEmpty(_str(map['medal_name']));
-    if (name == null) return null;
-    final level = _int(map['level']) ?? _int(map['medal_level']) ?? 0;
-    final lit = _int(map['is_light']) ?? _int(map['is_lighted']);
-    final color = _color(map['medal_color']);
-    return LiveMedal(
-      name: name,
-      level: level,
-      colorStart: _color(map['color_start']) ?? _color(map['medal_color_start']) ?? color ?? 0,
-      colorEnd: _color(map['color_end']) ?? _color(map['medal_color_end']) ?? color ?? 0,
-      border: _color(map['color_border']) ?? _color(map['medal_color_border']) ?? 0,
-      guardLevel: _int(map['guard_level']) ?? 0,
       lit: lit == null || lit != 0,
     );
   }

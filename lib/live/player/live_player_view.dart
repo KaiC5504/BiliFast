@@ -112,7 +112,7 @@ class _NativeViewState extends State<_NativeView> {
   Widget build(BuildContext context) => _view;
 }
 
-/// The loading TV while waiting, the cover dimmed with 直播已结束, or 重试 after a failure.
+/// The loading TV while waiting, the cover dimmed with 直播已结束, or 重试 after a failure (none under 暂不支持该直播流).
 class LivePhaseLayer extends StatelessWidget {
   const LivePhaseLayer({super.key, required this.controller, required this.room});
 
@@ -143,8 +143,8 @@ class LivePhaseLayer extends StatelessWidget {
             spacing: BiliMetrics.rowGap,
             children: [
               _text(controller.failureText, LivePlayerTheme.endedText),
-              // Locked, only the lock answers a touch.
-              if (!controller.locked)
+              // Locked, only the lock answers a touch; an unsupported stream would come back the same.
+              if (!controller.locked && !controller.unsupportedStream)
                 ChromeTap(
                   key: const ValueKey('live-retry'),
                   label: '重试',
@@ -359,6 +359,8 @@ abstract final class LivePlayerAssets {
   static const refresh = '$_folder/player_refresh.png';
   static const danmakuOn = '$_folder/player_danmaku_on.png';
   static const danmakuOff = '$_folder/player_danmaku_off.png';
+  static const danmakuSettings = '$_folder/player_danmaku_settings.png';
+  static const translate = '$_folder/send_translate.png';
   static const watchMovies = '$_folder/player_watch_movies.png';
   static const fullScreen = '$_folder/player_full_screen.png';
   static const share = '$_folder/player_share.png';

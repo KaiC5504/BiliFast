@@ -152,7 +152,7 @@ class _LiveRoomPageState extends State<LiveRoomPage> with RouteAware {
   late final LiveRoomPlayback _playback;
   late final LiveRoomModel _model;
   late final LivePlayerController _controller;
-  late LiveRoomState _roomState;
+  int _endsToasted = 0;
   final _overlays = LiveOverlays();
 
   /// 229's sheet over the open 醒目留言 card.
@@ -179,15 +179,16 @@ class _LiveRoomPageState extends State<LiveRoomPage> with RouteAware {
       final playback = _playback = brought != null && !brought.closed ? brought : _newPlayback(services);
       _model = playback.model;
       _controller = playback.controller;
-      _roomState = _model.state;
-      _model.addListener(_roomChanged);
+      // A restored room's ends from before this page were the small window's.
+      _endsToasted = _model.endedNotices.value;
+      _model.endedNotices.addListener(_toastEnded);
       _writeFailures = _model.writeFailures.listen((error) {
         if (mounted) roomWriteFailed(context, error, login: _requestLogin);
       });
       _model.setShown(true);
       unawaited(_model.start());
       unawaited(_controller.start());
-      // Not in this build: a kept playback let go notifies the keeper's listeners.
+      // After this frame's build: a kept playback let go notifies the keeper's listeners, which can't rebuild mid-build.
       scheduleMicrotask(() {
         if (mounted) services.pipKeeper.pageShown(playback, opened: true);
       });
@@ -208,7 +209,7 @@ class _LiveRoomPageState extends State<LiveRoomPage> with RouteAware {
       ..removeListener(_overlayChanged)
       ..dispose();
     _superChatMenu.dispose();
-    _model.removeListener(_roomChanged);
+    _model.endedNotices.removeListener(_toastEnded);
     unawaited(_writeFailures?.cancel());
     _services?.pipKeeper.pageRemoved(_playback);
     super.dispose();
@@ -235,12 +236,12 @@ class _LiveRoomPageState extends State<LiveRoomPage> with RouteAware {
     return LiveRoomPlayback(services: services, entry: widget.entry, model: model, controller: controller);
   }
 
-  void _roomChanged() {
-    final was = _roomState;
-    _roomState = _model.state;
-    if (was == LiveRoomState.live && _roomState == LiveRoomState.ended && mounted && !_covered) {
-      showToast(context, '直播已结束');
-    }
+  /// One 直播已结束 for each end the model counts; one while covered waits until the room shows again.
+  void _toastEnded() {
+    final ends = _model.endedNotices.value;
+    if (ends <= _endsToasted || !mounted || _covered) return;
+    _endsToasted = ends;
+    showToast(context, '直播已结束');
   }
 
   void _overlayChanged() {
@@ -272,6 +273,7 @@ class _LiveRoomPageState extends State<LiveRoomPage> with RouteAware {
     _covered = false;
     _model.setShown(!_away);
     _controller.setCovered(false);
+    WidgetsBinding.instance.addPostFrameCallback((_) => _toastEnded());
   }
 
   /// The header's and full screen's ‹: through [_popInvoked], so an overlay closes first and full screen turns upright.
@@ -348,7 +350,7 @@ class _LiveRoomPageState extends State<LiveRoomPage> with RouteAware {
           onPopInvokedWithResult: _popInvoked,
           child: AnnotatedRegion<SystemUiOverlayStyle>(
             value: SystemUiOverlayStyle.light,
-            // The other builders' inputs and panels need a Material above them; the room draws its own fills.
+            // The inputs and panels need a Material above them; the room draws its own fills.
             child: Material(
               key: const ValueKey('live-room-page'),
               type: MaterialType.transparency,
@@ -375,9 +377,22 @@ class _LiveRoomPageState extends State<LiveRoomPage> with RouteAware {
         landscape: true,
       ),
       LiveOverlay.rank => LiveRankSheet(room: _model, overlays: _overlays, landscape: true),
-      LiveOverlay.send => LiveSendInput(room: _model, overlays: _overlays, landscape: true),
+      LiveOverlay.send => LiveSendInput(
+        room: _model,
+        overlays: _overlays,
+        landscape: true,
+        startOnEmotes: _overlays.sendOnEmotes,
+      ),
       LiveOverlay.superChat || LiveOverlay.none => null,
     };
+    if (_overlays.value == LiveOverlay.superChat) {
+      // Full screen draws no 醒目留言 card; left open, back would close something no one sees.
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted || _overlays.value != LiveOverlay.superChat) return;
+        _superChatMenu.value = false;
+        _overlays.close();
+      });
+    }
     return ColoredBox(
       key: const ValueKey('live-room-full-screen'),
       color: BiliColors.videoBackground,
@@ -441,12 +456,16 @@ class _LiveRoomPageState extends State<LiveRoomPage> with RouteAware {
                 top: boxTop,
                 width: width,
                 height: boxBottom - boxTop,
-                child: LivePlayerView(
-                  controller: _controller,
-                  room: _model,
-                  overlays: _overlays,
-                  fullScreen: false,
-                  onBack: _back,
+                // The box (its picture, controls and flying danmaku) and the chat change at their own pace; each keeps
+                // its own layer so neither repaints the other or the header.
+                child: RepaintBoundary(
+                  child: LivePlayerView(
+                    controller: _controller,
+                    room: _model,
+                    overlays: _overlays,
+                    fullScreen: false,
+                    onBack: _back,
+                  ),
                 ),
               ),
               Positioned(
@@ -454,7 +473,7 @@ class _LiveRoomPageState extends State<LiveRoomPage> with RouteAware {
                 right: 0,
                 top: chatTop,
                 bottom: padding.bottom + LiveRoomTheme.barHeight + LiveRoomTheme.chatBottomGap,
-                child: RoomChatList(chat: _model.chat, now: _model.now),
+                child: RepaintBoundary(child: RoomChatList(chat: _model.chat, now: _model.now)),
               ),
               Positioned(
                 left: 0,
@@ -529,7 +548,12 @@ class _LiveRoomPageState extends State<LiveRoomPage> with RouteAware {
       landscape: false,
     ),
     LiveOverlay.rank => LiveRankSheet(room: _model, overlays: _overlays, landscape: false),
-    LiveOverlay.send => LiveSendInput(room: _model, overlays: _overlays, landscape: false),
+    LiveOverlay.send => LiveSendInput(
+      room: _model,
+      overlays: _overlays,
+      landscape: false,
+      startOnEmotes: _overlays.sendOnEmotes,
+    ),
     LiveOverlay.superChat || LiveOverlay.none => null,
   };
 

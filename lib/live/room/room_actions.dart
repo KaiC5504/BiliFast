@@ -5,6 +5,7 @@ import '../../app/app_environment.dart';
 import '../../app/app_scope.dart';
 import '../../shared/toast.dart';
 import '../live_login.dart';
+import 'live_overlays.dart';
 import 'live_room_model.dart';
 import '../../video/actions/actions_model.dart' show ActionsModel;
 
@@ -39,6 +40,15 @@ Future<void> roomWrite(BuildContext context, Future<void> Function() action) asy
       showToast(context, ActionsModel.failureMessage(error));
     }
   }
+}
+
+/// The 弹幕 input (on its emote panel with [emotes]), through the login page when logged out.
+Future<void> openRoomSend(BuildContext context, LiveOverlays overlays, {bool emotes = false}) async {
+  if (roomLoggedOut(AppScope.of(context))) {
+    await requestLiveLogin(context);
+    return;
+  }
+  overlays.openSend(emotes: emotes);
 }
 
 /// The header's online count: 9349, then 1万+.

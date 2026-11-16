@@ -103,6 +103,28 @@ void main() {
     rig.controller.dispose();
   });
 
+  testWidgets('after 自动 has played, picking the quality it landed on asks nothing and says nothing', (tester) async {
+    final rig = await playing(tester);
+    await rig.controller.pickQuality(null);
+    await tester.pump();
+    rig.player.emit(const StatusChanged(PlayerStatus.playing));
+    await tester.pump();
+    expect(rig.controller.autoQuality, isTrue);
+    final said = rig.controller.notices.shown.length;
+
+    await rig.controller.pickQuality(qualities[0]);
+    await tester.pump();
+    expect(rig.room.asked, ['quality 0']);
+    expect(rig.controller.autoQuality, isFalse);
+    expect(rig.controller.notices.shown, hasLength(said), reason: 'no 切换中');
+    rig.player.emit(const StatusChanged(PlayerStatus.playing));
+    await tester.pump();
+    expect(rig.controller.notices.shown, hasLength(said), reason: 'nothing was pending');
+
+    await tester.pump(LivePlayerTheme.noteShown);
+    rig.controller.dispose();
+  });
+
   testWidgets('⟳ asks the room for its stream again and loads it', (tester) async {
     final rig = await playing(tester);
     await rig.controller.refreshStream();

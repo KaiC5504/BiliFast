@@ -29,7 +29,18 @@ class LiveOverlays extends ValueNotifier<LiveOverlay> {
 
   int? superChatId;
 
-  void open(LiveOverlay overlay) => value = overlay;
+  /// The 弹幕 input opens on its emote panel rather than the keyboard (full screen's capsule face).
+  bool sendOnEmotes = false;
+
+  void open(LiveOverlay overlay) {
+    if (overlay == LiveOverlay.send) sendOnEmotes = false;
+    value = overlay;
+  }
+
+  void openSend({bool emotes = false}) {
+    sendOnEmotes = emotes;
+    value = LiveOverlay.send;
+  }
 
   void openSuperChat(int id) {
     superChatId = id;
