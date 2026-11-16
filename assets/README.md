@@ -81,3 +81,8 @@ Glyphs of the app's icon font (`composeResources/.../font/iconfont.ttf`), drawn 
 | `images/message/tab_sheet_settings.png`, `tab_sheet_contacts.png` | `nut_setting_line_500`, `person_address_book_line_500` |
 | `images/message/tab_sheet_fan_club.png`, `tab_sheet_system.png` | `person_hot_line_500`, `speaker_sound_on_line_500` |
 | `images/message/tab_sheet_creator.png` | `brandtv_normal_line_500` |
+| `images/message/chat_settings.png` | `nut-setting-line@500` |
+| `images/message/chat_push_off.png`, `chat_push_on.png` | `bell-reserve-off-line@500`, `bell-reserve-line@500` |
+| `images/message/chat_follow.png`, `chat_following.png` | `person-follow-line@500`, `person-following-line@500` |
+| `images/message/chat_picture.png`, `chat_emote.png` | `image-line@500`, `emoji-circle-line@500` |
+| `images/message/chat_keyboard.png`, `chat_link.png` | `keyboard-line@500`, `chain-link-line@500` |
