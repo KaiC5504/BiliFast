@@ -64,6 +64,7 @@ class _PushSettingsPageState extends State<PushSettingsPage> {
   late final AppLifecycleListener _lifecycle;
   NotifyKinds _kinds = NotifyKinds.none;
   NotifyPermission? _permission;
+  bool? _backgroundRefresh;
   bool _loaded = false;
   bool _asking = false;
 
@@ -72,10 +73,16 @@ class _PushSettingsPageState extends State<PushSettingsPage> {
   @override
   void initState() {
     super.initState();
-    // The user may have changed it in iOS's Settings meanwhile.
-    _lifecycle = AppLifecycleListener(onResume: () => unawaited(_readPermission()));
+    // The user may have changed them in iOS's Settings meanwhile.
+    _lifecycle = AppLifecycleListener(
+      onResume: () {
+        unawaited(_readPermission());
+        unawaited(_readBackgroundRefresh());
+      },
+    );
     unawaited(_readKinds());
     unawaited(_readPermission());
+    unawaited(_readBackgroundRefresh());
   }
 
   @override
@@ -84,14 +91,24 @@ class _PushSettingsPageState extends State<PushSettingsPage> {
     super.dispose();
   }
 
+  /// Tried twice. Until a read answers the switches don't move: a flip saves every kind, so one made over a failed
+  /// read would turn the others off on the phone.
   Future<void> _readKinds() async {
-    try {
-      final kinds = await _host.kinds();
-      if (mounted) setState(() => _kinds = kinds);
-    } catch (error) {
-      Logger.shared.warn(LogCategory.app, 'notify kinds not read', {'error': '${error.runtimeType}'});
-    } finally {
-      _loaded = true;
+    for (var attempt = 1; attempt <= 2; attempt++) {
+      try {
+        final kinds = await _host.kinds();
+        if (!mounted) return;
+        setState(() {
+          _kinds = kinds;
+          _loaded = true;
+        });
+        return;
+      } catch (error) {
+        Logger.shared.warn(LogCategory.app, 'notify kinds not read', {
+          'error': '${error.runtimeType}',
+          'attempt': '$attempt',
+        });
+      }
     }
   }
 
@@ -101,6 +118,14 @@ class _PushSettingsPageState extends State<PushSettingsPage> {
       if (mounted) setState(() => _permission = permission);
     } catch (error) {
       Logger.shared.warn(LogCategory.app, 'notify permission not read', {'error': '${error.runtimeType}'});
+    }
+  }
+
+  Future<void> _readBackgroundRefresh() async {
+    try {
+      _backgroundRefresh = await _host.backgroundRefreshAllowed();
+    } catch (error) {
+      Logger.shared.warn(LogCategory.app, 'background refresh not read', {'error': '${error.runtimeType}'});
     }
   }
 
@@ -143,7 +168,10 @@ class _PushSettingsPageState extends State<PushSettingsPage> {
     } catch (error) {
       Logger.shared.warn(LogCategory.app, 'notify kinds not saved', {'error': '${error.runtimeType}'});
       if (mounted && _kinds == next) setState(() => _kinds = before);
+      return;
     }
+    // Kept anyway: it starts working the moment the user allows it.
+    if (on && _backgroundRefresh == false && mounted) showToast(context, '请在系统设置中开启后台App刷新');
   }
 
   void _openSettings() {
@@ -172,8 +200,16 @@ class _PushSettingsPageState extends State<PushSettingsPage> {
       value: false,
       onChanged: (_) => soon(),
     );
-    SettingsSection labelled(String label, List<Widget> rows) =>
-        SettingsSection(look: SettingsSectionLook.labelled, label: label, children: rows);
+    Widget labelled(String label, List<Widget> rows, {double end = SettingsListTheme.pushGroupEnd}) => Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        SettingsSection(look: SettingsSectionLook.labelled, label: label, children: rows),
+        ColoredBox(
+          color: SettingsTheme.row,
+          child: SizedBox(height: end),
+        ),
+      ],
+    );
     return SettingsScaffold(
       title: '推送设置',
       children: [
@@ -196,9 +232,9 @@ class _PushSettingsPageState extends State<PushSettingsPage> {
         ),
         labelled('互动通知', [kept(PushKind.likes), kept(PushKind.replies), kept(PushKind.mentions)]),
         labelled('私信通知', [kept(PushKind.messages)]),
-        labelled('关注通知', [kept(PushKind.uploads)]),
+        labelled('关注通知', [kept(PushKind.uploads)], end: 0),
         labelled('内容推荐', [drawn('recommend', '推荐可能感兴趣的内容'), drawn('hot', '热点'), drawn('events', '活动')]),
-        labelled('订阅/预约通知', [
+        labelled('订阅/预约通知', end: 2 * SettingsListTheme.pushGroupEnd, [
           drawn('bangumi', '追番追剧更新提醒'),
           drawn('live', '直播提醒'),
           drawn('collection', '订阅合集更新提醒'),
@@ -207,8 +243,8 @@ class _PushSettingsPageState extends State<PushSettingsPage> {
         ]),
         labelled('UP主小助手', [drawn('creator', '投稿服务通知')]),
         labelled('服务通知', [drawn('orders', '物流与订单通知'), drawn('vip', '增值服务通知')]),
-        labelled('其他通知', [drawn('security', '账号安全通知'), drawn('other', '其他通知')]),
-        labelled('APP内通知横幅', [drawn('banner', '应用内顶部横幅提醒', subtitle: '开启后，应用使用期间会收到推送通知')]),
+        labelled('其他通知', [drawn('security', '账号安全通知'), drawn('other', '其他通知')], end: 0),
+        labelled('APP内通知横幅', end: 0, [drawn('banner', '应用内顶部横幅提醒', subtitle: '开启后，应用使用期间会收到推送通知')]),
       ],
     );
   }

@@ -38,6 +38,7 @@ const _drawn = {
 };
 
 const _denied = '请在系统设置中允许通知';
+const _refreshOff = '请在系统设置中开启后台App刷新';
 
 void main() {
   late FakeNotifyHost host;
@@ -90,6 +91,18 @@ void main() {
   Future<void> runOut(WidgetTester tester) async {
     await tester.pump(const Duration(milliseconds: 200));
     await tester.pump(const Duration(seconds: 3));
+    await tester.pumpAndSettle();
+  }
+
+  /// The app leaves the screen, [meanwhile] runs (the user in iOS's Settings), and the app comes back.
+  Future<void> awayAndBack(WidgetTester tester, void Function() meanwhile) async {
+    for (final state in [AppLifecycleState.inactive, AppLifecycleState.hidden, AppLifecycleState.paused]) {
+      tester.binding.handleAppLifecycleStateChanged(state);
+    }
+    meanwhile();
+    for (final state in [AppLifecycleState.hidden, AppLifecycleState.inactive, AppLifecycleState.resumed]) {
+      tester.binding.handleAppLifecycleStateChanged(state);
+    }
     await tester.pumpAndSettle();
   }
 
@@ -235,6 +248,130 @@ void main() {
     });
   });
 
+  group('reading the switches', () {
+    testWidgets('a read that fails is tried again, and its answer shows', (tester) async {
+      host
+        ..allowed = NotifyPermission.allowed
+        ..stored = const NotifyKinds(likes: true)
+        ..kindsFailures = 1;
+      await showPage(tester);
+      expect(host.kindsReads, 2);
+      expect(isOn(tester, 'push-likes'), isTrue);
+      await tap(tester, 'push-replies');
+      expect(host.saved, [const NotifyKinds(likes: true, replies: true)]);
+    });
+
+    testWidgets('unreadable twice: no switch moves, so nothing overwrites what the phone keeps', (tester) async {
+      host
+        ..stored = const NotifyKinds(likes: true, uploads: true)
+        ..kindsFailures = 2;
+      await showPage(tester);
+      expect(host.kindsReads, 2);
+      for (final key in _kept.keys) {
+        await tap(tester, key);
+        expect(isOn(tester, key), isFalse, reason: key);
+      }
+      expect(host.saved, isEmpty);
+      expect(host.stored, const NotifyKinds(likes: true, uploads: true));
+      expect(host.requests, 0, reason: 'nothing asked for a switch that can\'t move');
+    });
+  });
+
+  testWidgets('a save that fails puts the switch back, and a later one saves', (tester) async {
+    host
+      ..allowed = NotifyPermission.allowed
+      ..stored = const NotifyKinds(uploads: true)
+      ..saveError = StateError('not saved');
+    await showPage(tester);
+    await tap(tester, 'push-likes');
+    expect(isOn(tester, 'push-likes'), isFalse);
+    await tap(tester, 'push-uploads');
+    expect(isOn(tester, 'push-uploads'), isTrue);
+    expect(host.stored, const NotifyKinds(uploads: true));
+
+    host.saveError = null;
+    await tap(tester, 'push-likes');
+    expect(isOn(tester, 'push-likes'), isTrue);
+    expect(host.saved, [const NotifyKinds(likes: true, uploads: true)]);
+  });
+
+  group('后台App刷新 off', () {
+    testWidgets('turning one on still saves it, and the toast says where to turn it on', (tester) async {
+      host
+        ..allowed = NotifyPermission.allowed
+        ..backgroundRefresh = false;
+      await showPage(tester);
+      await tap(tester, 'push-likes');
+      expect(isOn(tester, 'push-likes'), isTrue);
+      expect(host.saved, [const NotifyKinds(likes: true)]);
+      expect(find.text(_refreshOff), findsOneWidget);
+      await runOut(tester);
+    });
+
+    testWidgets('turning one off says nothing', (tester) async {
+      host
+        ..allowed = NotifyPermission.allowed
+        ..stored = const NotifyKinds(likes: true)
+        ..backgroundRefresh = false;
+      await showPage(tester);
+      await tap(tester, 'push-likes');
+      expect(host.saved, [NotifyKinds.none]);
+      expect(find.text(_refreshOff), findsNothing);
+    });
+
+    testWidgets('read again when the app comes back to the screen', (tester) async {
+      host.allowed = NotifyPermission.allowed;
+      await showPage(tester);
+      await tap(tester, 'push-likes');
+      expect(find.text(_refreshOff), findsNothing, reason: 'on');
+      await awayAndBack(tester, () => host.backgroundRefresh = false);
+      await tap(tester, 'push-replies');
+      expect(host.saved.last, const NotifyKinds(likes: true, replies: true));
+      expect(find.text(_refreshOff), findsOneWidget);
+      await runOut(tester);
+    });
+  });
+
+  testWidgets('every switch tells accessibility whether it is on, as a switch rather than a button', (tester) async {
+    host
+      ..allowed = NotifyPermission.allowed
+      ..stored = const NotifyKinds(likes: true);
+    await showPage(tester);
+    for (final key in [..._kept.keys, ..._drawn.keys]) {
+      expect(
+        tester.getSemantics(row(key)),
+        isSemantics(hasToggledState: true, isToggled: key == 'push-likes', isButton: false, hasTapAction: true),
+        reason: key,
+      );
+    }
+    await tap(tester, 'push-replies');
+    expect(tester.getSemantics(row('push-replies')), isSemantics(hasToggledState: true, isToggled: true));
+  });
+
+  testWidgets('each group starts where 189 and 190 have it, the rows inside it as they were', (tester) async {
+    await showPage(tester);
+    // The official's px from 点赞's top; 190's lined up with 189 by 订阅/预约通知's rows.
+    const official = {
+      'push-replies': 130,
+      'push-mentions': 260,
+      'push-messages': 484,
+      'push-uploads': 708,
+      'push-recommend': 931,
+      'push-hot': 1061,
+      'push-bangumi': 1415,
+      'push-live': 1545,
+      'push-creator': 2160,
+      'push-orders': 2384,
+      'push-vip': 2514,
+      'push-security': 2738,
+      'push-banner': 3091,
+    };
+    final likes = tester.getRect(row('push-likes')).top;
+    for (final MapEntry(:key, :value) in official.entries) {
+      expect((tester.getRect(row(key)).top - likes) * 3, closeTo(value, 0.01), reason: key);
+    }
+  });
+
   group('接收通知总开关', () {
     for (final (permission, state) in [
       (NotifyPermission.allowed, '[已开启]'),
@@ -254,14 +391,7 @@ void main() {
       host.allowed = NotifyPermission.denied;
       await showPage(tester);
       expect(find.text('[已关闭]'), findsOneWidget);
-      for (final state in [AppLifecycleState.inactive, AppLifecycleState.hidden, AppLifecycleState.paused]) {
-        tester.binding.handleAppLifecycleStateChanged(state);
-      }
-      host.allowed = NotifyPermission.allowed;
-      for (final state in [AppLifecycleState.hidden, AppLifecycleState.inactive, AppLifecycleState.resumed]) {
-        tester.binding.handleAppLifecycleStateChanged(state);
-      }
-      await tester.pumpAndSettle();
+      await awayAndBack(tester, () => host.allowed = NotifyPermission.allowed);
       expect(find.text('[已开启]'), findsOneWidget);
     });
 
