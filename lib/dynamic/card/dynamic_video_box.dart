@@ -111,6 +111,12 @@ class DynamicVideoBoxState extends State<DynamicVideoBox> implements FeedInlineC
   @override
   void inlinePause() => _inline?.pause();
 
+  @override
+  void inlineRelease() => _inline?.release();
+
+  @override
+  ValueListenable<bool>? scrolling() => mounted ? scrollingOf(context) : null;
+
   FeedInlinePlayback _makeInline() {
     final host = widget.inline!;
     final video = widget.video;

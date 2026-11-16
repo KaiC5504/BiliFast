@@ -3,6 +3,7 @@ import 'dart:math' as math;
 
 import 'package:bili_core/api.dart' show FeedCard;
 import 'package:bili_core/devlog.dart';
+import 'package:flutter/foundation.dart' show ValueListenable;
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/widgets.dart';
 
@@ -83,16 +84,29 @@ abstract interface class FeedInlineCard {
   /// Its video box on screen, in global coordinates; null before it is laid out.
   Rect? videoRect();
 
+  /// Whether the list it sits in is being dragged or flung; null outside a scrolling list.
+  ValueListenable<bool>? scrolling();
+
   void inlinePlay();
 
+  /// Held where it is, its player kept a while for a quick return.
   void inlinePause();
+
+  /// Its player let go at once; a later play starts again where it stood.
+  void inlineRelease();
 }
+
+/// The list [context] scrolls in, as [FeedInlineCard.scrolling] reports it.
+ValueListenable<bool>? scrollingOf(BuildContext context) =>
+    context.findAncestorStateOfType<ScrollableState>()?.position.isScrollingNotifier;
 
 /// Which of 推荐's big cards plays: the one with the most of its video box on screen, at least
 /// [FeedBigCardTheme.visibleToPlay] of it, looked at once a scroll has come to rest (KaiC: a card dragged half off keeps
 /// playing until the finger lets go), while 首页 shows with nothing over it and the app is in front. One at a time, and
 /// only while [autoplay]'s rule lets it, read at each settle: a choice changed in 设置 applies once the list shows again,
-/// a change of network at once.
+/// a change of network at once. A card that stops being the one is let go when another takes over or the app leaves,
+/// and only paused (for [FeedBigCardTheme.releaseAfter]) while nothing plays in its place. A new card starts only once
+/// its list has rested [FeedBigCardTheme.startAfterRest].
 class FeedInlineHost with WidgetsBindingObserver {
   FeedInlineHost({required this.viewport, required this._pip, required this.autoplay, Logger? logger})
     : _logger = logger ?? Logger.shared {
@@ -121,6 +135,14 @@ class FeedInlineHost with WidgetsBindingObserver {
 
   final _cards = <FeedInlineCard>{};
   FeedInlineCard? _playing;
+
+  /// The lists the cards sit in, heard so a start waits for them to rest: a card passed on the way, or a fling caught
+  /// by a finger and dragged on, would otherwise start a player only to throw it away.
+  final _lists = <ValueListenable<bool>>{};
+  bool _moving = false;
+
+  /// From the lists coming to rest until a new card may start.
+  Timer? _rest;
   bool _shown = false;
   bool _foreground = true;
   bool _queued = false;
@@ -162,16 +184,20 @@ class FeedInlineHost with WidgetsBindingObserver {
   }
 
   void settle() {
+    _hearLists();
     final area = _shown && _foreground && !_pip.showing ? viewport() : null;
     FeedInlineCard? best;
     var bestShare = 0.0;
+    var playingSeen = false;
     if (area != null) {
       for (final card in _cards) {
         final box = card.videoRect();
         if (box == null || box.height <= 0) continue;
         final seen = math.min(box.bottom, area.bottom) - math.max(box.top, area.top);
         final share = (seen / box.height).clamp(0.0, 1.0);
-        if (share >= FeedBigCardTheme.visibleToPlay && share > bestShare) {
+        if (share < FeedBigCardTheme.visibleToPlay) continue;
+        if (identical(card, _playing)) playingSeen = true;
+        if (share > bestShare) {
           best = card;
           bestShare = share;
         }
@@ -185,11 +211,47 @@ class FeedInlineHost with WidgetsBindingObserver {
       _heldFor = held;
       if (held != null) best = null;
     }
+    // Nothing new starts until the lists have rested; the card playing goes on while enough of it shows.
+    if (best != null && !identical(best, _playing) && (_moving || _rest != null)) {
+      best = playingSeen ? _playing : null;
+    }
     for (final card in List.of(_cards)) {
-      if (!identical(card, best)) card.inlinePause();
+      if (identical(card, best)) continue;
+      if (best != null || !_foreground) {
+        card.inlineRelease();
+      } else {
+        card.inlinePause();
+      }
     }
     _playing = best;
     best?.inlinePlay();
+  }
+
+  void _hearLists() {
+    final lists = {for (final card in _cards) ?card.scrolling()};
+    for (final list in _lists.difference(lists)) {
+      list.removeListener(_listsMoved);
+    }
+    for (final list in lists.difference(_lists)) {
+      list.addListener(_listsMoved);
+    }
+    _lists
+      ..clear()
+      ..addAll(lists);
+    _listsMoved();
+  }
+
+  void _listsMoved() {
+    final moving = _lists.any((list) => list.value);
+    if (moving == _moving || _disposed) return;
+    _moving = moving;
+    _rest?.cancel();
+    _rest = moving
+        ? null
+        : Timer(FeedBigCardTheme.startAfterRest, () {
+            _rest = null;
+            settleSoon();
+          });
   }
 
   @override
@@ -208,6 +270,12 @@ class FeedInlineHost with WidgetsBindingObserver {
     _disposed = true;
     _pip.removeListener(settleSoon);
     _policy.removeListener(settleSoon);
+    for (final list in _lists) {
+      list.removeListener(_listsMoved);
+    }
+    _lists.clear();
+    _rest?.cancel();
+    _rest = null;
     WidgetsBinding.instance.removeObserver(this);
   }
 }
@@ -289,6 +357,7 @@ class FeedInlinePlayback extends ChangeNotifier {
     if (playback == null) {
       _start();
     } else if (_controller case final controller?) {
+      _hold(controller, false);
       controller.holdAutoplay(false, play: true);
       _quietly(controller.player.play, 'play');
     }
@@ -301,9 +370,19 @@ class FeedInlinePlayback extends ChangeNotifier {
     if (_controller case final controller?) {
       controller.holdAutoplay(true);
       _quietly(controller.player.pause, 'pause');
+      _hold(controller, true);
     }
     if (_playback != null) _release = Timer(FeedBigCardTheme.releaseAfter, release);
     notifyListeners();
+  }
+
+  static const _heldAhead = Duration(seconds: 1);
+  static const _playingAhead = Duration(seconds: 8);
+
+  /// A held card keeps little in its engine session and its player, and fetches nothing ahead until it plays again.
+  void _hold(PlaybackController controller, bool held) {
+    controller.setIdle(held);
+    _quietly(() => controller.player.setForwardBuffer(held ? _heldAhead : _playingAhead), 'buffer');
   }
 
   void _start() {
@@ -334,6 +413,7 @@ class FeedInlinePlayback extends ChangeNotifier {
         controller.holdAutoplay(true);
         _quietly(controller.player.pause, 'pause');
       }
+      _hold(controller, !_wanted);
       _applySound();
       _applyFilter();
     }
@@ -388,6 +468,8 @@ class FeedInlinePlayback extends ChangeNotifier {
     _logger.info(LogCategory.player, 'inline handed over', {'bvid': video.bvid, 'playing': _wanted});
     final playing = _wanted;
     _forget();
+    // The page sets its own forward buffer.
+    controller.setIdle(false);
     if (playing) {
       controller.holdAutoplay(false, play: true);
       if (controller.phase == PlaybackPhase.playing) _quietly(controller.player.play, 'play');

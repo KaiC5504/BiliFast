@@ -172,6 +172,12 @@ class _FeedBigCardViewState extends State<FeedBigCardView> with TickerProviderSt
   @override
   void inlinePause() => _inline?.pause();
 
+  @override
+  void inlineRelease() => _inline?.release();
+
+  @override
+  ValueListenable<bool>? scrolling() => mounted ? scrollingOf(context) : null;
+
   FeedInlinePlayback _makeInline() {
     final host = widget.host!;
     final bvid = widget.card.bvid;
