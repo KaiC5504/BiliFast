@@ -318,7 +318,7 @@ void main() {
   });
 
   testWidgets("a 装扮's header folds too: its pictures move up with it, cut at the screen's top, the magnifier in the "
-      "skin's colour at the other tabs' 72%", (tester) async {
+      "skin's colour at 72%", (tester) async {
     Finder headArt() => find.byKey(const ValueKey('home-head-art'));
     Finder tabArt() => find.byKey(const ValueKey('home-head-tab-art'));
     await show(tester, skin: _pictures.skin());
@@ -461,9 +461,8 @@ void main() {
       semantics.dispose();
     });
 
-    testWidgets("dressed, the chosen one and the indicator take the skin's colour, the others it at 72%", (
-      tester,
-    ) async {
+    testWidgets("dressed, the chosen one and the indicator take the skin's colour, the others it at 68%, lighter than "
+        "the folded magnifier's 72%", (tester) async {
       await show(tester, skin: _pictures.skin());
       const white = Color(0xFFFFFFFF);
       expect(style(tester, HomeTopTab.recommend).color, white);
@@ -471,7 +470,25 @@ void main() {
         (tester.widget<Container>(find.byKey(const ValueKey('home-tab-indicator'))).decoration! as BoxDecoration).color,
         white,
       );
-      expect(style(tester, HomeTopTab.hot).color, white.withValues(alpha: 0.72));
+      for (final tab in [HomeTopTab.live, HomeTopTab.hot, HomeTopTab.anime, HomeTopTab.film]) {
+        expect(style(tester, tab).color, white.withValues(alpha: 0.68), reason: tab.label);
+      }
+
+      await scrollTo(tester, 40);
+      expect(
+        tester.widget<SearchGlyphIcon>(find.descendant(of: magnifier(), matching: find.byType(SearchGlyphIcon))).color,
+        white.withValues(alpha: 0.72),
+      );
+    });
+
+    test("the others' opacity puts 204's black over its #D9E8D3 on its #464A44", () {
+      final drawn = Color.alphaBlend(
+        const Color(0xFF000000).withValues(alpha: HomeTabRowTheme.skinInkOpacity),
+        const Color(0xFFD9E8D3),
+      );
+      for (final (channel, got, want) in [('r', drawn.r, 0x46), ('g', drawn.g, 0x4A), ('b', drawn.b, 0x44)]) {
+        expect(got * 255, moreOrLessEquals(want.toDouble(), epsilon: 0.6), reason: channel);
+      }
     });
 
     testWidgets('直播, 动画 and 影视 say 暂未开放 and change nothing', (tester) async {

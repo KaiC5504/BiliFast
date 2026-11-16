@@ -8156,10 +8156,11 @@ abstract final class HomeTabRowTheme {
   static const weight = FontWeight.w400;
   static const chosenWeight = FontWeight.w600;
 
-  /// The others' grey on white (01's #61666D, the folded magnifier's); over a 装扮's picture the skin's colour at the
-  /// magnifier's 72% (204: a black 热门 over the others' #464A44 on #D9E8D3).
+  /// The others' grey on white (01's #61666D, the folded magnifier's); over a 装扮's picture the skin's colour at 68%,
+  /// a little lighter than the magnifier's 72% (204: a black 热门 over the others' #464A44 on #D9E8D3, black at 0.677
+  /// to 0.681 by channel).
   static const ink = HomeHeaderTheme.searchInk;
-  static const skinInkOpacity = HomeHeaderTheme.skinSearchOpacity;
+  static const skinInkOpacity = 0.68;
 
   /// A tap on 推荐 or 热门 slides the pages over in UIKit's ease-in-out (no recording of the official one).
   static const pageTurn = Duration(milliseconds: 300);
