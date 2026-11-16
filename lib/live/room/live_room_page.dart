@@ -75,6 +75,14 @@ class _LiveRoomPageState extends State<LiveRoomPage> with RouteAware {
             api: services.liveApi,
             entry: widget.entry,
             loggedIn: () => services.environment.account is LoggedIn,
+            viewer: () => LiveUser(
+              uid: services.environment.mid ?? 0,
+              name: switch (services.environment.account) {
+                LoggedIn(:final name) => name,
+                _ => '',
+              },
+              face: services.environment.face ?? '',
+            ),
           );
       _controller =
           widget.createController?.call(services, _model) ?? LivePlayerController(room: _model, services: services);

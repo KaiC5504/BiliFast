@@ -4,6 +4,7 @@ import 'package:flutter/widgets.dart';
 import '../../app/app_environment.dart';
 import '../../app/app_scope.dart';
 import '../../shared/toast.dart';
+import 'live_room_model.dart';
 import '../../video/actions/actions_model.dart' show ActionsModel;
 
 const roomNotYet = '暂未开放';
@@ -18,7 +19,7 @@ bool roomLoggedOut(AppServices services) => switch (services.environment.account
 
 /// Bilibili's "needs a login", or the room model's own refusal of a logged-out write.
 bool liveNeedsLogin(Object error) =>
-    (error is BiliError && error.needsLogin) || error.runtimeType.toString() == 'LiveNotLoggedIn';
+    (error is BiliError && error.needsLogin) || error is LiveNotLoggedIn;
 
 /// Runs [action] for a logged-in viewer: logged out it opens the login page instead, as does a refusal that needs a
 /// login; any other failure toasts.
