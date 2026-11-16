@@ -16,6 +16,7 @@ import 'package:bilifast/home/recent_store.dart';
 import 'package:bilifast/home/tab_bar_icons.dart';
 import 'package:bilifast/me/fake_me_api.dart';
 import 'package:bilifast/me/me_page.dart';
+import 'package:bilifast/message/fake_message_api.dart';
 import 'package:bilifast/message/message_page.dart';
 import 'package:bilifast/search/fake_search_api.dart';
 import 'package:bilifast/shared/theme.dart';
@@ -90,6 +91,7 @@ void main() {
       searchApi: FakeSearchApi(defaultWord: _word),
       meApi: FakeMeApi.demo(),
       loginGate: FakeLoginGate(),
+      messageApi: FakeMessageApi(),
     );
     final skins = FixedSkinModel(skin, environment: environment);
     addTearDown(skins.dispose);
@@ -208,6 +210,39 @@ void main() {
       expect(tester.widget<Divider>(find.byType(Divider).first).color, BiliColors.divider);
       expect(SystemChrome.latestStyle?.statusBarIconBrightness, Brightness.dark);
       expect(find.byType(SkinTabIcon), findsNWidgets(4), reason: 'the bar still takes it');
+    });
+  });
+
+  group('消息 dressed by head_bg (196)', () {
+    Finder messageArt() => find.byKey(const ValueKey('message-head-art'));
+
+    Future<void> openMessages(WidgetTester tester, Skin? skin) async {
+      await show(tester, skin);
+      await settle(tester);
+      await tester.tap(find.byKey(const ValueKey('home-tab-messages')));
+      await settle(tester);
+    }
+
+    testWidgets('behind the status bar and the 44 pt row, centre-cropped; 消息 and its buttons in the skin\'s colour; '
+        'the status bar as 首页\'s', (tester) async {
+      await openMessages(tester, _pictures.skin());
+      expect(tester.getRect(messageArt()), const Rect.fromLTRB(0, 0, 440, 62 + MessageTabTheme.barRow));
+      final image = tester.widget<Image>(messageArt());
+      expect((image.image as FileImage).file.path, _pictures['head_bg.png'].path);
+      expect(image.fit, BoxFit.cover);
+      expect(image.alignment, Alignment.center);
+      expect(tester.widget<Text>(find.byKey(const ValueKey('message-title'))).style?.color, const Color(0xFFFFFFFF));
+      for (final key in ['message-read-all-button', 'message-more-button']) {
+        expect(imageIn(tester, find.byKey(ValueKey(key))).color, const Color(0xFFFFFFFF), reason: key);
+      }
+      expect(SystemChrome.latestStyle?.statusBarIconBrightness, Brightness.light);
+    });
+
+    testWidgets('without head_bg the header stays white, its ink the page\'s, the status bar dark', (tester) async {
+      await openMessages(tester, _pictures.skin(head: false));
+      expect(messageArt(), findsNothing);
+      expect(tester.widget<Text>(find.byKey(const ValueKey('message-title'))).style?.color, MessageTabTheme.titleInk);
+      expect(SystemChrome.latestStyle?.statusBarIconBrightness, Brightness.dark);
     });
   });
 

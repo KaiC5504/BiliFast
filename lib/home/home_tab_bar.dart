@@ -52,7 +52,7 @@ enum PadTab {
   String get key => place?.name ?? name;
 }
 
-/// One place on the bar as drawn: its key, label, 装扮 icon and stock icon.
+/// One place on the bar as drawn: its key, label, 装扮 icon, stock icon and red count.
 typedef _Place = ({
   String key,
   String label,
@@ -61,6 +61,7 @@ typedef _Place = ({
   bool selected,
   Widget Function(bool selected) icon,
   VoidCallback onTap,
+  int count,
 });
 
 /// What differs between the phone's bar and the iPad's.
@@ -81,7 +82,14 @@ typedef _Shape = ({
 /// icons and label colours instead (109, 110), once its still pictures have decoded; until then, or for good when
 /// one won't, the bar stays stock.
 class HomeTabBar extends StatelessWidget {
-  const HomeTabBar({super.key, required this.selected, required this.onTap, this.onPartition, this.skin});
+  const HomeTabBar({
+    super.key,
+    required this.selected,
+    required this.onTap,
+    this.onPartition,
+    this.skin,
+    this.messageBadge = 0,
+  });
 
   final HomeTab selected;
   final ValueChanged<HomeTab> onTap;
@@ -91,6 +99,9 @@ class HomeTabBar extends StatelessWidget {
 
   /// The equipped 装扮; null, or one [dresses] refuses, leaves it stock.
   final Skin? skin;
+
+  /// 消息's red count (211); none at 0. The iPad's bar has no 消息.
+  final int messageBadge;
 
   /// Whether [skin] dresses the bar: its picture, both label colours and all five icons each way. Without any of
   /// them the bar stays stock.
@@ -135,6 +146,7 @@ class HomeTabBar extends StatelessWidget {
               selected: tab.place == selected,
               icon: (selected) => PadTabIcon(tab, selected: selected),
               onTap: () => tab.place == null ? onPartition?.call() : onTap(tab.place!),
+              count: 0,
             ),
         ]
       : [
@@ -147,6 +159,7 @@ class HomeTabBar extends StatelessWidget {
               selected: tab == selected,
               icon: (selected) => HomeTabIcon(tab, selected: selected),
               onTap: () => onTap(tab),
+              count: tab == HomeTab.messages ? messageBadge : 0,
             ),
         ];
 
@@ -284,6 +297,7 @@ class _Slot extends StatelessWidget {
       button: true,
       selected: selected,
       label: place.label,
+      value: place.count > 0 ? TabCount.label(place.count) : null,
       child: GestureDetector(
         key: ValueKey(place.key),
         behavior: HitTestBehavior.opaque,
@@ -332,6 +346,21 @@ class _Slot extends StatelessWidget {
                     style: TextStyle(fontSize: shape.labelText, color: labelColour),
                   ),
                 ),
+              if (place.count > 0)
+                Positioned(
+                  top: skin == null ? MessageTabTheme.countStockTop : MessageTabTheme.countDressedTop,
+                  left: 0,
+                  right: 0,
+                  child: Center(
+                    child: Transform.translate(
+                      offset: const Offset(MessageTabTheme.countRight, 0),
+                      child: FractionalTranslation(
+                        translation: const Offset(0, -0.5),
+                        child: TabCount(place.count, key: ValueKey('${place.key}-count')),
+                      ),
+                    ),
+                  ),
+                ),
             ],
           ),
         ),
@@ -351,4 +380,57 @@ class _Slot extends StatelessWidget {
           child: SizedBox(width: width, height: height, child: child),
         ),
       );
+}
+
+/// A red count as 211 draws it on a place of the bar: white numbers on a red stadium in a white ring, 99+ past 99;
+/// nothing at 0. 消息's entries and sessions draw it too.
+class TabCount extends StatelessWidget {
+  const TabCount(this.count, {super.key});
+
+  final int count;
+
+  static String label(int count) => count > 99 ? '99+' : '$count';
+
+  @override
+  Widget build(BuildContext context) {
+    if (count <= 0) return const SizedBox.shrink();
+    return DecoratedBox(
+      decoration: const ShapeDecoration(color: MessageTabTheme.countRim, shape: StadiumBorder()),
+      child: Padding(
+        padding: const EdgeInsets.all(MessageTabTheme.countRing),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(
+            minWidth: MessageTabTheme.count,
+            minHeight: MessageTabTheme.count,
+            maxHeight: MessageTabTheme.count,
+          ),
+          child: DecoratedBox(
+            decoration: const ShapeDecoration(color: MessageTabTheme.countFill, shape: StadiumBorder()),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: MessageTabTheme.countPadX),
+              child: Center(
+                widthFactor: 1,
+                child: Text(
+                  label(count),
+                  maxLines: 1,
+                  softWrap: false,
+                  style: TextStyle(
+                    fontFamily: BiliFonts.family,
+                    fontFamilyFallback: BiliFonts.fallback,
+                    fontSize: MessageTabTheme.countText,
+                    fontWeight: MessageTabTheme.countWeight,
+                    height: MessageTabTheme.count / MessageTabTheme.countText,
+                    leadingDistribution: TextLeadingDistribution.even,
+                    color: MessageTabTheme.countInk,
+                    letterSpacing: 0,
+                    decoration: TextDecoration.none,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 }

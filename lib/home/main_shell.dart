@@ -5,6 +5,7 @@ import '../app/app_scope.dart';
 import '../dynamic/follow_tab/face_sheet.dart';
 import '../dynamic/follow_tab/follow_tab_page.dart';
 import '../me/me_page.dart';
+import '../message/message_model.dart';
 import '../message/message_page.dart';
 import '../shared/theme.dart';
 import '../shared/toast.dart';
@@ -16,7 +17,8 @@ import 'home_tab_bar.dart';
 
 /// The bottom bar's places: 首页, 关注, 消息 and 我的 kept alive side by side, the bar under them (01, 02, 127). A bar dressed
 /// by the equipped 装扮 lies over the pages' bottom instead, so they show behind its picture (109, 110). 关注's face
-/// sheet lies over everything, the bar included (139), and a sideloaded install's launch alert over that.
+/// sheet lies over everything, the bar included (139), and a sideloaded install's launch alert over that. 消息's
+/// counts start with the shell; their total is the bar's badge (211), and a tapped 私信 notification shows 消息.
 class MainShell extends StatefulWidget {
   const MainShell({super.key, this.developerPage, this.initialLink, @visibleForTesting this.skin});
 
@@ -38,14 +40,31 @@ class _MainShellState extends State<MainShell> {
   final _messageReloads = _Reloads();
   final _faceSheet = FaceSheetController();
   HomeTab _tab = HomeTab.home;
+  MessageModel? _messages;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_messages != null) return;
+    _messages = AppScope.of(context).messages
+      ..start()
+      ..showRequests.addListener(_showMessages);
+  }
 
   @override
   void dispose() {
+    _messages?.showRequests.removeListener(_showMessages);
     _reloads.dispose();
     _followReloads.dispose();
     _messageReloads.dispose();
     _faceSheet.dispose();
     super.dispose();
+  }
+
+  void _showMessages() {
+    if (!mounted) return;
+    _faceSheet.close();
+    if (_tab != HomeTab.messages) setState(() => _tab = HomeTab.messages);
   }
 
   /// 首页 again on 首页 refreshes 推荐, and 关注 again on 关注 its list, closing the face sheet first (a guess: no
@@ -141,11 +160,15 @@ class _MainShellState extends State<MainShell> {
             left: 0,
             right: 0,
             bottom: 0,
-            child: HomeTabBar(
-              selected: _tab,
-              onTap: _tapped,
-              onPartition: () => showToast(context, '暂未开放'),
-              skin: skin,
+            child: ListenableBuilder(
+              listenable: _messages!,
+              builder: (context, _) => HomeTabBar(
+                selected: _tab,
+                onTap: _tapped,
+                onPartition: () => showToast(context, '暂未开放'),
+                skin: skin,
+                messageBadge: _messages!.badge,
+              ),
             ),
           ),
           Positioned.fill(child: FaceSheetLayer(controller: _faceSheet)),

@@ -13,6 +13,9 @@ import 'package:bilifast/home/recent_store.dart';
 import 'package:bilifast/home/tab_bar_icons.dart';
 import 'package:bilifast/me/fake_me_api.dart';
 import 'package:bilifast/me/me_page.dart';
+import 'package:bilifast/message/fake_message_api.dart';
+import 'package:bilifast/message/message_model.dart';
+import 'package:bilifast/message/message_page.dart';
 import 'package:bilifast/search/fake_search_api.dart';
 import 'package:bilifast/shared/loading_tv.dart';
 import 'package:bilifast/shared/theme.dart';
@@ -38,7 +41,12 @@ void main() {
   });
 
   /// The shell at 440×956 over a 34 pt home indicator; [phone] makes it KaiC's iPhone at 3× under the system font.
-  Future<void> show(WidgetTester tester, {bool phone = false}) async {
+  /// [messages] builds 消息's model in place of the app's.
+  Future<void> show(
+    WidgetTester tester, {
+    bool phone = false,
+    MessageModel Function(AppEnvironment environment)? messages,
+  }) async {
     if (phone) {
       final saved = BiliFonts.family;
       addTearDown(() => BiliFonts.family = saved);
@@ -68,6 +76,8 @@ void main() {
       searchApi: FakeSearchApi(defaultWord: '崩铁新版本即将上线'),
       meApi: FakeMeApi.demo(),
       loginGate: FakeLoginGate(),
+      messageApi: FakeMessageApi(),
+      messages: messages?.call(environment),
     );
     if (phone) BiliFonts.family = BiliFonts.system;
     await tester.pumpWidget(
@@ -235,6 +245,73 @@ void main() {
     expect(SystemChrome.latestStyle?.statusBarIconBrightness, Brightness.dark);
   });
 
+  testWidgets('消息 shows its page, active only while shown; 消息 again asks it to reload', (tester) async {
+    late _Messages model;
+    await show(tester, messages: (environment) => model = _Messages(environment));
+    await settle(tester);
+    expect(model.starts, 1, reason: 'the shell starts the counts once');
+    bool messagesActive() => tester.widget<MessagePage>(find.byType(MessagePage, skipOffstage: false)).active;
+    expect(messagesActive(), isFalse);
+
+    await tapTab(tester, HomeTab.messages);
+    await settle(tester);
+    expectSelected(tester, HomeTab.messages);
+    expect(messagesActive(), isTrue);
+    expect(find.byType(MessagePage), findsOneWidget);
+    expect(find.byType(HomePage), findsNothing, reason: 'offstage');
+    expect(model.refreshes, 1);
+
+    await tapTab(tester, HomeTab.messages);
+    await settle(tester);
+    expect(model.refreshes, 2, reason: 'reloaded');
+
+    await tapTab(tester, HomeTab.home);
+    await settle(tester);
+    expect(messagesActive(), isFalse);
+    expect(model.starts, 1);
+  });
+
+  testWidgets("the bar's 消息 count follows the model's badge: none at 0", (tester) async {
+    late _Messages model;
+    await show(tester, messages: (environment) => model = _Messages(environment));
+    await settle(tester);
+    final count = find.byKey(const ValueKey('home-tab-messages-count'));
+    expect(count, findsNothing);
+
+    model.setBadge(7);
+    await tester.pump();
+    expect(find.descendant(of: count, matching: find.text('7')), findsOneWidget);
+
+    model.setBadge(120);
+    await tester.pump();
+    expect(find.descendant(of: count, matching: find.text('99+')), findsOneWidget);
+
+    model.setBadge(0);
+    await tester.pump();
+    expect(count, findsNothing);
+  });
+
+  testWidgets('a show request (a tapped 私信 notification) switches to 消息 from any place, and again changes nothing', (
+    tester,
+  ) async {
+    late _Messages model;
+    await show(tester, messages: (environment) => model = _Messages(environment));
+    await settle(tester);
+    for (final from in [HomeTab.home, HomeTab.follow, HomeTab.mine]) {
+      if (from != HomeTab.home) {
+        await tapTab(tester, from);
+        await settle(tester);
+      }
+      model.requestShow();
+      await settle(tester);
+      expectSelected(tester, HomeTab.messages);
+      expect(tester.widget<MessagePage>(find.byType(MessagePage)).active, isTrue);
+    }
+    model.requestShow();
+    await settle(tester);
+    expectSelected(tester, HomeTab.messages);
+  });
+
   testWidgets('+ says 暂未开放 and changes nothing, from either tab', (tester) async {
     await show(tester);
     await settle(tester, 40);
@@ -335,4 +412,27 @@ void main() {
       if (shots != null) await saveShot(tester, find.byKey(_screen), '$shots/$shot-bar-ours.png');
     });
   }
+}
+
+/// 消息's model counting the shell's and the page's asks, its badge set by the test; it asks Bilibili nothing.
+class _Messages extends MessageModel {
+  _Messages(AppEnvironment environment) : super(api: FakeMessageApi(), environment: environment);
+
+  int starts = 0;
+  int refreshes = 0;
+  int _badge = 0;
+
+  void setBadge(int badge) {
+    _badge = badge;
+    notifyListeners();
+  }
+
+  @override
+  int get badge => _badge;
+
+  @override
+  void start() => starts++;
+
+  @override
+  Future<void> refresh() async => refreshes++;
 }
