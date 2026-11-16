@@ -19,11 +19,6 @@ final _t0 = DateTime(2026, 11, 17, 20);
 
 const _viewer = LiveUser(uid: _viewerUid, name: '我自己');
 
-/// The socket's refusal: `refused` once bili_core has it, `failed` before.
-final _refused = LiveSocketState.values.firstWhere(
-  (state) => state.name == 'refused',
-  orElse: () => LiveSocketState.failed,
-);
 
 LivePlayInfo _playInfo({LiveStatus status = LiveStatus.live, int qn = 10000}) => LivePlayInfo(
   roomId: _realId,
@@ -467,7 +462,7 @@ void main() {
       room.start();
       expect(room.callsNamed('channel'), hasLength(1));
 
-      room.channel.setState(_refused);
+      room.channel.setState(LiveSocketState.refused);
       async.flushMicrotasks();
       expect(room.callsNamed('channel'), hasLength(2));
       expect(room.channel.closes, 1);
@@ -477,7 +472,7 @@ void main() {
       room.emit(LiveDanmakuEvent(_message('d0')));
       expect(_describe(room.chat.last), 'dm d0');
 
-      room.channel.setState(_refused);
+      room.channel.setState(LiveSocketState.refused);
       async.flushMicrotasks();
       expect(room.callsNamed('channel'), hasLength(2));
       expect(room.channel.closes, 2);
@@ -485,7 +480,7 @@ void main() {
 
       unawaited(room.model.setQuality(400));
       async.elapse(const Duration(minutes: 1));
-      room.channel.setState(_refused);
+      room.channel.setState(LiveSocketState.refused);
       async.flushMicrotasks();
       expect(room.callsNamed('channel'), hasLength(2));
       expect(room.chat.whereType<LiveChatNotice>(), hasLength(2), reason: '系统提示 and the one notice');

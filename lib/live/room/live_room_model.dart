@@ -68,13 +68,6 @@ class LiveRoomModel extends ChangeNotifier {
   static const _channelStaleAfter = Duration(minutes: 30);
   static const _channelAsksPerShow = 2;
 
-  /// The socket's word for a token it was refused with. `refused` where bili_core has it; until then every `failed`
-  /// counts, which costs at most one more ask per showing.
-  static final _refusal = LiveSocketState.values.firstWhere(
-    (state) => state.name == 'refused',
-    orElse: () => LiveSocketState.failed,
-  );
-
   final LiveApi api;
   final LiveRoomEntry entry;
   final bool Function() loggedIn;
@@ -516,7 +509,7 @@ class LiveRoomModel extends ChangeNotifier {
   }
 
   void _onSocketState(LiveChannel channel, LiveSocketState state) {
-    if (_disposed || state != _refusal || !identical(channel, _channel)) return;
+    if (_disposed || state != LiveSocketState.refused || !identical(channel, _channel)) return;
     final giveUp = _channelAsks >= _channelAsksPerShow;
     _logger.warn(LogCategory.api, 'live socket refused', {'room': roomId, 'asks': _channelAsks, 'give_up': giveUp});
     _dropChannel();
