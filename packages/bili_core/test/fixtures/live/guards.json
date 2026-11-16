@@ -1,0 +1,16 @@
+{"code":0,"message":"0","ttl":1,"data":{
+"info":{"num":5,"page":1,"now":1},
+"list":[
+ {"ruid":7001,"rank":4,"accompany":36,"uinfo":{"uid":8104,"base":{"name":"舰长丁","face":"https://i0.hdslb.com/bfs/face/guard-0004.jpg"},"medal":{"name":"莲宝","level":25,"is_light":1,"guard_level":3,"v2_medal_color_start":"#4775EFCC","v2_medal_color_end":"#4775EFCC","v2_medal_color_border":"#58A1F8FF"},"wealth":null,"guard":{"level":3,"expired_str":""}},"score":0},
+ {"ruid":7001,"rank":5,"accompany":513,"uinfo":{"uid":8105,"base":{"name":"舰长戊","face":"https://i0.hdslb.com/bfs/face/guard-0005.jpg"},"medal":{"name":"莲宝","level":30,"is_light":1,"guard_level":3},"guard":null},"score":0},
+ {"ruid":7001,"rank":6}
+],
+"top3":[
+ {"ruid":7001,"rank":1,"accompany":306,"uinfo":{"uid":8101,"base":{"name":"提督甲","face":"https://i0.hdslb.com/bfs/face/guard-0001.jpg"},"medal":{"name":"莲宝","level":30,"is_light":1,"guard_level":2},"guard":{"level":2}},"score":0},
+ {"ruid":7001,"rank":2,"accompany":1005,"uinfo":{"uid":8102,"base":{"name":"提督乙","face":"https://i0.hdslb.com/bfs/face/guard-0002.jpg"},"medal":{"name":"莲宝","level":29,"is_light":1,"guard_level":2},"guard":{"level":2}},"score":0},
+ {"ruid":7001,"rank":3,"accompany":95,"uinfo":{"uid":8103,"base":{"name":"提督丙","face":"https://i0.hdslb.com/bfs/face/guard-0003.jpg"},"medal":{"name":"莲宝","level":28,"is_light":1,"guard_level":2},"guard":{"level":2}},"score":0}
+],
+"my_follow_info":{"accompany_days":0,"rank":0,"ruid":0,"uinfo":null},
+"guard_leader":{"text":"上周TOP1","uinfo":{"uid":8101,"base":{"name":"提督甲","face":"https://i0.hdslb.com/bfs/face/guard-0001.jpg"}}},
+"remind_benefit":"立即上船","typ":3
+}}

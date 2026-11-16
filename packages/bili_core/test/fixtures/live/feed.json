@@ -1,0 +1,21 @@
+{"code":0,"message":"0","ttl":1,"data":{"card_list":[
+{"card_type":"banner_v2","card_data":{"banner_v2":{"list":[
+ {"id":901,"title":"活动横幅","pic":"https://i0.hdslb.com/bfs/live/banner-0001.png","link":"https://www.bilibili.com/blackboard/live/activity-0001.html"},
+ {"id":902,"title":"测试大卡","cover":"https://i0.hdslb.com/bfs/live/big-0001.jpg","link":"bilibili://live/5001?broadcast_type=0","uname":"测试主播甲","uid":7001,"face":"https://i0.hdslb.com/bfs/face/live-face-0001.jpg","rank_info":{"text":"人气榜TOP·2","value":"2009助力值"}},
+ {"id":903,"title":"直接带房间号","roomid":5002,"cover":"https://i0.hdslb.com/bfs/live/big-0002.jpg","uname":"测试主播乙"}
+]}}},
+{"card_type":"my_idol_v1","card_data":{"my_idol_v1":{"list":[
+ {"roomid":5010,"uid":7010,"uname":"你关注的主播","face":"https://i0.hdslb.com/bfs/face/live-face-0010.jpg","cover":"https://i0.hdslb.com/bfs/live/cover-0010.jpg","title":"关注的直播","area_name":"剑网3","watched_show":{"switch":true,"num":883,"text_small":"883","text_large":"883人看过"},"cover_left_style":{"text":"TopStar","pic":"https://i0.hdslb.com/bfs/live/topstar-icon.png","bg_color":"#FF3D2B5E"}}
+],"extra_info":{"total_count":3}}}},
+{"card_type":"area_entrance_v3","card_data":{"area_entrance_v3":{"list":[
+ {"area_v2_id":0,"area_v2_parent_id":0,"title":"推荐"},
+ {"area_v2_id":0,"area_v2_parent_id":14,"title":"聊天室"},
+ {"area_v2_id":145,"area_v2_parent_id":1,"title":"颜值"},
+ {"area_v2_id":86,"area_v2_parent_id":2},
+ "坏的一项"
+]}}},
+{"card_type":"small_card_v1","card_data":{"small_card_v1":{"id":5020,"uid":7020,"uname":"测试主播丙","face":"https://i0.hdslb.com/bfs/face/live-face-0020.jpg","cover":"https://i0.hdslb.com/bfs/live/cover-0020.jpg","system_cover":"https://i0.hdslb.com/bfs/live/system-0020.jpg","title":"全国大赛测试","area_name":"无畏契约","watched_show":{"text_small":"9.1万","text_large":"9.1万人看过"},"like_info":{"text":"12.3万"},"new_pendants":{"mobile_badge":{"name":"badge","desc":"SS主播","value":"https://i0.hdslb.com/bfs/live/ss-icon.png","bg_color":"#FFFF6699"}},"cover_right_style":{"pic":"https://i0.hdslb.com/bfs/live/corner-0001.png"},"verify":{"role":1,"type":0,"desc":"测试认证"}}}},
+{"card_type":"small_card_v1","card_data":{"small_card_v1":{"uname":"没有房间号","title":"坏卡"}}},
+{"card_type":"small_card_v1","card_data":{"small_card_v1":{"roomid":5021,"uid":7021,"uname":"测试主播丁","cover":"https://i0.hdslb.com/bfs/live/cover-0021.jpg","title":"机构号","official_info":{"type":1},"pendant_info":{"2":{"type":"mobile_index_badge","name":"挂件名","text":"全站第5","bg_color":"#FB9E60"}}}}},
+{"card_type":"unknown_v9","card_data":{"unknown_v9":{"whatever":true}}}
+],"has_more":1}}

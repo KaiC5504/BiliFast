@@ -1,6 +1,10 @@
 /// 直播: the tab's lists, a room's stream, info, chat, 醒目留言, 高能榜 and emotes.
 library;
 
+import 'json.dart';
+
+part 'live_decode.dart';
+
 /// A room in a list (205's cards, 206, the 我的关注 strip).
 final class LiveCard {
   const LiveCard({

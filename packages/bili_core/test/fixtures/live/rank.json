@@ -1,0 +1,6 @@
+{"code":0,"message":"0","ttl":1,"data":{"item":[
+{"uid":8001,"name":"榜一","face":"https://i0.hdslb.com/bfs/face/rank-0001.jpg","rank":1,"score":3768,"medal_info":{"guard_level":3,"medal_color_start":2951253,"medal_color_end":10329087,"medal_color_border":6809855,"medal_name":"莲宝","level":29,"target_id":7001,"is_light":1},"guard_level":3,"wealth_level":41,
+ "uinfo":{"uid":8001,"base":{"name":"榜一","face":"https://i0.hdslb.com/bfs/face/rank-0001.jpg","name_color":0},"medal":{"name":"莲宝","level":29,"color_start":2951253,"color_end":10329087,"color_border":6809855,"is_light":1,"guard_level":3,"v2_medal_color_start":"#9660E5CC","v2_medal_color_end":"#9660E5CC","v2_medal_color_border":"#D47AFFFF"},"wealth":{"level":41},"guard":{"level":3,"expired_str":""}}},
+{"uid":8002,"name":"榜二","face":"https://i0.hdslb.com/bfs/face/rank-0002.jpg","rank":2,"score":1546,"medal_info":{"medal_name":"旧牌","level":5,"medal_color_start":12632256,"medal_color_end":12632256,"medal_color_border":12632256,"is_light":0},"guard_level":0,"wealth_level":12},
+{"name":"没有uid","rank":3,"score":1}
+],"count":9349,"own_info":{"uid":12345,"name":"测试用户","face":"https://i0.hdslb.com/bfs/face/test.jpg","rank":-1,"score":0,"wealth_level":4,"guard_level":0}}}

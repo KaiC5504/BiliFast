@@ -1,0 +1,13 @@
+{"code":0,"message":"0","ttl":1,"data":{"data":[
+{"pkg_id":1,"pkg_name":"通用表情","pkg_type":1,"pkg_perm":1,"current_cover":"https://i0.hdslb.com/bfs/live/pkg-0001.png","emoticons":[
+ {"emoji":"啊","emoticon_id":331,"emoticon_unique":"official_331","height":60,"width":200,"perm":1,"url":"https://i0.hdslb.com/bfs/live/emote-0331.png"},
+ {"emoji":"锁着的","emoticon_id":332,"emoticon_unique":"official_332","height":60,"width":200,"perm":0,"url":"https://i0.hdslb.com/bfs/live/emote-0332.png"},
+ {"emoji":"没有地址","emoticon_id":333,"emoticon_unique":"official_333","perm":1}
+]},
+{"pkg_id":2,"pkg_name":"房间专属","pkg_type":2,"current_cover":"https://i0.hdslb.com/bfs/live/pkg-0002.png","emoticons":[
+ {"emoji":"全锁","emoticon_unique":"room_5001_1","perm":0,"url":"https://i0.hdslb.com/bfs/live/emote-room-1.png"}
+]},
+{"pkg_id":3,"pkg_name":"UP主大表情","current_cover":"https://i0.hdslb.com/bfs/live/pkg-0003.png","emoticons":[
+ {"emoji":"大笑","emoticon_unique":"upower_[大笑]","height":162,"width":162,"perm":1,"url":"https://i0.hdslb.com/bfs/live/emote-up-1.png"}
+]}
+],"fans_brand":1,"purchase_url":null}}
