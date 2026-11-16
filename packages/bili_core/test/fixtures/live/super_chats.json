@@ -1,0 +1,8 @@
+{"code":0,"message":"0","msg":"0","data":{"list":[
+{"id":"6001","uid":9101,"price":30,"rate":1000,"message":"测试醒目留言","background_color":"#EDF5FF","background_color_start":"#3171D2","background_color_end":"#74A9FF","background_bottom_color":"#2A60B2","background_price_color":"#7497CD","message_font_color":"#FFFFFF","start_time":1702204000,"end_time":1702204300,"time":120,"token":"MADE-UP","ts":1702204000,
+ "user_info":{"uname":"醒目甲","face":"https://i0.hdslb.com/bfs/face/sc-0001.jpg","face_frame":"https://i0.hdslb.com/bfs/live/frame-sc.png","guard_level":3,"name_color":"#00D1F1"},
+ "medal_info":{"medal_name":"莲宝","medal_level":21,"medal_color_start":398668,"medal_color_end":6850801,"medal_color_border":6809855,"guard_level":3,"is_lighted":1}},
+{"id":6002,"uid":9102,"price":50,"message":"已经过期","background_color":"#FFF1C5","background_bottom_color":"#E2B52B","background_price_color":"#D5A219","start_time":1702200000,"end_time":1702200060,
+ "user_info":{"uname":"醒目乙","face":""}},
+{"uid":9103,"message":"没有编号","start_time":1702204000,"end_time":1702209999}
+]}}

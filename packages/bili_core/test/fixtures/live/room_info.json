@@ -1,0 +1,17 @@
+{"code":0,"message":"0","ttl":1,"data":{
+"room_info":{"uid":7001,"room_id":5001,"short_id":3,"title":"全国大赛 AQ vs LGD","cover":"https://i0.hdslb.com/bfs/live/room-cover-5001.jpg","live_status":1,"area_name":"无畏契约","parent_area_name":"网游","online":9349,
+ "pendants":{"frame":{"name":"frame","value":"https://i0.hdslb.com/bfs/live/frame-web.png"},"mobile_frame":{"name":"frame","value":"https://i0.hdslb.com/bfs/live/frame-mobile.png"}}},
+"anchor_info":{"base_info":{"uname":"测试主播甲","face":"https://i0.hdslb.com/bfs/face/live-face-0001.jpg","official_info":{"role":1,"title":"测试认证","type":0}}},
+"news_info":{"uid":7001,"ctime":"2026-11-01 12:00:00","content":"<p>测试公告第一行</p><p>第二行 &amp; 更多<br/>第三行</p>"},
+"like_info_v3":{"total_likes":124000,"click_block":false},
+"watched_show":{"switch":true,"num":91000,"text_small":"9.1万","text_large":"9.1万人看过"},
+"online_gold_rank_info_v2":{"list":[
+ {"uid":8001,"face":"https://i0.hdslb.com/bfs/face/rank-0001.jpg","uname":"榜一","score":"300","rank":1},
+ {"uid":8002,"face":"https://i0.hdslb.com/bfs/face/rank-0002.jpg","uname":"榜二","score":"200","rank":2},
+ {"uid":8003,"face":"","uname":"没头像","score":"150","rank":3},
+ {"uid":8004,"face":"https://i0.hdslb.com/bfs/face/rank-0004.jpg","uname":"榜四","score":"100","rank":4},
+ {"uid":8005,"face":"https://i0.hdslb.com/bfs/face/rank-0005.jpg","uname":"榜五","score":"50","rank":5}]},
+"popular_rank_info":{"rank":0,"countdown":0,"on_rank_name":"热门榜","rank_name":"人气榜"},
+"new_area_rank_info":{"items":[{"conf_id":1,"rank_name":"网游人气榜","uid":7001,"rank":28}]},
+"area_rank_info":{"areaRank":{"index":1,"rank":"28"},"liveRank":{"rank":">10000"}}
+}}

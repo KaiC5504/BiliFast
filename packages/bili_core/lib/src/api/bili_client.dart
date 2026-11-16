@@ -80,6 +80,7 @@ final class BiliClient {
   static const api = 'https://api.bilibili.com';
   static const passport = 'https://passport.bilibili.com';
   static const appAPI = 'https://app.bilibili.com';
+  static const liveAPI = 'https://api.live.bilibili.com';
   static const _origin = 'https://www.bilibili.com';
   static const _spiPath = '/x/frontend/finger/spi';
 

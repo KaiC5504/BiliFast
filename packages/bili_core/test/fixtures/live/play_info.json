@@ -1,0 +1,18 @@
+{"code":0,"message":"0","ttl":1,"data":{"room_id":5001,"short_id":3,"uid":7001,"is_hidden":false,"is_locked":false,"is_portrait":false,"live_status":1,"live_time":1700000000,
+"playurl_info":{"conf_json":"{}","playurl":{"cid":5001,
+"g_qn_desc":[{"qn":10000,"desc":"原画","hdr_desc":""},{"qn":400,"desc":"蓝光","hdr_desc":"HDR"},{"qn":250,"desc":"超清"},{"qn":150,"desc":"高清"}],
+"stream":[
+ {"protocol_name":"http_stream","format":[{"format_name":"flv","codec":[
+  {"codec_name":"avc","current_qn":10000,"accept_qn":[10000,150],"base_url":"/live-test/flv-avc.flv?","url_info":[{"host":"https://cn-test-flv.bilivideo.com","extra":"expires=1&sign=MADE-UP-FLV","stream_ttl":3600}]}]}]},
+ {"protocol_name":"http_hls","format":[
+  {"format_name":"ts","codec":[
+   {"codec_name":"avc","current_qn":10000,"accept_qn":[10000,150],"base_url":"/live-test/ts-avc.m3u8?","url_info":[{"host":"https://cn-test-ts.bilivideo.com","extra":"expires=1&sign=MADE-UP-TS-AVC","stream_ttl":3600}]},
+   {"codec_name":"hevc","current_qn":10000,"accept_qn":[10000,400,250],"base_url":"/live-test/ts-hevc.m3u8?","url_info":[{"host":"https://cn-test-ts.bilivideo.com","extra":"expires=1&sign=MADE-UP-TS-HEVC","stream_ttl":3600}]}]},
+  {"format_name":"fmp4","codec":[
+   {"codec_name":"avc","current_qn":150,"accept_qn":[10000,150],"base_url":"/live-test/fmp4-avc/index.m3u8?","url_info":[{"host":"https://cn-test-fmp4.bilivideo.com","extra":"expires=1&sign=MADE-UP-FMP4-AVC","stream_ttl":3600}]},
+   {"codec_name":"hevc","current_qn":10000,"accept_qn":[10000,400,250,999],"base_url":"/live-test/fmp4-hevc/index.m3u8?","url_info":[
+    {"host":"","extra":"expires=1"},
+    {"host":"https://cn-test-fmp4.bilivideo.com","extra":"expires=1&sign=MADE-UP-FMP4-HEVC","stream_ttl":3600},
+    {"host":"https://cn-test-fmp4-backup.bilivideo.com","extra":"expires=1&sign=MADE-UP-BACKUP","stream_ttl":3600}]}]}
+ ]}
+],"p2p_data":null,"dolby_qn":null}}}}

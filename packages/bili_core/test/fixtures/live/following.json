@@ -1,0 +1,5 @@
+{"code":0,"message":"0","ttl":1,"data":{"title":"哔哩哔哩直播 - 我的关注","pageSize":9,"totalPage":4,"list":[
+{"roomid":5010,"uid":7010,"uname":"你关注的主播","title":"关注的直播","face":"https://i0.hdslb.com/bfs/face/live-face-0010.jpg","live_status":1,"area_name":"","area_name_v2":"剑网3","text_small":"883","room_cover":"https://i0.hdslb.com/bfs/live/cover-0010.jpg","parent_area_id":6,"area_id":82},
+{"roomid":5011,"uid":7011,"uname":"另一个主播","title":"另一个直播","face":"","live_status":1,"area_name_v2":"聊天室","text_small":"1.2万","room_cover":"https://i0.hdslb.com/bfs/live/cover-0011.jpg"},
+{"roomid":5012,"uid":7012,"uname":"没开播","title":"昨天的直播","live_status":0,"text_small":"0","room_cover":"https://i0.hdslb.com/bfs/live/cover-0012.jpg"}
+],"count":30,"never_lived_count":5,"live_count":2,"never_lived_faces":[]}}

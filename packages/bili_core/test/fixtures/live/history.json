@@ -1,0 +1,15 @@
+{"code":0,"data":{"admin":[],"room":[
+{"text":"测试弹幕 [dog]","dm_type":0,"uid":9001,"nickname":"观众甲","uname_color":"","timeline":"2026-11-17 05:05:06","guard_level":3,"wealth_level":4,
+ "check_info":{"ts":1763327106,"ct":"MADEUP01"},
+ "emoticon":{"id":0,"emoticon_unique":"","text":"","perm":0,"url":"","height":0,"width":0},
+ "emots":{"[dog]":{"count":1,"descript":"[dog]","emoji":"[dog]","emoticon_id":208,"emoticon_unique":"emoji_208","height":20,"url":"https://i0.hdslb.com/bfs/live/emote-dog.png","width":20},"[bad]":{"descript":"没有地址"}},
+ "id_str":"made-up-id-0001","reply":{"show_reply":true,"reply_mid":0,"reply_uname":""},
+ "user":{"uid":9001,"base":{"name":"观众甲","face":"https://i0.hdslb.com/bfs/face/viewer-0001.jpg","name_color":0,"name_color_str":"#00D1F1"},
+  "medal":{"name":"莲宝","level":21,"color_start":398668,"color_end":6850801,"color_border":6809855,"is_light":1,"ruid":7001,"guard_level":3,"v2_medal_color_start":"#4775EFCC","v2_medal_color_end":"#4775EFCC","v2_medal_color_border":"#58A1F8FF"},
+  "wealth":{"level":4},"guard":{"level":3,"expired_str":""},"uhead_frame":null}},
+{"text":"大表情","dm_type":1,"uid":9002,"nickname":"观众乙","timeline":"2026-11-17 05:06:00",
+ "emoticon":{"id":0,"emoticon_unique":"room_5001_77","text":"大表情","perm":1,"url":"https://i0.hdslb.com/bfs/live/emote-big.png","height":60,"width":120},
+ "emots":null,"id_str":"made-up-id-0002","reply":{"show_reply":true,"reply_mid":9001,"reply_uname":"观众甲"},
+ "user":{"uid":9002,"base":{"name":"观众乙","face":""},"medal":{"name":"灰牌","level":3,"color_start":12632256,"color_end":12632256,"color_border":12632256,"is_light":0},"wealth":null,"guard":null}},
+{"dm_type":0,"uid":9003,"nickname":"没有文字"}
+]},"message":"","msg":""}
