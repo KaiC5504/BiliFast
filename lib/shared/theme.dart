@@ -1464,7 +1464,7 @@ abstract final class VerticalActionTheme {
   static const iconBox = 32.0;
   static const countGap = 3.5;
   static const countLine = 16.0;
-  static const countText = 13.0;
+  static const countText = 11.0;
 
   /// [ActionIcon] sizes that draw 09's glyphs at their measured size (30, 30, 32, 29.3 and 30 × 24.3).
   static const likeIcon = 36.0;
@@ -9480,8 +9480,203 @@ abstract final class LiveRoomTheme {
   static const serverFrameScale = 1.4;
 }
 
-/// The live player's box and full screen (209, 210, 222).
-abstract final class LivePlayerTheme {}
+/// The live player's box and full screen (209, 210, 222), measured in px / 3 off KaiC's iPhone.
+abstract final class LivePlayerTheme {
+  /// 207: the 16:9 box ends 1342 px down the page, under the header, the rank chips and the event row.
+  static const boxBottom = 1342 / 3;
+  static const boxTop = boxBottom - 440 * 9 / 16;
+
+  /// 弹 and the full-screen button at the box's bottom right (207, 208): 32 pt discs of grey over the picture, their
+  /// 20 pt icons centred; the full-screen one 8.33 from the right edge, 弹 16.33 before it, both 8 above the bottom.
+  static const boxButton = 32.0;
+  static const boxButtonFill = Color(0x6B525252);
+  static const boxButtonIcon = 20.0;
+  static const boxButtonRight = 25 / 3;
+  static const boxButtonBottom = 8.0;
+  static const boxButtonGap = 49 / 3;
+
+  /// 208's 已开启弹幕: 8.67 under the box, centred, 42.67 tall on the toast's black.
+  static const boxToastTop = 26 / 3;
+  static const boxToastHeight = 128 / 3;
+  static const boxToastInset = 44 / 3;
+  static const boxToastRadius = 6.0;
+  static const boxToastText = 15.0;
+  static const toastFill = BiliColors.toastFill;
+
+  /// 210's notes at full screen's bottom left: 切换中，请稍候 over 已成功切换至…, each 36 tall on 70% black, 4.33 apart,
+  /// the last one 79.33 above the bottom edge, 10 inside the safe area.
+  static const noteLeft = 10.0;
+  static const noteBottom = 238 / 3;
+  static const noteHeight = 36.0;
+  static const noteGap = 13 / 3;
+  static const noteInset = 10.0;
+  static const noteRadius = 4.0;
+  static const noteText = 14.0;
+  static const noteFill = Color(0xB3000000);
+  static const noteShown = Duration(seconds: 3);
+
+  /// 209: the top row's middle 45 down; ‹ 9 × 14.67 centred 20.83 inside the safe area.
+  static const topRowCentre = 45.0;
+  static const backCentre = 62.5 / 3;
+  static const backWidth = 9.0;
+  static const backHeight = 44 / 3;
+
+  /// The anchor's capsule: 36 tall from 38 inside the safe area, the face 30 inset 3, the name 11.67 and 点赞 9.33
+  /// after a 6.33 gap, their middles 11.67 and 26.33 down the capsule, the pink 关注 40 × 26 6 after the longer of
+  /// them and 5 from the capsule's end.
+  static const anchorLeft = 38.0;
+  static const anchorHeight = 36.0;
+  static const anchorFace = 30.0;
+  static const anchorFaceInset = 3.0;
+  static const anchorTextGap = 19 / 3;
+  static const anchorName = 35 / 3;
+  static const anchorLikes = 28 / 3;
+  static const anchorNameCentre = 35 / 3;
+  static const anchorLikesCentre = 79 / 3;
+  static const followGap = 6.0;
+  static const followWidth = 40.0;
+  static const followHeight = 26.0;
+  static const followText = 13.0;
+  static const followEnd = 5.0;
+
+  /// The capsules and chips over the picture: white at 8.5%, which reads as grey over the video and the black.
+  static const capsuleFill = Color(0x16FFFFFF);
+
+  /// The 在线榜's three faces 23.33 across, each 20 after the one before and over the next, ringed 1 pt in gold, silver
+  /// and bronze; the count after them on a capsule that starts under the last face, 11 pt.
+  static const rankFace = 70 / 3;
+  static const rankFaceStep = 20.0;
+  static const rankFaceRing = 1.0;
+  static const rankFaceRings = [Color(0xFFF8D848), Color(0xFFC9D2DA), Color(0xFFC28242)];
+  static const countHeight = 24.0;
+  static const countLead = 4.33;
+  static const countTrail = 10.0;
+  static const countText = 11.0;
+
+  /// The count's capsule ends 95.67 inside the safe area's right edge.
+  static const countRight = 287 / 3;
+
+  /// The right end of the top row: ↗ centred 66 and ⋮ 23.67 inside the safe area, both on 44 targets.
+  static const shareCentre = 66.0;
+  static const shareIcon = 24.0;
+  static const moreCentre = 23.67;
+  static const moreDot = 4.0;
+  static const moreDotGap = 11 / 3;
+
+  /// The rank chips under the anchor and 更多直播 › on the right: 24 tall about 76 down, 12 pt words padded 8.33,
+  /// the chips 4.67 apart from 12.33 inside the safe area.
+  static const chipCentre = 76.0;
+  static const chipHeight = 24.0;
+  static const chipLeft = 37 / 3;
+  static const chipInset = 25 / 3;
+  static const chipGap = 14 / 3;
+  static const chipText = 12.0;
+  static const moreLiveChevronWidth = 4.0;
+  static const moreLiveChevronHeight = 8.0;
+  static const moreLiveChevronGap = 6.0;
+
+  /// The anchor's name and 点赞 give way past this width; a followed room's capsule ends 12.67 after them.
+  static const anchorTextMax = 160.0;
+  static const anchorFollowedEnd = 38 / 3;
+
+  /// The 🔓 on the left: a 36.67 square of 12% white, corners 8, centred 18.67 inside the safe area at mid-height.
+  static const lockBox = 110 / 3;
+  static const lockRadius = 8.0;
+  static const lockCentre = 56 / 3;
+  static const lockFill = Color(0x1FFFFFFF);
+
+  /// The bottom row 385 down (55 above the bottom edge): ⏸ ⟳ 弹 at 24 pt centred 24, 71.67 and 120.33 inside the safe
+  /// area, the quality's 13.67 pt name from 157.33, then 209's last icon (the APK's watch_movies) centred 233.5.
+  static const bottomRowCentre = 55.0;
+  static const bottomIcon = 24.0;
+  static const playCentre = 24.0;
+  static const refreshCentre = 215 / 3;
+  static const danmakuCentre = 361 / 3;
+  static const qualityLeft = 472 / 3;
+  static const qualityText = 41 / 3;
+  static const watchCentre = 233.5;
+
+  /// The gift and the anchor's pink + at the bottom right: the gift's 35 pt disc centred 75 inside the safe area's
+  /// right edge, the + capsule 47.33 × 33 ending at it, its face 26.
+  static const giftDisc = 35.0;
+  static const giftIcon = 24.0;
+  static const giftCentre = 75.0;
+  static const giftRowCentre = 160 / 3;
+  static const giftFill = Color(0x33FFFFFF);
+  static const plusWidth = 142 / 3;
+  static const plusHeight = 33.0;
+  static const plusFace = 26.0;
+  static const plusStroke = 2.0;
+  static const plusArm = 6.0;
+
+  /// The controls show at first and on a tap, and hide 5 s after the last touch.
+  static const chromeHide = Duration(seconds: 5);
+  static const chromeFade = Duration(milliseconds: 220);
+
+  /// A picture over the dimmed cover for 直播已结束 and the retry.
+  static const endedDim = Color(0x99000000);
+  static const endedText = 15.0;
+  static const retryText = 14.0;
+  static const retryWidth = 88.0;
+  static const retryHeight = 32.0;
+
+  /// 210, 222 and 232: a panel on the right 375 wide; the picture shrinks into the room left of it, from 34 to 6 short
+  /// of the panel, centred down the screen.
+  static const sideWidth = 375.0;
+  static const sidePictureLeft = 34.0;
+  static const sidePictureGap = 6.0;
+  static const sideSlide = Duration(milliseconds: 250);
+
+  /// 210: #202123 with 画质增强 14 pt 40 down, its grey note, the switch 42 × 18.67 ending 20 from the right; the rows
+  /// #242628, 50 tall from 70 down, 10 apart, 16 from the panel's sides, their 14 pt names 16 in, the current one pink.
+  static const qualityFill = Color(0xFF202123);
+  static const qualityTitleCentre = 40.0;
+  static const qualityTitleRow = 24.0;
+  static const qualityTitle = 14.0;
+  static const qualityNote = Color(0xFF8E8E93);
+  static const qualitySide = 16.0;
+  static const qualityTop = 70.0;
+  static const qualityRow = 50.0;
+  static const qualityRowGap = 10.0;
+  static const qualityRowFill = Color(0xFF242628);
+  static const qualityRowRadius = 2.0;
+  static const qualityRowInset = 16.0;
+  static const qualityRowText = 14.0;
+  static const switchWidth = 125 / 3;
+  static const switchHeight = 56 / 3;
+  static const switchKnobWidth = 24.0;
+  static const switchKnobInset = 1.0;
+  static const switchRight = 20.0;
+  static const switchOn = BiliColors.pink;
+
+  /// Portrait's 画质 sheet: KaiC has no screenshot of it, so it takes 221's sheet (#110F1A, 分享's title 13 in and
+  /// 20 down) with 210's rows.
+  static const sheetFill = Color(0xF2110F1A);
+  static const sheetRadius = 12.0;
+  static const sheetTitleLeft = 13.0;
+  static const sheetTitleTop = 10.0;
+  static const sheetTitleHeight = 20.0;
+  static const sheetTitle = 15.0;
+  static const sheetBottom = 16.0;
+
+  /// 222: #18191C with a grid of 42 pt discs (#2F3032), four to a row 79 apart and 98 down, the first centred 48.5 in
+  /// and 42.83 down; the words 13 pt, their middle 35.17 under the disc's.
+  static const moreFill = Color(0xFF18191C);
+  static const moreDisc = 42.0;
+  static const moreDiscFill = Color(0xFF2F3032);
+  static const moreIcon = 44.0;
+  static const moreColourIcon = 22.0;
+  static const moreColumns = 4;
+  static const moreColumn = 79.0;
+  static const moreRow = 98.0;
+  static const moreFirstX = 48.5;
+  static const moreFirstY = 128.5 / 3;
+  static const moreLabelDrop = 211 / 6;
+  static const moreLabel = 13.0;
+
+  /// The flame (助TA必火) and the shield (消费管理), drawn: the APK has neither; strokes 1.33 on the disc's 42 grid.
+  static const drawnStroke = 4 / 3;
+}
 
 /// The 弹幕 inputs and emote panel (223, 226, 227).
 abstract final class LiveSendTheme {}

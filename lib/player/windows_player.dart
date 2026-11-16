@@ -64,6 +64,7 @@ final class WindowsPlayer implements BiliPlayer {
   }
 
   static const _bufferedEvery = 5;
+  static const _liveReadyTicks = 10;
 
   final mk.Player _player;
   final VideoController _controller;
@@ -94,6 +95,7 @@ final class WindowsPlayer implements BiliPlayer {
   double? _volumeBeforeMute;
   bool _muted;
   int _ticks = 0;
+  int _loadTick = 0;
   bool _ticking = false;
   bool _disposed = false;
 
@@ -131,6 +133,7 @@ final class WindowsPlayer implements BiliPlayer {
     _check();
     _generation++;
     _source = source;
+    _loadTick = _ticks;
     _ready = false;
     _fellBack = false;
     _failed = false;
@@ -291,6 +294,12 @@ final class WindowsPlayer implements BiliPlayer {
     final generation = _generation;
     try {
       _ticks++;
+      // A live stream has no duration, so a picture a second after the open is what says it opened; a file has its
+      // duration well before then.
+      if (!_ready && !_opening && _ticks - _loadTick >= _liveReadyTicks && (_player.state.width ?? 0) > 0) {
+        _ready = true;
+        _updateStatus();
+      }
       await _readPosition(generation);
       if (_ticks % _bufferedEvery == 0) await _readBuffered(generation);
       if (!_ready || _ticks % _bufferedEvery == 0) await _checkStopped(generation);
