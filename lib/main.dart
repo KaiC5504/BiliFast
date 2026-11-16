@@ -31,6 +31,7 @@ import 'home/main_shell.dart';
 import 'home/recent_store.dart';
 import 'me/fake_me_api.dart';
 import 'me/me_profile_store.dart';
+import 'message/message_prefs.dart';
 import 'notify/ios/ios_notify_host.dart';
 import 'notify/notify_host.dart';
 import 'notify/notify_taps.dart';
@@ -82,6 +83,7 @@ Future<void> main(List<String> args) async {
   final DanmakuSettingsStore danmakuSettings;
   final CodecMemory codecMemory;
   final MeProfileStore meProfile;
+  final MessagePrefs messagePrefs;
   final HistoryOutbox historyOutbox;
   try {
     environment = await (Platform.isWindows
@@ -95,6 +97,7 @@ Future<void> main(List<String> args) async {
     RecentEmotes.shared = await RecentEmotes.load(supportFilePath('emotes_recent.json'));
     codecMemory = await CodecMemory.load(codecMemoryPath());
     meProfile = await MeProfileStore.load(supportFilePath('me.json'));
+    messagePrefs = await MessagePrefs.load(supportFilePath('message_prefs.json'));
     historyOutbox = await HistoryOutbox.load(supportFilePath('history_outbox.json'));
   } catch (error, stack) {
     // Without this the launch screen would stay up with nothing to say why.
@@ -170,6 +173,7 @@ Future<void> main(List<String> args) async {
     meApi: fakeAccount ? FakeMeApi.demo() : null,
     dynamicApi: fakeAccount ? FakeDynamicApi.demo() : null,
     meProfile: meProfile,
+    messagePrefs: messagePrefs,
     skinApi: fakeAccount ? FakeSkinApi.demo() : null,
     // The demo skin keeps a folder of its own, so a later run never starts from it.
     skinFolder: supportFilePath(fakeAccount ? 'skins_fake' : 'skins'),
