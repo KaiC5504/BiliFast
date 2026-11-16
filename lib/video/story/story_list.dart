@@ -72,9 +72,11 @@ abstract class StoryHost extends ChangeNotifier {
 /// neighbour, and handed to its open. With [warmsNext] too, the next video is then loaded ahead on the page's player
 /// ([StoryHost.warm]) once the video settled on has shown its first frame and holds enough ahead: once for each video
 /// settled on (a warm the page couldn't start yet, covered, is asked again when it can), never while halted, let go
-/// when the feed starts over or 竖屏 ends. The page let go towards a neighbour that isn't loaded ahead (its details
-/// in hand) loads it at once, without waiting for those, so it loads during the settle: one for each release, let go
-/// if the page goes back instead, unless it is the next video's warm due now anyway.
+/// when the feed starts over or 竖屏 ends. Let go towards a neighbour whose details are in hand and that isn't loaded
+/// ahead yet, the page loads it at once, without waiting for the first frame or the buffer, so it loads during the
+/// settle. One per release, and none towards the video before while the next one is loaded ahead; let go if the page
+/// goes back, unless it is the next video and its ordinary warm is due now anyway, and the next video's warm is then
+/// asked again.
 class StoryList extends StoryFeed {
   StoryList({
     required StoryHost host,
@@ -269,6 +271,9 @@ class StoryList extends StoryFeed {
     }
     _released = (bvid: entry.bvid, since: Stopwatch()..start());
     if (!_warmsNext || _host.halted || _warmedBvid == entry.bvid) return;
+    // The page's one warm slot holds the next video's: taking it for the one before would cost a second playurl
+    // call to load the next again if the page springs back.
+    if (next case final next? when _warmedBvid == next.bvid) return;
     final detail = _details[entry.bvid];
     if (detail == null) return;
     if (_startWarm(entry, detail)) _releaseWarm = entry.bvid;
@@ -284,6 +289,9 @@ class StoryList extends StoryFeed {
     }
     _warmedBvid = null;
     _host.dropWarm();
+    // That warm took the slot: the next video's is asked again once due, or this settle would never load it.
+    _warmAskedIn = null;
+    _askWarm();
   }
 
   void _userMoved() {
@@ -344,6 +352,8 @@ class StoryList extends StoryFeed {
       _releaseWarm = null;
       return;
     }
+    // The page was let go towards the video before: that warm holds the slot until it opens or is let go.
+    if (_releaseWarm != null) return;
     final detail = _details[next.bvid];
     if (detail == null) return;
     _warmAskedIn = _settles;
