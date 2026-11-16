@@ -2,7 +2,6 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:bili_core/api.dart';
-import 'package:bili_core/src/api/bvid.dart';
 import 'package:test/test.dart';
 
 /// Made-up answers in the live answers' shapes (2026-10-26).

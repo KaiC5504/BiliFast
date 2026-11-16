@@ -91,7 +91,7 @@ class _MessagePageState extends State<MessagePage> with SkinRefreshRoom {
     _environment = _services.environment..addListener(_accountChanged);
     _signedOut = _loggedOut;
     _model = _services.messages..addListener(_modelChanged);
-    if (widget.active) _activate();
+    if (widget.active) _activateAfterBuild();
   }
 
   @override
@@ -101,8 +101,13 @@ class _MessagePageState extends State<MessagePage> with SkinRefreshRoom {
       oldWidget.reloads?.removeListener(_reload);
       widget.reloads?.addListener(_reload);
     }
-    if (widget.active && !oldWidget.active) _activate();
+    if (widget.active && !oldWidget.active) _activateAfterBuild();
   }
+
+  /// The model tells its listeners as a refresh starts, which mustn't happen while the shell is building.
+  void _activateAfterBuild() => WidgetsBinding.instance.addPostFrameCallback((_) {
+    if (mounted && widget.active) _activate();
+  });
 
   @override
   void dispose() {
@@ -221,8 +226,8 @@ class _MessagePageState extends State<MessagePage> with SkinRefreshRoom {
 
   void _more() => unawaited(showMessageMoreSheet(context, sessions: _model!.sessions, now: _now));
 
+  /// The pages clear their own counts as they open (a notification opens them too).
   void _openFeed(NoticeFeed feed) {
-    _model!.feedOpened(feed);
     unawaited(feed == NoticeFeed.like ? openLikes(context) : openReplies(context));
   }
 

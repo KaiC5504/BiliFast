@@ -4,6 +4,7 @@ export 'src/api/app_token.dart';
 export 'src/api/bili_client.dart';
 export 'src/api/bili_error.dart';
 export 'src/api/bili_hosts.dart';
+export 'src/api/bvid.dart' show avToBv;
 export 'src/api/comment_models.dart'
     show
         CommentSort,

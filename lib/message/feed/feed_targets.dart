@@ -64,7 +64,7 @@ FeedTarget replyTarget(ReplyNotice notice) {
   switch (notice.businessId) {
     case 1:
       final aid = _first(_aidPattern, links) ?? (notice.subjectId > 0 ? notice.subjectId : null);
-      final bvid = _bvid(links) ?? (aid == null ? null : avToBvid(aid));
+      final bvid = _bvid(links) ?? (aid == null ? null : avToBv(aid));
       return bvid == null ? const FeedNowhere() : FeedVideo(bvid: bvid, comment: focus);
     case final area when _postAreas.contains(area):
       // 17's subject_id is the post's own id; 11's is its picture album's, so only the link names the post.
@@ -90,7 +90,7 @@ FeedTarget likeTarget(LikeNotice notice) {
   final bvid =
       _bvid(links) ??
       switch (_first(_aidPattern, links)) {
-        final aid? => avToBvid(aid),
+        final aid? => avToBv(aid),
         null => null,
       };
   if (bvid != null) {
@@ -103,28 +103,6 @@ FeedTarget likeTarget(LikeNotice notice) {
   }
   if (_first(_postPattern, links) case final id?) return FeedPost(id: '$id', toComments: comment);
   return const FeedNowhere();
-}
-
-const _bvAlphabet = 'FcwAPNKTMug3GV5Lj7EJnHpWsx4tb8haYeviqBz6rkCy12mUSDQX9RdoZf';
-
-/// Bilibili's published av → BV conversion, as bili_core's avToBv, which the package doesn't export.
-String avToBvid(int aid) {
-  const xor = 23442827791579;
-  final chars = 'BV1000000000'.split('');
-  var value = ((1 << 51) | aid) ^ xor;
-  for (var index = chars.length - 1; value > 0; index--) {
-    chars[index] = _bvAlphabet[value % 58];
-    value ~/= 58;
-  }
-  void swap(int a, int b) {
-    final kept = chars[a];
-    chars[a] = chars[b];
-    chars[b] = kept;
-  }
-
-  swap(3, 9);
-  swap(4, 7);
-  return chars.join();
 }
 
 /// The pages a row opens; tests stand in for them (a video page needs a player).

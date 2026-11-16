@@ -8,8 +8,8 @@ import 'feed_support.dart';
 
 void main() {
   test('av to BV as Bilibili publishes it', () {
-    expect(avToBvid(170001), 'BV17x411w7KC');
-    expect(avToBvid(2), 'BV1xx411c7mD');
+    expect(avToBv(170001), 'BV17x411w7KC');
+    expect(avToBv(2), 'BV1xx411c7mD');
   });
 
   test('a reply on a video: the link\'s BV, else its av, else the aid; the thread is its root, else itself', () {
