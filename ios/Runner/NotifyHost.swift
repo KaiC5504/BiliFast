@@ -7,7 +7,7 @@ import UserNotifications
 /// 推送设置's notifications without a server: iOS's app refresh wakes the app now and then, the check asks Bilibili's
 /// unread counts with the keychain's login, and anything new is posted as a local notification. It runs natively
 /// because a background launch may bring up no Flutter engine at all. Ids, names and comment text never reach a log.
-final class NotifyHost: NotifyHostApi {
+final class NotifyHost: NotifyHostApi, @unchecked Sendable {
   static let shared = NotifyHost()
   static let refreshIdentifier = "com.kaichuan.bilifast.notify.refresh"
 
@@ -197,14 +197,19 @@ extension NativeNotifyRoute {
 /// Every notification the app posts comes through here, the sideload reminder's (DeviceChannel.swift) too; that one
 /// carries no route and only opens the app. iOS may call in on any thread.
 final class NotifyTapDelegate: NSObject, UNUserNotificationCenterDelegate {
-  func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification,
-                              withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions)
-                                -> Void) {
+  func userNotificationCenter(
+    _ center: UNUserNotificationCenter,
+    willPresent notification: UNNotification,
+    withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
+  ) {
     completionHandler([.banner, .list, .sound])
   }
 
-  func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse,
-                              withCompletionHandler completionHandler: @escaping () -> Void) {
+  func userNotificationCenter(
+    _ center: UNUserNotificationCenter,
+    didReceive response: UNNotificationResponse,
+    withCompletionHandler completionHandler: @escaping () -> Void
+  ) {
     if response.actionIdentifier == UNNotificationDefaultActionIdentifier,
        let route = NotifyRoutes.route(response.notification.request.content.userInfo) {
       Task { @MainActor in NotifyTaps.tapped(route) }
