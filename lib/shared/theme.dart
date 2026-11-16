@@ -9558,8 +9558,16 @@ abstract final class LivePlayerTheme {
   static const followTextDrop = 11 / 6;
   static const followEnd = 5.0;
 
-  /// The capsules and chips over the picture: white at 8.5%, which reads as grey over the video and the black.
-  static const capsuleFill = Color(0x16FFFFFF);
+  /// The capsules, chips and discs over the picture: dark grey at 60%, read off 235 (about 50 over the black edge, a
+  /// third of the way down from the video behind). White tints vanished over a bright picture.
+  static const capsuleFill = Color(0x99404040);
+
+  /// While the controls show, black shades the top and bottom edges: 50% at the top fading out 100 pt down, 60% at
+  /// the bottom fading out 120 pt up (235 and 209 against the same streams without them).
+  static const topShade = 100.0;
+  static const topShadeInk = Color(0x80000000);
+  static const bottomShade = 120.0;
+  static const bottomShadeInk = Color(0x99000000);
 
   /// The 在线榜's three faces 23.33 across, each 20 after the one before and over the next, ringed 1 pt in gold, silver
   /// and bronze; the count after them on a capsule that starts under the last face, 11 pt.
@@ -9599,11 +9607,12 @@ abstract final class LivePlayerTheme {
   static const anchorTextMax = 160.0;
   static const anchorFollowedEnd = 38 / 3;
 
-  /// The 🔓 on the left: a 36.67 square of 12% white, corners 8, centred 18.67 inside the safe area at mid-height.
+  /// The 🔓 on the left: a 36.67 square, corners 8, centred 18.67 inside the safe area at mid-height, 22 over the
+  /// black edge (235).
   static const lockBox = 110 / 3;
   static const lockRadius = 8.0;
   static const lockCentre = 56 / 3;
-  static const lockFill = Color(0x1FFFFFFF);
+  static const lockFill = Color(0x66383838);
 
   /// The bottom row 385 down (55 above the bottom edge): ⏸ ⟳ 弹 at 24 pt centred 24, 71.67 and 120.33 inside the safe
   /// area, the quality's 13.67 pt name from 157.33, then 209's last icon (the APK's watch_movies) centred 233.5.
@@ -9662,7 +9671,7 @@ abstract final class LivePlayerTheme {
   static const giftIcon = 36.0;
   static const giftCentre = 445 / 6;
   static const giftRowCentre = 166 / 3;
-  static const giftFill = Color(0x33FFFFFF);
+  static const giftFill = capsuleFill;
   static const giftDot = 6.0;
   static const giftDotTop = 5 / 3;
   static const giftDotInk = LiveRoomTheme.giftDotInk;

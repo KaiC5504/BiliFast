@@ -196,6 +196,7 @@ class _LiveFullScreenState extends State<LiveFullScreen> {
       child: Stack(
         fit: StackFit.expand,
         children: [
+          fade(shown && !locked, const _Shades()),
           fade(shown && !locked, _unlocked(context, insets)),
           fade(
             shown,
@@ -912,6 +913,46 @@ class _PlusPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(_PlusPainter oldDelegate) => false;
+}
+
+class _Shades extends StatelessWidget {
+  const _Shades();
+
+  @override
+  Widget build(BuildContext context) => const Stack(
+    children: [
+      Positioned(
+        left: 0,
+        right: 0,
+        top: 0,
+        height: LivePlayerTheme.topShade,
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [LivePlayerTheme.topShadeInk, Color(0x00000000)],
+            ),
+          ),
+        ),
+      ),
+      Positioned(
+        left: 0,
+        right: 0,
+        bottom: 0,
+        height: LivePlayerTheme.bottomShade,
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.bottomCenter,
+              end: Alignment.topCenter,
+              colors: [LivePlayerTheme.bottomShadeInk, Color(0x00000000)],
+            ),
+          ),
+        ),
+      ),
+    ],
+  );
 }
 
 /// 210's notes at the bottom left, the newest lowest.
