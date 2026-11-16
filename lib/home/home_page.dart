@@ -25,6 +25,7 @@ import '../shared/toast.dart';
 import '../skin/skin.dart';
 import '../video/link_opener.dart';
 import '../video/page_playback.dart';
+import '../video/player_prefs.dart';
 import '../video/video_route.dart';
 import 'avatar_page.dart';
 import 'feed_big_card.dart';
@@ -132,6 +133,7 @@ class _HomePageState extends State<HomePage> {
       client: _environment.client,
       minimumRefresh: HomePage.feedMinimumRefresh,
       webPage: HomePage.feedPages,
+      refreshPages: () => PlayerPrefs.shared.feedRefreshSize.pages,
     );
     unawaited(LoadingTv.precache(context));
     unawaited(PlayerLoading.precache());

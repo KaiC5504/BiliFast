@@ -212,6 +212,7 @@ class FeedModel extends ChangeNotifier {
     DateTime Function()? now,
     PictureSession? Function()? pictures,
     String Function()? coverFormat,
+    int Function()? refreshPages,
     this._minimumRefresh = FeedModel.minimumRefresh,
     this._webPage,
   }) : _logger = logger ?? Logger.shared,
@@ -219,7 +220,8 @@ class FeedModel extends ChangeNotifier {
        _pad = pad ?? (() => FormFactor.device.isPad),
        _now = now ?? DateTime.now,
        _pictures = pictures ?? (() => ImageDiskCache.session),
-       _coverFormat = coverFormat ?? (() => CoverFormat.shared.name);
+       _coverFormat = coverFormat ?? (() => CoverFormat.shared.name),
+       _refreshPages = refreshPages ?? (() => 1);
 
   static const emptyMessage = '暂时没有推荐的视频';
   static const endMessage = '没有更多了';
@@ -256,6 +258,10 @@ class FeedModel extends ChangeNotifier {
   final PictureSession? Function() _pictures;
   final String Function() _coverFormat;
   final Duration _minimumRefresh;
+
+  /// 每次刷新数量: the official feed's pages one refresh shows, page 1 included.
+  // ignore: unused_field
+  final int Function() _refreshPages;
 
   /// Answers the website's pages in place of the client: tests whose cards the web feed can't send (the big card).
   final Future<List<FeedCard>> Function(int index)? _webPage;

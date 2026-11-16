@@ -45,6 +45,7 @@ Vector drawables, drawn white as PNGs (by `tools/apk_asset.py`) for tinting:
 | --- | --- |
 | `images/loading/cover_placeholder.png` | `bili_default_image_tv_2023` |
 | `images/card/stat_play.png`, `stat_danmaku.png` | `ic_vector_pegasus_play_count`, `ic_vector_pegasus_danmaku_count` |
+| `images/card/up_badge.png` | `ic_info_uploader_name` |
 | `images/player/screen_mode_normal.png`, `screen_mode_clean.png` | `bili_story_ctrl_normal`, `bili_story_ctrl_clean` |
 | `images/player/speed_lock.png` | `biligame_vector_lock_fill` |
 | `images/player/pad_cast_tv.png` | `biliplayer_ic_topbar_tv` |

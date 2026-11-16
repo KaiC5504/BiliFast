@@ -24,6 +24,19 @@ enum NodeChoice {
 /// mobile data, so [wifiOnly] plays on Wi-Fi alone.
 enum AutoplayChoice { always, wifiOnly, off }
 
+/// 首页推荐设置's 每次刷新数量: how many of the official feed's pages one refresh shows. The feed has no size field and
+/// each page brings about 7 videos once its ads and live rooms are dropped.
+enum FeedRefreshSize {
+  one(1, '约7条'),
+  two(2, '约14条'),
+  three(3, '约20条');
+
+  const FeedRefreshSize(this.pages, this.label);
+
+  final int pages;
+  final String label;
+}
+
 /// The player settings Swift's AppSettings kept in UserDefaults (自动连播, 循环播放, 画面尺寸, BTR 加速, CDN 节点,
 /// 显示统计, the quality and codec asked for, and danmaku on or off), as a small JSON file in the support folder.
 class PlayerPrefs {
@@ -82,6 +95,7 @@ class PlayerPrefs {
   AutoplayChoice _homeAutoplay = AutoplayChoice.always;
   AutoplayChoice _listAutoplay = AutoplayChoice.always;
   bool _bigCardSound = false;
+  FeedRefreshSize _feedRefreshSize = FeedRefreshSize.one;
   bool _verticalFullScreen = true;
   bool _autoPip = true;
   bool _backgroundListen = true;
@@ -152,6 +166,10 @@ class PlayerPrefs {
   bool get bigCardSound => _bigCardSound;
   set bigCardSound(bool value) => _set(() => _bigCardSound = value);
 
+  /// 首页推荐设置's 每次刷新数量.
+  FeedRefreshSize get feedRefreshSize => _feedRefreshSize;
+  set feedRefreshSize(FeedRefreshSize value) => _set(() => _feedRefreshSize = value);
+
   /// 竖屏模式设置 (173)'s 竖屏视频全屏用竖屏模式播放: off, an upright video's full screen is the ordinary landscape one,
   /// pillarboxed, as on the iPad.
   bool get verticalFullScreen => _verticalFullScreen;
@@ -207,6 +225,7 @@ class PlayerPrefs {
     _homeAutoplay = named('homeAutoplay', AutoplayChoice.values) ?? _homeAutoplay;
     _listAutoplay = named('listAutoplay', AutoplayChoice.values) ?? _listAutoplay;
     _bigCardSound = pick<bool>('bigCardSound') ?? _bigCardSound;
+    _feedRefreshSize = named('feedRefreshSize', FeedRefreshSize.values) ?? _feedRefreshSize;
     _verticalFullScreen = pick<bool>('verticalFullScreen') ?? _verticalFullScreen;
     _autoPip = pick<bool>('autoPip') ?? _autoPip;
     _backgroundListen = pick<bool>('backgroundListen') ?? _backgroundListen;
@@ -232,6 +251,7 @@ class PlayerPrefs {
     if (_homeAutoplay != AutoplayChoice.always) 'homeAutoplay': _homeAutoplay.name,
     if (_listAutoplay != AutoplayChoice.always) 'listAutoplay': _listAutoplay.name,
     if (_bigCardSound) 'bigCardSound': true,
+    if (_feedRefreshSize != FeedRefreshSize.one) 'feedRefreshSize': _feedRefreshSize.name,
     if (!_verticalFullScreen) 'verticalFullScreen': false,
     if (!_autoPip) 'autoPip': false,
     if (!_backgroundListen) 'backgroundListen': false,
