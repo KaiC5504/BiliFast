@@ -3748,6 +3748,52 @@ void main() {
       await back(tester);
     });
 
+    testWidgets("a related row's uploader name opens that uploader's sheet, not the video; the row still takes the "
+        "page's place", (tester) async {
+      replaceOnOpen();
+      await host(tester, pageApi: api, spaceApi: spaceApi);
+      pushVideo(const VideoRoute(bvid: bv, cid: p1, start: 0));
+      await opened(tester);
+      const related = VideoCard(
+        aid: 2,
+        bvid: 'BV1relatedup',
+        cid: 3,
+        title: '相关视频',
+        cover: '',
+        duration: 60,
+        ownerMid: 42,
+        ownerName: '相关UP主',
+        views: 1,
+        danmaku: 1,
+        likes: 1,
+      );
+      sessions.single
+        ..detail = detail(bv, ownerMid: owner)
+        ..related = [related]
+        ..changed();
+      await frames(tester);
+      final name = find.byKey(const ValueKey('related-uploader'));
+      await tester.ensureVisible(name);
+      await frames(tester);
+
+      await tester.tap(name);
+      await frames(tester);
+      expect((sheet(tester).uploader?.mid, sheet(tester).uploader?.name), (42, '相关UP主'));
+      expect(spaceApi.calls.first, 'profile mid=42');
+      expect(api.calls, contains('uploaderCard mid=42'), reason: 'not the page\'s uploader, so its 关注 is asked');
+      expect(tester.widget<VideoPage>(find.byType(VideoPage)).route.bvid, bv);
+
+      unawaited(nav.currentState!.maybePop());
+      await frames(tester, 20);
+      expect(sheet(tester).isOpen, isFalse);
+      await tester.tap(find.text('相关视频'));
+      await frames(tester, 20);
+      expect(find.byType(VideoPage, skipOffstage: false), findsOneWidget);
+      expect(tester.widget<VideoPage>(find.byType(VideoPage)).route.bvid, 'BV1relatedup');
+      await back(tester);
+      expect(find.byType(VideoPage), findsNothing);
+    });
+
     testWidgets('a card opens its video in the page\'s place; back goes to what the page was opened from',
         (tester) async {
       replaceOnOpen();

@@ -1,19 +1,21 @@
 import 'package:bili_core/api.dart' show VideoCard;
 import 'package:bilifast/shared/theme.dart';
+import 'package:bilifast/space/uploader_tap.dart';
 import 'package:bilifast/video/intro/related_list.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/semantics.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-VideoCard card(int i, {int duration = 175, int views = 4815000, int danmaku = 17000}) => VideoCard(
+VideoCard card(int i, {int duration = 175, int views = 4815000, int danmaku = 17000, int? mid}) => VideoCard(
   aid: i,
   bvid: 'BV$i',
   cid: i,
   title: '相关视频 $i',
   cover: '',
   duration: duration,
-  ownerMid: i,
+  ownerMid: mid ?? i,
   ownerName: '学姐圆$i',
+  ownerFace: 'https://i0.hdslb.com/face$i.jpg',
   views: views,
   danmaku: danmaku,
   likes: 0,
@@ -24,6 +26,7 @@ Future<void> show(
   List<VideoCard> cards, {
   ValueChanged<VideoCard>? onOpen,
   ValueChanged<VideoCard>? onWatchLater,
+  ValueChanged<UploaderRef>? onUploader,
   bool still = false,
 }) async {
   tester.view.physicalSize = const Size(440, 956);
@@ -35,12 +38,15 @@ Future<void> show(
   }
   await tester.pumpWidget(
     MaterialApp(
-      home: Material(
-        child: CustomScrollView(
-          slivers: [
-            RelatedSliver(cards: cards, onOpen: onOpen ?? (_) {}, onWatchLater: onWatchLater ?? (_) {}),
-            const SliverToBoxAdapter(child: SizedBox(key: ValueKey('after'), height: 10)),
-          ],
+      home: UploaderTap(
+        open: onUploader ?? (_) {},
+        child: Material(
+          child: CustomScrollView(
+            slivers: [
+              RelatedSliver(cards: cards, onOpen: onOpen ?? (_) {}, onWatchLater: onWatchLater ?? (_) {}),
+              const SliverToBoxAdapter(child: SizedBox(key: ValueKey('after'), height: 10)),
+            ],
+          ),
         ),
       ),
     ),
@@ -118,6 +124,93 @@ void main() {
 
     await tester.tap(find.text('相关视频 2'));
     expect(opened, ['BV2']);
+  });
+
+  group("the uploader's name", () {
+    final name = find.byKey(const ValueKey('related-uploader'));
+    bool lit(WidgetTester tester) => find
+        .byWidgetPredicate(
+          (widget) =>
+              widget is DecoratedBox &&
+              widget.decoration is BoxDecoration &&
+              (widget.decoration as BoxDecoration).color == BiliColors.pressedFill,
+        )
+        .evaluate()
+        .isNotEmpty;
+
+    testWidgets('a tap on it opens that uploader, not the video, and the row stays unlit', (tester) async {
+      final opened = <String>[];
+      final uploaders = <UploaderRef>[];
+      await show(tester, [card(1), card(2)], onOpen: (card) => opened.add(card.bvid), onUploader: uploaders.add);
+      await tester.pumpAndSettle();
+
+      final target = find.descendant(of: row(2), matching: name);
+      final gesture = await tester.startGesture(tester.getCenter(target));
+      await tester.pump(const Duration(milliseconds: 300));
+      expect(lit(tester), isFalse);
+      await gesture.up();
+      await tester.pumpAndSettle();
+      expect(opened, isEmpty);
+      expect(uploaders.map((uploader) => (uploader.mid, uploader.name, uploader.face)), [
+        (2, '学姐圆2', 'https://i0.hdslb.com/face2.jpg'),
+      ]);
+
+      final held = await tester.startGesture(tester.getCenter(find.text('相关视频 2')));
+      await tester.pump(const Duration(milliseconds: 300));
+      expect(lit(tester), isTrue, reason: 'the rest of the row lights under the finger');
+      await held.up();
+      await tester.pumpAndSettle();
+      expect(opened, ['BV2'], reason: 'and opens the video');
+      expect(uploaders, hasLength(1));
+    });
+
+    testWidgets('its target is the name and a few pt above and below it, not the whole line', (tester) async {
+      final opened = <String>[];
+      final uploaders = <UploaderRef>[];
+      await show(tester, [card(1)], onOpen: (card) => opened.add(card.bvid), onUploader: uploaders.add);
+      await tester.pumpAndSettle();
+
+      final text = tester.getRect(find.text('学姐圆1'));
+      final target = tester.getRect(name);
+      expect(target.left, moreOrLessEquals(text.left));
+      expect(target.width, moreOrLessEquals(text.width));
+      expect(target.top, lessThan(text.top));
+      expect(target.top, greaterThan(tester.getRect(find.text('相关视频 1')).bottom));
+      expect(target.bottom, greaterThanOrEqualTo(text.bottom));
+      expect(target.bottom, lessThan(tester.getRect(find.text('481.5万')).top));
+
+      await tester.tapAt(Offset(target.right + 20, target.center.dy));
+      await tester.pumpAndSettle();
+      expect(opened, ['BV1'], reason: 'beside the name the row opens the video');
+      expect(uploaders, isEmpty);
+    });
+
+    testWidgets('without a mid there is nothing to open: the name opens the video as the row does', (tester) async {
+      final opened = <String>[];
+      final uploaders = <UploaderRef>[];
+      await show(tester, [card(1, mid: 0)], onOpen: (card) => opened.add(card.bvid), onUploader: uploaders.add);
+      await tester.pumpAndSettle();
+
+      expect(name, findsNothing);
+      await tester.tap(find.text('学姐圆1'));
+      expect(opened, ['BV1']);
+      expect(uploaders, isEmpty);
+    });
+
+    testWidgets('it is a button of its own named by the uploader, which presses it', (tester) async {
+      final handle = tester.ensureSemantics();
+      final opened = <String>[];
+      final uploaders = <UploaderRef>[];
+      await show(tester, [card(1)], onOpen: (card) => opened.add(card.bvid), onUploader: uploaders.add);
+      await tester.pumpAndSettle();
+
+      final node = tester.getSemantics(find.bySemanticsLabel('学姐圆1'));
+      expect(node, isSemantics(isButton: true, hasTapAction: true));
+      node.owner!.performAction(node.id, SemanticsAction.tap);
+      expect(uploaders.single.mid, 1);
+      expect(opened, isEmpty);
+      handle.dispose();
+    });
   });
 
   testWidgets('⋮ opens a menu whose 稍后再看 saves the video and closes it', (tester) async {

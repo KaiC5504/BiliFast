@@ -12,6 +12,7 @@ import '../../shared/cover_preset.dart';
 import '../../shared/menu.dart';
 import '../../shared/remote_image.dart';
 import '../../shared/theme.dart';
+import '../../space/uploader_tap.dart';
 import '../video_route.dart';
 
 /// The related videos under 简介 (03, 18), as a sliver: cover with duration, title, UP and counts, and ⋮ 稍后再看.
@@ -273,6 +274,8 @@ class _RelatedRow extends StatelessWidget {
   final VoidCallback onOpen;
   final VoidCallback onWatchLater;
 
+  static const _nameSlop = 4.0;
+
   TextStyle get _meta => TextStyle(
     fontFamily: BiliFonts.family,
     fontSize: IntroListTheme.relatedMetaText,
@@ -411,6 +414,7 @@ class _RelatedRow extends StatelessWidget {
               ),
             ),
           ),
+          if (card.ownerMid > 0 && card.ownerName.isNotEmpty) _uploaderTarget(context),
           Positioned(
             right: m.moreCentreFromRight - IntroListTheme.moreTarget / 2,
             top: coverTop + m.countsCentre - IntroListTheme.moreTarget / 2,
@@ -419,6 +423,56 @@ class _RelatedRow extends StatelessWidget {
             child: _More(onWatchLater: onWatchLater, dot: m.moreDot, dotGap: m.moreDotGap),
           ),
         ],
+      ),
+    );
+  }
+
+  /// The uploader's name opens them: a target of its own over the row, as wide as the name draws, so a tap on it
+  /// neither opens the video nor lights the row. Below, the slop stops halfway to the counts.
+  Widget _uploaderTarget(BuildContext context) {
+    final m = metrics;
+    const line = IntroListTheme.relatedMetaLine;
+    final below = clampDouble((m.countsCentre - m.uploaderCentre - line) / 2, 0, _nameSlop);
+    void open() => openUploader(
+      context,
+      UploaderRef(mid: card.ownerMid, name: card.ownerName, face: card.ownerFace.isEmpty ? null : card.ownerFace),
+    );
+    return Positioned(
+      left: m.textLeft + m.metaLead + m.iconWidth + m.metaGap,
+      right: m.gutter,
+      top: m.coverTop + m.uploaderCentre - line / 2 - _nameSlop,
+      height: line + _nameSlop + below,
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final name = TextPainter(
+            text: TextSpan(text: card.ownerName, style: DefaultTextStyle.of(context).style.merge(_meta)),
+            strutStyle: BiliFonts.strut(_meta),
+            textDirection: Directionality.of(context),
+            textScaler: MediaQuery.textScalerOf(context),
+            maxLines: 1,
+            ellipsis: '\u2026',
+          )..layout(maxWidth: constraints.maxWidth);
+          final width = name.width;
+          name.dispose();
+          return Align(
+            alignment: AlignmentDirectional.centerStart,
+            child: SizedBox(
+              width: width,
+              height: constraints.maxHeight,
+              child: Semantics(
+                button: true,
+                label: card.ownerName,
+                onTap: open,
+                excludeSemantics: true,
+                child: GestureDetector(
+                  key: const ValueKey('related-uploader'),
+                  behavior: HitTestBehavior.opaque,
+                  onTap: open,
+                ),
+              ),
+            ),
+          );
+        },
       ),
     );
   }
