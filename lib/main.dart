@@ -187,7 +187,7 @@ Future<void> main(List<String> args) async {
             // A reply notification's tap, on a real video (one live open) with the demo thread.
             ? NoNotifyHost(
                 launchRoute: const NotifyVideo(
-                  bvid: 'BV1GJ411x7h7',
+                  bvid: 'BV13as367Ebh',
                   commentRoot: FakePageApi.demoFocusRoot,
                   comment: FakePageApi.demoFocusReply,
                 ),
