@@ -2,7 +2,10 @@
 /// The website's calls with the web login's cookies (`/x/msgfeed/…`, `api.vc.bilibili.com`'s session and IM calls).
 library;
 
+import 'dart:convert';
+
 import 'dynamic_models.dart' show DynamicVerify;
+import 'json.dart';
 
 /// What the red badges count (`/x/msgfeed/unread` and `session_svr/single_unread`).
 final class MessageUnread {
@@ -312,7 +315,7 @@ final class ChatSessionPage {
   final int? next;
 }
 
-/// A person's card (`account/v1/user/cards`), naming the sessions get_sessions leaves bare.
+/// A person's card (`x/im/user_infos`), naming the sessions get_sessions leaves bare.
 final class ChatUserCard {
   const ChatUserCard({
     required this.mid,
@@ -345,7 +348,8 @@ enum ChatMessageKind {
   /// [ChatMessage.links].
   notice,
 
-  /// 5: withdrawn (撤回).
+  /// A message its sender took back (撤回, `msg_status` 1), drawn as 对方/你撤回了一条消息 without its text. The take-back
+  /// itself (`msg_type` 5) isn't listed, as on the website.
   withdrawn,
 
   /// 18 and other grey lines in the middle (202's 对方主动回复或关注你前，最多发送1条消息).
@@ -374,7 +378,8 @@ final class ChatMessage {
     this.autoReply = false,
   });
 
-  /// `msg_seqno`: the message's place in the session, the ack and the paging go by it.
+  /// `msg_seqno`: the message's place in the session, the ack and the paging go by it. 0 for a message just sent
+  /// (send_msg's answer has none) until the session is fetched again; a 系统通知's cursor.
   final int seqno;
 
   /// `msg_key`.
@@ -434,3 +439,500 @@ enum NoticeSettingKind { replies, likes, fans }
 
 /// 所有人, 关注的人, 不接收任何消息提醒 (215).
 enum NoticeAudience { everyone, following, off }
+
+/// The decoders, each taking the envelope's `data`, and the settings' wire values.
+abstract final class MessageDecode {
+  /// `/x/msgfeed/unread`. Its `up` (UP主助手), `coin`, `danmu` and `favorite` counts aren't part of 消息.
+  static FeedUnread feedUnread(Object? json) {
+    final data = JsonObject.from(json, 'msgfeed unread');
+    return (
+      reply: data.count('reply'),
+      at: data.count('at'),
+      like: data.count('like', 'recv_like'),
+      system: data.count('sys_msg'),
+    );
+  }
+
+  /// `single_unread`: people's messages, followed and not. Left out: `biz_msg_follow_unread` and
+  /// `biz_msg_unfollow_unread` (official notice cards), `custom_unread` (客服), `unfollow_push_msg` and the
+  /// intercepted `dustbin_unread` and `dustbin_push_msg`.
+  static int chatUnread(Object? json) {
+    final data = JsonObject.from(json, 'single unread');
+    return data.count('follow_unread') + data.count('unfollow_unread');
+  }
+
+  /// `/x/msgfeed/reply` or `/x/msgfeed/at`.
+  static NoticePage<ReplyNotice> replies(Object? json, NoticeFeed feed) {
+    final data = JsonObject.from(json, 'msgfeed page');
+    final items = data.lenientList('items', (item) => _replyNotice(item, feed));
+    return NoticePage(items: items, next: items.isEmpty ? null : _cursor(data.nested('cursor')));
+  }
+
+  /// `/x/msgfeed/like`: the likes since the list was last seen come under `latest`, the rest under `total`, which
+  /// alone pages on; later pages repeat `latest`, so only the [firstPage] keeps it.
+  static NoticePage<LikeNotice> likes(Object? json, {required bool firstPage}) {
+    final data = JsonObject.from(json, 'like page');
+    final total = data.nested('total');
+    final older = total?.lenientList('items', _likeNotice) ?? const <LikeNotice>[];
+    final latest = firstPage ? data.nested('latest')?.lenientList('items', _likeNotice) : null;
+    final seen = <int>{};
+    return NoticePage(
+      items: [
+        for (final notice in [...?latest, ...older])
+          if (seen.add(notice.id)) notice,
+      ],
+      next: older.isEmpty ? null : _cursor(total?.nested('cursor')),
+    );
+  }
+
+  /// `get_sessions`; [ChatSessionPage.next] is the last session's `session_ts`, the website's `end_ts` for the next
+  /// page.
+  static ChatSessionPage sessions(Object? json) {
+    final data = JsonObject.from(json, 'sessions');
+    final sessions = data.lenientList('session_list', _session);
+    return ChatSessionPage(
+      sessions: sessions,
+      next: data.flag('has_more') && sessions.isNotEmpty ? sessions.last.time.microsecondsSinceEpoch : null,
+    );
+  }
+
+  /// `x/im/user_infos`' list; a map of cards by mid reads the same.
+  static List<ChatUserCard> userCards(Object? json) => switch (json) {
+    final List<Object?> cards => lossy(cards, _userCard),
+    final Map<String, Object?> byMid => lossy(byMid.values.toList(), _userCard),
+    _ => const [],
+  };
+
+  /// `fetch_session_msgs`, turned oldest first. An empty session answers `min_seqno` 2⁶⁴−1, which reads as 0 here.
+  static ChatMessagePage messages(Object? json) {
+    final data = JsonObject.from(json, 'session messages');
+    final emotes = _emotes(data);
+    final raw = data.lenientList('messages', (message) => message);
+    final messages = lossy(raw, (message) => _chatMessage(message, emotes)).nonNulls.toList()
+      ..sort((a, b) => a.seqno.compareTo(b.seqno));
+    return ChatMessagePage(
+      messages: messages,
+      hasMore: data.flag('has_more'),
+      minSeqno: raw.isEmpty ? 0 : _seqno(data.map['min_seqno']) ?? messages.firstOrNull?.seqno ?? 0,
+      maxSeqno: raw.isEmpty ? 0 : _seqno(data.map['max_seqno']) ?? messages.lastOrNull?.seqno ?? 0,
+    );
+  }
+
+  /// send_msg's answer: the message as sent, with no seqno (the answer has none).
+  static ChatMessage sent(Object? json, {required int senderMid, required String text, required DateTime time}) {
+    final data = JsonObject.from(json, 'sent message');
+    return ChatMessage(
+      seqno: 0,
+      key: _seqno(data.map['msg_key']) ?? 0,
+      senderMid: senderMid,
+      kind: ChatMessageKind.text,
+      time: time,
+      text: text,
+      emotes: _used(_emotes(data), text),
+    );
+  }
+
+  /// `sys-msg/query_notify_list`, turned oldest first; a full page of [pageSize] may have more before it.
+  static ChatMessagePage systemNotices(Object? json, {required int pageSize}) {
+    final raw = json is List ? List<Object?>.of(json) : const <Object?>[];
+    final notices = lossy(raw, _systemNotice)..sort((a, b) => a.seqno.compareTo(b.seqno));
+    return ChatMessagePage(
+      messages: notices,
+      hasMore: notices.isNotEmpty && raw.length >= pageSize,
+      minSeqno: notices.firstOrNull?.seqno ?? 0,
+      maxSeqno: notices.lastOrNull?.seqno ?? 0,
+    );
+  }
+
+  /// `get_session_ss`: `follow_status` is the account's relation to them (悄悄关注, 关注, 互粉 count as following).
+  static ChatSettings chatSettings(Object? json) {
+    final data = JsonObject.from(json, 'session settings');
+    return ChatSettings(
+      following: const {1, 2, 6}.contains(_id(data.map['follow_status'])),
+      pushOn: (_id(data.map['push_setting']) ?? 0) == 0,
+      showPush: data.map['show_push_setting'] == null || data.flag('show_push_setting'),
+    );
+  }
+
+  /// `link_setting/get`; a setting the answer leaves out is left out here too.
+  static Map<NoticeSettingKind, NoticeAudience> noticeSettings(Object? json) {
+    final data = JsonObject.from(json, 'link settings');
+    return {for (final kind in NoticeSettingKind.values) kind: ?_audience(data.map[settingField(kind)])};
+  }
+
+  /// `link_setting`'s field for [kind]: the new 回复与@, 收到喜欢 and 新增粉丝 fields, not the old `set_comment`,
+  /// `set_at` and `set_like`.
+  static String settingField(NoticeSettingKind kind) => switch (kind) {
+    NoticeSettingKind.replies => 'set_recv_reply',
+    NoticeSettingKind.likes => 'set_recv_like',
+    NoticeSettingKind.fans => 'set_new_follow',
+  };
+
+  /// 0 所有人, 1 关注的人, 2 不接收: one scale for all three fields.
+  static String audienceValue(NoticeAudience audience) => switch (audience) {
+    NoticeAudience.everyone => '0',
+    NoticeAudience.following => '1',
+    NoticeAudience.off => '2',
+  };
+}
+
+const _empty = JsonObject(<String, Object?>{});
+
+/// Ids come as numbers or as strings of digits, depending on the call.
+int? _id(Object? value) => asInt(value) ?? (value is String ? int.tryParse(value.trim()) : null);
+
+/// Seqnos and msg_keys run past 2⁵³, so only an exact integer counts; 2⁶⁴−1 arrives as a double and reads as none.
+int? _seqno(Object? value) => value is int ? value : (value is String ? int.tryParse(value.trim()) : null);
+
+DateTime _seconds(Object? value) => DateTime.fromMillisecondsSinceEpoch((_id(value) ?? 0) * 1000);
+
+String _firstText(List<String?> texts) =>
+    texts.firstWhere((text) => text != null && text.isNotEmpty, orElse: () => '')!;
+
+NoticeCursor? _cursor(JsonObject? cursor) {
+  if (cursor == null || cursor.flag('is_end')) return null;
+  final id = _id(cursor.map['id']);
+  if (id == null || id <= 0) return null;
+  return NoticeCursor(id: id, time: _id(cursor.map['time']) ?? 0);
+}
+
+NoticeUser _noticeUser(JsonObject? user) => NoticeUser(
+  mid: _id(user?.map['mid']) ?? 0,
+  name: user?.text('nickname') ?? '',
+  face: user?.text('avatar') ?? '',
+  following: user?.flag('follow') ?? false,
+);
+
+NoticeAudience? _audience(Object? value) => switch (_id(value)) {
+  null => null,
+  0 => NoticeAudience.everyone,
+  1 => NoticeAudience.following,
+  _ => NoticeAudience.off,
+};
+
+/// The answer has no field saying the replier is the subject's uploader (197's UP tag), so [ReplyNotice.fromUploader]
+/// stays false.
+ReplyNotice _replyNotice(Object? json, NoticeFeed feed) {
+  final row = JsonObject.from(json, 'reply notice');
+  final id = _id(row.map['id']) ?? (throw const DecodeError('reply notice: missing id'));
+  final item = row.nested('item') ?? _empty;
+  return ReplyNotice(
+    id: id,
+    feed: feed,
+    user: _noticeUser(row.nested('user')),
+    business: item.text('type') ?? '',
+    businessId: _id(item.map['business_id']) ?? 0,
+    subjectId: _id(item.map['subject_id']) ?? 0,
+    rootId: _id(item.map['root_id']) ?? 0,
+    sourceId: _id(item.map['source_id']) ?? 0,
+    targetId: _id(item.map['target_id']) ?? 0,
+    text: item.text('source_content') ?? '',
+    time: _seconds(row.map[feed == NoticeFeed.at ? 'at_time' : 'reply_time']),
+    targetText: _firstText([item.text('target_reply_content'), item.text('root_reply_content')]),
+    title: item.text('title') ?? '',
+    image: item.text('image') ?? '',
+    uri: item.text('uri') ?? '',
+    nativeUri: item.text('native_uri') ?? '',
+    liked: item.flag('like_state'),
+    canReply: !item.flag('hide_reply_button'),
+    canLike: !item.flag('hide_like_button'),
+  );
+}
+
+LikeNotice _likeNotice(Object? json) {
+  final row = JsonObject.from(json, 'like notice');
+  final id = _id(row.map['id']) ?? (throw const DecodeError('like notice: missing id'));
+  final item = row.nested('item') ?? _empty;
+  final users = row.lenientList('users', (json) => _noticeUser(JsonObject.from(json, 'liker')));
+  final counts = row.count('counts');
+  return LikeNotice(
+    id: id,
+    users: users,
+    count: counts > 0 ? counts : users.length,
+    business: item.text('business') ?? '',
+    time: _seconds(row.map['like_time']),
+    itemId: _id(item.map['item_id']) ?? 0,
+    title: item.text('title') ?? '',
+    image: item.text('image') ?? '',
+    uri: item.text('uri') ?? '',
+    nativeUri: item.text('native_uri') ?? '',
+    notifying: (_id(row.map['notice_state']) ?? 0) == 0,
+  );
+}
+
+/// A session's name and face come from `account_info` (official accounts) or the group's, else from the user cards
+/// (`chatUserCards`). The website's list has no 服务通知 or 社区中心 type: an official account is boxed by its
+/// `account_info.name`, else by `system_msg_type` (5 系统通知, 7 UP主小助手 as 创作助手).
+ChatSession _session(Object? json) {
+  final session = JsonObject.from(json, 'session');
+  final talkerId = _id(session.map['talker_id']) ?? (throw const DecodeError('session: missing talker_id'));
+  final type = _id(session.map['session_type']) ?? 1;
+  final account = session.nested('account_info');
+  final group = type == 2;
+  final last = session.nested('last_msg');
+  final sessionTs = _seqno(session.map['session_ts']) ?? 0;
+  final name = account?.text('name') ?? (group ? session.text('group_name') : null) ?? '';
+  return ChatSession(
+    talkerId: talkerId,
+    sessionType: type,
+    name: name,
+    face: account?.text('pic_url') ?? (group ? session.text('group_cover') : null) ?? '',
+    lastText: last == null ? '' : _lastText(last, talkerId),
+    time: sessionTs > 0 ? DateTime.fromMicrosecondsSinceEpoch(sessionTs) : _seconds(last?.map['timestamp']),
+    unread: session.count('unread_count'),
+    ackSeqno: _seqno(session.map['ack_seqno']) ?? 0,
+    maxSeqno: _seqno(session.map['max_seqno']) ?? 0,
+    top: (_seqno(session.map['top_ts']) ?? 0) > 0,
+    box: _box(account == null ? null : name, _id(session.map['system_msg_type']) ?? 0),
+  );
+}
+
+NoticeBox? _box(String? officialName, int systemType) {
+  for (final box in NoticeBox.values) {
+    if (box.label == officialName) return box;
+  }
+  return switch (systemType) {
+    5 => NoticeBox.system,
+    7 => NoticeBox.creator,
+    _ => null,
+  };
+}
+
+bool _vipPink(JsonObject? vip) =>
+    _id(vip?.map['vipStatus'] ?? vip?.map['status']) == 1 && (_id(vip?.map['vipType'] ?? vip?.map['type']) ?? 0) > 0;
+
+/// The 大 on the face: `avatar_subscript` where the answer has it, else a 大会员 that lasts.
+bool _bigVip(JsonObject? vip) {
+  if (vip == null) return false;
+  if (vip.map['avatar_subscript'] != null) return _id(vip.map['avatar_subscript']) == 1;
+  return _vipPink(vip);
+}
+
+DynamicVerify _verify(Object? type) => switch (_id(type)) {
+  0 => DynamicVerify.personal,
+  1 => DynamicVerify.organisation,
+  _ => DynamicVerify.none,
+};
+
+ChatUserCard _userCard(Object? json) {
+  final card = JsonObject.from(json, 'user card');
+  final mid = _id(card.map['mid']) ?? (throw const DecodeError('user card: missing mid'));
+  final vip = card.nested('vip');
+  return ChatUserCard(
+    mid: mid,
+    name: _firstText([card.text('name'), card.text('uname')]),
+    face: card.text('face') ?? '',
+    vipPink: _vipPink(vip),
+    bigVip: _bigVip(vip),
+    verify: _verify((card.nested('official') ?? card.nested('official_verify'))?.map['type']),
+    pendant: card.nested('pendant')?.text('image') ?? '',
+  );
+}
+
+/// A message's `content` is JSON in a string; anything else (a take-back's bare msg_key) reads as empty.
+JsonObject _content(Object? raw) {
+  final value = raw is String ? _json(raw) : raw;
+  return value is Map<String, Object?> ? JsonObject(value) : _empty;
+}
+
+Object? _json(String text) {
+  try {
+    return jsonDecode(text);
+  } on FormatException {
+    return null;
+  }
+}
+
+/// `msg_source` 8-11: 被关注回复, 收到消息回复, 关键词回复 and 大航海上船回复, which the website marks 此条消息为自动回复.
+bool _autoReply(JsonObject message) => switch (_id(message.map['msg_source'])) {
+  8 || 9 || 10 || 11 => true,
+  _ => false,
+};
+
+/// What a message reads as in one line, as the website's session list puts it.
+String _preview(int type, JsonObject content) {
+  final title = content.text('title') ?? '';
+  return switch (type) {
+    1 => content.text('content') ?? '',
+    2 => '[图片]',
+    6 => '[自定义表情]',
+    7 => '[${(content.text('headline') ?? '').isEmpty ? '分享' : '转发'}]$title',
+    10 || 13 => title,
+    11 => '[视频]$title',
+    12 => '[文章]$title',
+    14 => '[分享]$title',
+    16 => content.text('reply_content') ?? '',
+    18 => '',
+    _ => content.text('content') ?? '',
+  };
+}
+
+final _spaces = RegExp(r'\s+');
+
+/// 196's grey line: an auto reply as `[自动回复] …` (the phone's space, where the website has none).
+String _lastText(JsonObject message, int talkerId) {
+  if (_id(message.map['msg_status']) == 1 || _id(message.map['msg_type']) == 5) {
+    return '${_id(message.map['sender_uid']) == talkerId ? '对方' : '你'}撤回了一条消息';
+  }
+  final text = _preview(_id(message.map['msg_type']) ?? 0, _content(message.map['content']));
+  return (_autoReply(message) ? '[自动回复] $text' : text).replaceAll(_spaces, ' ').trim();
+}
+
+Map<String, String> _emotes(JsonObject data) => {
+  for (final emote in data.lenientList('e_infos', (json) => JsonObject.from(json, 'emote')))
+    if (emote.text('text') case final code? when code.isNotEmpty)
+      if (_firstText([emote.text('url'), emote.text('uri')]) case final url when url.isNotEmpty) code: url,
+};
+
+Map<String, String> _used(Map<String, String> emotes, String text) => {
+  for (final MapEntry(:key, :value) in emotes.entries)
+    if (text.contains(key)) key: value,
+};
+
+/// The take-back itself (`msg_type` 5) is dropped, as the website drops it; the message it took back carries
+/// `msg_status` 1 and is kept without its text.
+ChatMessage? _chatMessage(Object? json, Map<String, String> emotes) {
+  final message = JsonObject.from(json, 'chat message');
+  final seqno = _seqno(message.map['msg_seqno']) ?? (throw const DecodeError('chat message: missing msg_seqno'));
+  final type = _id(message.map['msg_type']) ?? 0;
+  if (type == 5) return null;
+  final sender = _id(message.map['sender_uid']) ?? 0;
+  final key = _seqno(message.map['msg_key']) ?? 0;
+  final time = _seconds(message.map['timestamp']);
+  final autoReply = _autoReply(message);
+  ChatMessage make(ChatMessageKind kind, {String text = ''}) =>
+      ChatMessage(seqno: seqno, key: key, senderMid: sender, kind: kind, time: time, text: text, autoReply: autoReply);
+  if (_id(message.map['msg_status']) == 1) return make(ChatMessageKind.withdrawn);
+  final content = _content(message.map['content']);
+  switch (type) {
+    case 1:
+      final text = content.text('content') ?? '';
+      return ChatMessage(
+        seqno: seqno,
+        key: key,
+        senderMid: sender,
+        kind: ChatMessageKind.text,
+        time: time,
+        text: text,
+        emotes: _used(emotes, text),
+        autoReply: autoReply,
+      );
+    case 2 || 6:
+      return ChatMessage(
+        seqno: seqno,
+        key: key,
+        senderMid: sender,
+        kind: ChatMessageKind.picture,
+        time: time,
+        picture: content.text('url') ?? '',
+        pictureWidth: asDouble(content.map['width'])?.round() ?? 0,
+        pictureHeight: asDouble(content.map['height'])?.round() ?? 0,
+        autoReply: autoReply,
+      );
+    case 10:
+      return ChatMessage(
+        seqno: seqno,
+        key: key,
+        senderMid: sender,
+        kind: ChatMessageKind.notice,
+        time: time,
+        title: content.text('title') ?? '',
+        text: content.text('text') ?? '',
+        fields: content.lenientList('modules', _noticeField),
+        links: _noticeLinks(content),
+        autoReply: autoReply,
+      );
+    case 18:
+      return make(ChatMessageKind.tip, text: _tipLines(content.text('content')));
+    case 53:
+      return make(ChatMessageKind.tip, text: _subscribeTip(content));
+    case >= 301 && <= 306:
+      return make(ChatMessageKind.tip, text: content.text('content') ?? '');
+  }
+  // The website draws a bare line from no one (a group's 欢迎…入群) as a tip.
+  final line = content.text('content') ?? '';
+  if (sender == 0 && line.isNotEmpty) return make(ChatMessageKind.tip, text: line);
+  return make(ChatMessageKind.other, text: _preview(type, content));
+}
+
+({String title, String detail}) _noticeField(Object? json) {
+  final module = JsonObject.from(json, 'notice module');
+  return (title: module.text('title') ?? '', detail: module.text('detail') ?? '');
+}
+
+/// A notice card's up to three buttons. Each one's address is its config's `web_uri`, else `all_uri`, else the bare
+/// `jump_uri`; without one there is no button. Its text is the config's, else `jump_text`, else 查看详情.
+List<({String text, String uri})> _noticeLinks(JsonObject content) {
+  final links = <({String text, String uri})>[];
+  for (final suffix in const ['', '_2', '_3']) {
+    final config = content.nested('jump_uri${suffix}_config');
+    final uri = _firstText([config?.text('web_uri'), config?.text('all_uri'), content.text('jump_uri$suffix')]);
+    if (uri.isEmpty) continue;
+    links.add((text: _firstText([config?.text('text'), content.text('jump_text$suffix'), '查看详情']), uri: uri));
+  }
+  return links;
+}
+
+/// msg_type 18's `content` is a JSON array, as a string, of `{text, color_day, …}`.
+String _tipLines(String? raw) {
+  final lines = raw == null ? null : _json(raw);
+  if (lines is! List) return raw ?? '';
+  return [
+    for (final line in lines)
+      if (line case {'text': final String text}) text,
+  ].join();
+}
+
+/// msg_type 53's paragraph of words and links.
+String _subscribeTip(JsonObject content) {
+  final nodes = content.nested('paragraph')?.nested('text')?.lenientList('nodes', (json) => JsonObject.from(json));
+  return [
+    for (final node in nodes ?? const <JsonObject>[])
+      _firstText([
+        node.nested('word')?.text('words'),
+        node.nested('link')?.nested('show_text')?.text('words'),
+        node.text('raw_text'),
+      ]),
+  ].join();
+}
+
+/// `#{label}{"address"}` in a 系统通知: the label stays in the text, the address becomes a link.
+final _noticeLink = RegExp(r'#\{(.+?)\}\{"?(.+?)"?\}');
+
+/// A 系统通知: its `content` is the text, or JSON whose `web` field is, as the website reads it.
+ChatMessage _systemNotice(Object? json) {
+  final notice = JsonObject.from(json, 'system notice');
+  final cursor = _seqno(notice.map['cursor']) ?? (throw const DecodeError('system notice: missing cursor'));
+  var body = notice.text('content') ?? '';
+  if (_json(body) case {'web': final String web}) body = web;
+  final links = <({String text, String uri})>[];
+  body = body.replaceAllMapped(_noticeLink, (match) {
+    final label = match[1]!;
+    final address = match[2]!;
+    links.add((text: label, uri: address.startsWith('//') ? 'https:$address' : address));
+    return label;
+  });
+  return ChatMessage(
+    seqno: cursor,
+    key: _seqno(notice.map['id']) ?? 0,
+    senderMid: 0,
+    kind: ChatMessageKind.notice,
+    time: _noticeTime(notice.text('time_at'), cursor),
+    title: notice.text('title') ?? '',
+    text: body,
+    links: links,
+  );
+}
+
+final _beijingTime = RegExp(r'^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2}):(\d{2})$');
+
+/// `time_at` is Beijing time with no zone; failing that, the cursor is a time in nanoseconds.
+DateTime _noticeTime(String? timeAt, int cursor) {
+  if (_beijingTime.firstMatch(timeAt?.trim() ?? '') case final match?) {
+    final [year, month, day, hour, minute, second] = [
+      for (var group = 1; group <= 6; group++) int.parse(match[group]!),
+    ];
+    return DateTime.utc(year, month, day, hour - 8, minute, second).toLocal();
+  }
+  return cursor > 100000000000000000 ? DateTime.fromMicrosecondsSinceEpoch(cursor ~/ 1000) : DateTime(1970);
+}

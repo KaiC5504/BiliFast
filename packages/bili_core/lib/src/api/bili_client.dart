@@ -326,9 +326,12 @@ final class BiliClient {
     return _decodeEnvelope(sent, path, decode);
   }
 
+  /// [query] goes in the URL beside the form, WBI-signed when [signed], as the website's send_msg asks it.
   Future<BiliEnvelope<T>> _postEnvelope<T>(
     String path, {
     required Map<String, String> form,
+    Map<String, String> query = const {},
+    bool signed = false,
     String? referer,
     required String host,
     bool cookies = true,
@@ -338,7 +341,8 @@ final class BiliClient {
     final sent = await _send(
       method: 'POST',
       path: path,
-      signed: false,
+      query: query,
+      signed: signed,
       host: host,
       form: form,
       referer: referer,
