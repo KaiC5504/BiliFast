@@ -88,3 +88,36 @@ Glyphs of the app's icon font (`composeResources/.../font/iconfont.ttf`), drawn 
 | `images/message/chat_keyboard.png`, `chat_link.png` | `keyboard-line@500`, `chain-link-line@500` |
 | `images/message/chat_emote_search.png`, `chat_emote_recent.png` | `magnifier-search-line@500`, `clock-history-line@500` |
 | `images/message/chat_emote_star.png` | `star-favorite-fill@500` |
+
+直播's art (`images/live/`), from the same APK: bitmaps taken unchanged, vectors and icon-font glyphs drawn white as
+PNGs by `tools/apk_asset.py` and cut to their ink:
+
+| File | Original |
+| --- | --- |
+| `live_ing.gif` | `ic_live_card_live_ing` |
+| `tab_watching.png`, `tab_thumb.png` | `ic_info_watching`, `ic_hand_thumbsup_line` |
+| `tab_cover_switch.png`, `tab_areas.png` | `ic_live_home_tab_cover`, `live_home_tab_edit` |
+| `player_pause.png`, `player_play.png`, `player_refresh.png` | `live_ic_player_pause`, `live_ic_player_play`, `live_ic_player_refresh` |
+| `player_danmaku_on.png`, `player_danmaku_off.png` | `live_ic_danmu_open`, `live_ic_danmu_close` |
+| `player_watch_movies.png`, `player_full_screen.png` | `live_ic_watch_movies_open`, `live_ic_player_toggle_zoom_v2` |
+| `player_share.png`, `player_gift.png`, `room_gift.png` | `ic_live_menu_share`, `ic_gift_icon_static` |
+| `player_more_share.png`, `player_more_pip.png`, `room_more_pip.png` | `ic_live_setting_share`, `ic_live_small_window` |
+| `player_more_settings.png`, `room_more_player.png` | `ic_live_setting_player` |
+| `player_more_danmaku.png`, `room_more_danmaku.png` | `ic_live_setting_danmaku` |
+| `room_more_quality.png` | `ic_live_setting_clarity` |
+| `player_more_effects.png`, `room_more_effects.png` | `ic_live_setting_magic` |
+| `player_more_cast.png`, `room_more_cast.png` | `ic_live_setting_cast_screen` |
+| `player_more_report.png`, `room_more_report.png` | `ic_live_setting_report` |
+| `player_more_feedback.png`, `room_more_feedback.png` | `ic_live_setting_feedback` |
+| `player_more_audio.png`, `room_more_audio.png` | `ic_live_setting_audio_only` |
+| `player_more_desktop.png`, `room_more_desktop.png` | `ic_live_setting_launcher` |
+| `player_more_colour.png` | `biliplayer_ic_setting_background_daltonism` |
+| `room_more_boost.png` | `comment_bihuo_icon` |
+| `room_share_qzone.png` | `bili_socialize_qq_zone` |
+| `room_guard_frame_1.png` … `_3.png` | `ic_live_guard_governor_border_v2`, `_commander_`, `_captain_` |
+| `room_guard_icon_1.png` … `_3.png` | `ic_comment_guard_governor`, `_commander`, `_captaion` |
+| `rank_tag_1.png` … `_3.png` | `ic_live_online_rank_label_1st`, `_2nd`, `_3rd` |
+| `rank_guard_1.png` … `_3.png` | `ic_live_guard_list_first`, `_second`, `_third` |
+| `rank_exchange.png`, `rank_anchor.png`, `rank_question.png` | `ic_live_contribution_exhange`, `ic_live_guard_onboard`, `ic_live_question_mark` |
+| `send_style.png` | the icon font's `ref_fontcolor_text_line_200` |
+| `send_translate.png` | redrawn from the icon font's `ref_mic_singer_setting_line_500` (its head) and `ref_arrow_closed_caption_language_line_500` (its 文) |
