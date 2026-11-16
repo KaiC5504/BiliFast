@@ -86,3 +86,5 @@ Glyphs of the app's icon font (`composeResources/.../font/iconfont.ttf`), drawn 
 | `images/message/chat_follow.png`, `chat_following.png` | `person-follow-line@500`, `person-following-line@500` |
 | `images/message/chat_picture.png`, `chat_emote.png` | `image-line@500`, `emoji-circle-line@500` |
 | `images/message/chat_keyboard.png`, `chat_link.png` | `keyboard-line@500`, `chain-link-line@500` |
+| `images/message/chat_emote_search.png`, `chat_emote_recent.png` | `magnifier-search-line@500`, `clock-history-line@500` |
+| `images/message/chat_emote_star.png` | `star-favorite-fill@500` |
