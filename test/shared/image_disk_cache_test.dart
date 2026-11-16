@@ -603,6 +603,48 @@ void main() {
       await cache.settle();
       expect(await cache.sizeBytes(), 0);
     });
+
+    test('pictures stored while a trim runs stay in the total, each counted once', () async {
+      final beforeListing = Completer<void>();
+      final listed = Completer<void>();
+      final afterListing = Completer<void>();
+      var trims = 0;
+      final cache = ImageDiskCache(
+        folder: folder.path,
+        capBytes: 500,
+        fetch: fetch.call,
+        trimRunner: (plan) async {
+          if (trims++ == 0) return plan.run();
+          await beforeListing.future;
+          // Counts only, so the test's pictures all stay.
+          final result = TrimPlan(
+            folder: plan.folder,
+            capBytes: 1 << 40,
+            leftovers: false,
+            runTag: plan.runTag,
+            freshSince: plan.freshSince,
+          ).run();
+          listed.complete();
+          await afterListing.future;
+          return result;
+        },
+      );
+      caches.add(cache);
+      await cache.start();
+      fetch.size = 600;
+      await cache.storedFile(_a);
+      expect(trims, 2, reason: 'the store passed the cap');
+
+      fetch.size = 400;
+      await cache.storedFile(_b);
+      beforeListing.complete();
+      await listed.future;
+      fetch.size = 300;
+      await cache.storedFile(_c);
+      afterListing.complete();
+      await cache.settle();
+      expect(await cache.sizeBytes(), 1300, reason: 'the one stored before the listing is not counted twice');
+    });
   });
 
   test('sizeBytes totals the folder; a folder not made yet is empty', () async {

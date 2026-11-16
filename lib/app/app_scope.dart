@@ -143,8 +143,8 @@ class AppPlayback with WidgetsBindingObserver {
 
   /// Flutter's notice comes on every trip to the background (FlutterEngine.mm's flutterDidEnterBackground) as well as
   /// on iOS's real warnings, which [MemoryWarnings] brings on its own. Away, the video the app comes back to (or plays
-  /// on: 后台听视频, the small window) keeps its prefetch and the rest drop theirs; in the foreground it is only the
-  /// real warning again.
+  /// on: 后台听视频, the small window) keeps its prefetch and the rest drop theirs; in the foreground it is ignored,
+  /// since a real warning also comes through [MemoryWarnings].
   @override
   void didHaveMemoryPressure() {
     final state = WidgetsBinding.instance.lifecycleState;

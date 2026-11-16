@@ -25,13 +25,15 @@ final _segments = [
 
 final _config = TestEngine.config.copyWith(keepBehindSeconds: 30, keepBehindBytes: 8 << 20);
 
-RipperSession _session(RangeTransport transport, {RipperConfig? config, Logger? logger}) => RipperSession(
-  sources: {TrackKind.video: (primary: TestEngine.primary, backups: const <String>[])},
-  mode: CustomNodes([NodeAddress('upos-sz-mirrorcos.bilivideo.com')]),
-  config: config ?? _config,
-  transport: transport,
-  logger: logger ?? Logger(session: 'test'),
-)..setSegments(TrackKind.video, _segments);
+RipperSession _session(RangeTransport transport, {RipperConfig? config, Logger? logger, bool warm = false}) =>
+    RipperSession(
+      sources: {TrackKind.video: (primary: TestEngine.primary, backups: const <String>[])},
+      mode: CustomNodes([NodeAddress('upos-sz-mirrorcos.bilivideo.com')]),
+      config: config ?? _config,
+      transport: transport,
+      logger: logger ?? Logger(session: 'test'),
+      warm: warm,
+    )..setSegments(TrackKind.video, _segments);
 
 Future<void> _read(RipperSession session, int index) async {
   final builder = BytesBuilder(copy: false);
@@ -222,6 +224,31 @@ void main() {
       expect(budget.check([idle, other, third]), 6 * _segment);
       expect(other.heldBytes, 0);
       expect(sink.events.where((event) => event.msg == 'engine budget shed'), hasLength(2));
+    });
+
+    test("a warm session's unread prime counts as in use and stays; an idle session over the budget goes whole",
+        () async {
+      // Under one segment, so the budget stays over even once the idle session is gone.
+      final budget = EngineBudget(bytes: _segment ~/ 2, logger: Logger(session: 'test'));
+      final warm = _session(SimCDN(size: _size), warm: true);
+      addTearDown(warm.close);
+      warm.prime(TrackKind.video, seconds: 0);
+      expect(await eventually(() => warm.isCached(TrackKind.video, _segments[0].range)), isTrue);
+      await _settle(warm);
+
+      final idle = _session(SimCDN(size: _size));
+      addTearDown(idle.close);
+      await _read(idle, 0);
+      await _settle(idle);
+      idle.setIdle(true);
+      expect([warm.heldBytes, idle.heldBytes], [_segment, 6 * _segment]);
+      expect(warm.lastPlayed, lessThan(idle.lastPlayed), reason: 'the warm one would go first if it counted as idle');
+
+      expect(budget.check([warm, idle]), 6 * _segment);
+      expect(idle.heldBytes, 0);
+      expect(warm.idle, isFalse);
+      expect(warm.heldBytes, _segment, reason: 'the prime the player has not read yet stays');
+      expect(warm.isCached(TrackKind.video, _segments[0].range), isTrue);
     });
   });
 }
