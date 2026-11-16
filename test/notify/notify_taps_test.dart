@@ -75,6 +75,15 @@ class _Video extends StatelessWidget {
 class _Pages extends NotifyPages {
   final videos = <(String, VideoRoute)>[];
   final posts = <(String, bool)>[];
+  int likes = 0;
+
+  /// Stands in for 收到喜欢, which asks the account's likes.
+  @override
+  Future<void> openLikes(BuildContext context) {
+    likes += 1;
+    return Navigator.of(context)
+        .push(SwipeBackPageRoute<void>(builder: (_) => const SizedBox.expand(key: ValueKey('likes'))));
+  }
 
   @override
   Future<void> openVideo(BuildContext context, VideoRoute route) {
@@ -101,6 +110,7 @@ void main() {
   late Logger logger;
   late CannedHttp http;
   late GlobalKey<NavigatorState> navigator;
+  late AppServices services;
 
   setUp(() {
     host = _Host();
@@ -124,7 +134,7 @@ void main() {
     if (fake) environment.useFakeAccount();
     final playback = AppPlayback(() => Completer<PlaybackController>().future);
     addTearDown(playback.dispose);
-    final services = AppServices(
+    services = AppServices(
       environment: environment,
       playback: playback,
       recents: await RecentStore.load(null, logger: logger),
@@ -324,6 +334,75 @@ void main() {
     expect(logged('notify open'), [
       {'kind': 'post'},
       {'kind': 'post'},
+    ]);
+  });
+
+  testWidgets('a like\'s route opens 收到喜欢 over the page on top, sheets closed first', (tester) async {
+    taps().start();
+    await mount(tester);
+    await tester.pumpAndSettle();
+    host.tap(const NotifyVideo(bvid: 'BV1first'));
+    await tester.pumpAndSettle();
+    var closed = false;
+    unawaited(
+      showDialog<void>(
+        context: tester.element(find.byKey(const ValueKey('video-BV1first'))),
+        builder: (_) => const Center(child: Text('dialog')),
+      ).then((_) => closed = true),
+    );
+    await tester.pumpAndSettle();
+    host.tap(const NotifyLikes());
+    await tester.pumpAndSettle();
+    expect(closed, isTrue);
+    expect(pages.likes, 1);
+    expect(find.byKey(const ValueKey('likes')), findsOneWidget);
+    navigator.currentState!.pop();
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('video-BV1first')), findsOneWidget, reason: 'the page under it stays');
+    expect(logged('notify open'), [
+      {'kind': 'video'},
+      {'kind': 'likes'},
+    ]);
+  });
+
+  testWidgets('a 私信\'s route goes back to the shell and asks it to show 消息', (tester) async {
+    taps().start();
+    await mount(tester);
+    await tester.pumpAndSettle();
+    var shows = 0;
+    services.messages.showRequests.addListener(() => shows += 1);
+    host.tap(const NotifyVideo(bvid: 'BV1first'));
+    await tester.pumpAndSettle();
+    unawaited(
+      navigator.currentState!.push(
+        SwipeBackPageRoute<void>(builder: (_) => const SizedBox.expand(key: ValueKey('space'))),
+      ),
+    );
+    await tester.pumpAndSettle();
+    host.tap(const NotifyMessages());
+    await tester.pumpAndSettle();
+    expect(shows, 1);
+    expect(find.byKey(const ValueKey('home')), findsOneWidget);
+    expect(navigator.currentState!.canPop(), isFalse);
+    expect(logged('notify open').last, {'kind': 'messages'});
+  });
+
+  testWidgets('logged out, a like\'s or a 私信\'s route opens nothing', (tester) async {
+    http = Canned.http(loggedIn: false);
+    host.launch = const NotifyLikes();
+    taps().start();
+    final environment = await mount(tester, fake: false, cookies: const NoStoredCookies());
+    var shows = 0;
+    services.messages.showRequests.addListener(() => shows += 1);
+    await tester.pumpAndSettle();
+    expect(environment.account, isA<LoggedOut>());
+    host.tap(const NotifyMessages());
+    await tester.pumpAndSettle();
+    expect(pages.likes, 0);
+    expect(shows, 0);
+    expect(logged('notify not opened'), [
+      {'kind': 'likes', 'reason': 'logged out'},
+      {'kind': 'messages', 'reason': 'logged out'},
     ]);
   });
 

@@ -7,12 +7,14 @@ import '../app/app_environment.dart';
 import '../account/login_gate.dart';
 import '../app/app_scope.dart';
 import '../dynamic/post/post_route.dart';
+import '../message/message_routes.dart' as message;
 import '../video/video_route.dart';
 import 'notify_host.dart';
 
 /// Opens what a tapped notification names, and logs the background checks NotifyHost.swift ran since the last launch.
 /// A tap closes the sheets and dialogs on top and opens its page over the page under them, as a pasted link does; only
-/// a video page there is replaced, since video pages never stack. Logged out, a tap opens nothing.
+/// a video page there is replaced, since video pages never stack. A 私信's goes back to the shell and shows 消息.
+/// Logged out, a tap opens nothing.
 class NotifyTaps {
   NotifyTaps({
     required this.host,
@@ -148,7 +150,13 @@ class NotifyTaps {
         }
       case NotifyDynamicPost(:final id, :final toComments):
         unawaited(pages.openPost(navigator.context, id: id, toComments: toComments));
-      case NotifyLikes() || NotifyMessages() || NotifyApp():
+      case NotifyLikes():
+        unawaited(pages.openLikes(navigator.context));
+      case NotifyMessages():
+        // 消息 is a place of the shell, under every page.
+        navigator.popUntil((route) => route.isFirst);
+        _services?.messages.requestShow();
+      case NotifyApp():
         break;
     }
   }
@@ -176,4 +184,6 @@ class NotifyPages {
 
   Future<void> openPost(BuildContext context, {required String id, required bool toComments}) =>
       openDynamicPost(context, id: id, toComments: toComments);
+
+  Future<void> openLikes(BuildContext context) => message.openLikes(context);
 }

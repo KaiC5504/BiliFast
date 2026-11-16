@@ -8291,6 +8291,190 @@ abstract final class MessageTabTheme {
 
 /// 回复与@, 收到喜欢 and 新增粉丝 (197-199, 213, 214). Filled by their builder.
 abstract final class MessageFeedTheme {
+  /// 回复与@'s and 收到喜欢's bar (197, 198), 我的关注's: 54 tall under the status bar in the 装扮's second-page colour,
+  /// a 2/3 hairline under it; the title 20 pt semibold on the row's middle, ‹ and the gear in round glass discs whose
+  /// middles are 42 in from either side. The gear is the APK's `vc_mine_login_settings`, 18.67 × 20.33 of ink.
+  static const barRow = FollowingListTheme.barRow;
+  static const barHairline = FollowingListTheme.barHairline;
+  static const hairline = BiliColors.divider;
+  static const titleText = 20.0;
+  static const titleLine = 28.0;
+  static const titleWeight = FontWeight.w600;
+  static const buttonCentreX = FollowingListTheme.backCentreX;
+  static const buttonTarget = FollowingListTheme.backTarget;
+  static const gearWidth = 56 / 3;
+  static const gearHeight = 61 / 3;
+  static const gearInk = FollowingListTheme.backInk;
+
+  /// 新增粉丝's bar (199): white and 44 tall, a 1/3 #E7E7E7 rule 2/3 above its bottom; 新增粉丝 18 pt medium, its
+  /// line centred 23 under the status bar; a bare ‹ (9.33 × 18 of ink, 1.5 strokes) centred 23 in and the gear 24 from
+  /// the right, both #18191C.
+  static const plainBar = 44.0;
+  static const plainRuleTop = 130 / 3;
+  static const plainRule = 1 / 3;
+  static const plainRuleInk = Color(0xFFE7E7E7);
+  static const plainTitleText = 18.0;
+  static const plainTitleLine = 25.0;
+  static const plainTitleWeight = FontWeight.w500;
+  static const plainCentre = 23.0;
+  static const plainBackCentreX = 23.0;
+  static const plainBackWidth = 28 / 3;
+  static const plainBackHeight = 18.0;
+  static const plainBackStroke = 1.5;
+  static const plainGearRight = 24.0;
+  static const plainInk = BiliColors.text;
+
+  /// 全部 and @我 (197, 213): a 51 row closed by a 1/3 rule, the chips 28 tall and 11.33 down, 全部 42 wide from 12 in,
+  /// @我 43 wide 8 after it, 5 corners. 13 pt words on the chip's middle: the chosen pink on #FFECF1, the other #61666D.
+  static const chipRow = 51.0;
+  static const chipRule = 1 / 3;
+  static const chipTop = 34 / 3;
+  static const chipHeight = 28.0;
+  static const chipLeft = 12.0;
+  static const chipGap = 8.0;
+  static const chipAllWidth = 42.0;
+  static const chipAtWidth = 43.0;
+  static const chipRadius = 5.0;
+  static const chipText = 13.0;
+  static const chipLine = 18.0;
+  static const chipInk = Color(0xFF61666D);
+  static const chipChosenInk = BiliColors.pink;
+  static const chipChosenFill = Color(0xFFFFECF1);
+
+  /// A reply (197). The face 40 at 12 in, 15.67 down. From 63 in, three lines: the name 13 pt semibold, the UP tag
+  /// and the action 13 pt #61666D, 6 apart (4.33 after the tag), its middle 23.33 down; what they wrote 13 pt #61666D
+  /// in up to two lines,
+  /// the first's middle 43.5 down (a second makes the row 17 taller); then 25.17 under the last of those the date 12 pt
+  /// grey, 13 after it 回复 and
+  /// 点赞 (the APK's `ic_bubble_comment_line_v2` and `ic_vector_like`, 13.33 wide, 4 before their 12 pt grey words, the
+  /// two 11 apart; a liked thumb `ic_vector_liked` pink). The words stop 64 short of the right. ⋮'s three 2 pt dots
+  /// 4.33 apart, centred 66 from the right on the date's line. The row ends 24 under the date's middle with a 2/3
+  /// rule the screen's width. With the UP tag (19 × 12, 2 corners, 9.5 pt UP, on the name's line) the three lines come
+  /// 3.33 lower and the row is as much taller; the face stays.
+  static const face = 40.0;
+  static const faceLeft = 12.0;
+  static const replyFaceTop = 47 / 3;
+  static const textLeft = 63.0;
+  static const textRight = 64.0;
+  static const nameCentre = 70 / 3;
+  static const nameText = 13.0;
+  static const nameLine = 18.0;
+  static const nameWeight = FontWeight.w600;
+  static const name = BiliColors.text;
+  static const actionInk = Color(0xFF61666D);
+  static const nameGap = 6.0;
+  static const upExtra = 10 / 3;
+  static const upWidth = 19.0;
+  static const upHeight = 12.0;
+  static const upRadius = 2.0;
+  static const upText = 9.5;
+  static const upFill = BiliColors.pink;
+  static const upInk = BiliColors.onPink;
+  static const upGap = 13 / 3;
+  static const bodyCentre = 87 / 2;
+  static const bodyText = 13.0;
+  static const bodyLine = 17.0;
+  static const bodyInk = Color(0xFF61666D);
+  static const bodyLines = 2;
+  static const dateGap = 151 / 6;
+  static const dateText = 12.0;
+  static const dateLine = 17.0;
+  static const dateInk = BiliColors.secondaryText;
+  static const dateBox = 30.0;
+
+  /// The date's and 回复's words sit 2/3 above the line's middle, where the glyphs and ⋮ are.
+  static const dateLift = 2 / 3;
+  static const actionsGap = 13.0;
+  static const glyph = 40 / 3;
+  static const replyGlyphHeight = 13.0;
+  static const glyphGap = 4.0;
+  static const actionGap = 11.0;
+  static const likedInk = BiliColors.pink;
+  static const moreRight = 66.0;
+  static const moreDot = 2.0;
+  static const moreSpacing = 13 / 3;
+  static const moreInk = BiliColors.secondaryText;
+  static const moreTarget = 44.0;
+  static const rowBottom = 24.0;
+  static const rowRule = 2 / 3;
+  static const rowRuleInk = BiliColors.divider;
+
+  /// The right column (197, 198): what was replied to or liked, 10 pt grey in up to three 12 pt lines, 41 wide ending
+  /// 12 from the right; on 回复与@ its top 17.67 down, on 收到喜欢 centred on the row. A picture where there are no
+  /// words: no screenshot, so a 40 square with 4 corners in the same place.
+  static const sideWidth = 41.0;
+  static const sideRight = 12.0;
+  static const sideTop = 53 / 3;
+  static const sideText = 10.0;
+  static const sideLine = 12.0;
+  static const sideLines = 3;
+  static const sideInk = BiliColors.secondaryText;
+  static const sidePicture = 40.0;
+  static const sidePictureRadius = 4.0;
+
+  /// A like (198): one face 40 at 12 in, 16 down; two as a pair of 30s, the older at 12 in and 15.33 down, the newer 8
+  /// right of it and 8 lower over a 1.5 white ring. The names 13 pt semibold, 、 (squeezed, as iOS sets it) and, 6
+  /// after, the rest 13 pt #61666D, the line's middle 22.83 down; the date's 48.67 down, and the row ends as a reply's.
+  static const likeNameCentre = 137 / 6;
+  static const likeCommaSqueeze = 4 / 3;
+  static const likeFaceTop = 16.0;
+  static const pairFace = 30.0;
+  static const pairTop = 46 / 3;
+  static const pairShift = 8.0;
+  static const pairRing = 1.5;
+  static const likeDateCentre = 146 / 3;
+
+  /// An empty list: the APK's `ic_page_status_empty` (我的好友's) 140 square, then 这里还什么都没有呢～ 14 pt grey. 213's
+  /// grey page has the picture 220 under the chips and the words' middle 154.33 under its top (收到喜欢's, with no
+  /// screenshot, the same under the bar); 199's white page 140 under the bar and 149.83.
+  static const emptyFill = BiliColors.pageGrey;
+  static const emptyPicture = 140.0;
+  static const emptyText = 14.0;
+  static const emptyLine = 20.0;
+  static const emptyInk = BiliColors.secondaryText;
+  static const emptyTop = 220.0;
+  static const emptyTextCentre = 463 / 3;
+  static const fansEmptyTop = 140.0;
+  static const fansEmptyTextCentre = 899 / 6;
+
+  /// A row's ⋮ sheet (214), over a 50% dim on everything: #F6F7F8 with 8 corners, a 30 × 3 grabber 8 down, then 19
+  /// down a white card 16 in from each side with 8 corners. 不再通知 and 删除 52 tall, a 1/3 rule between from 44 into
+  /// the card; their glyphs centred 26 in (a drawn bell 15.33 × 16.67, the APK's `biligame_vector_trash_delete_line`
+  /// 16.33 square) and the words 14 pt from 44 in. 12 under the card, then the home indicator's room.
+  static const sheetDim = BiliColors.sheetDim;
+  static const sheetFill = BiliColors.softGrey;
+  static const sheetRadius = 8.0;
+  static const grabberTop = 8.0;
+  static const grabberWidth = 30.0;
+  static const grabberHeight = 3.0;
+  static const grabberInk = BiliColors.sheetGrabber;
+  static const cardTop = 19.0;
+  static const cardInset = 16.0;
+  static const cardRadius = 8.0;
+  static const cardFill = BiliColors.card;
+  static const cardBottom = 12.0;
+  static const sheetRow = 52.0;
+  static const sheetRule = 1 / 3;
+  static const sheetRuleInk = BiliColors.divider;
+  static const sheetGlyphCentre = 26.0;
+  static const sheetTextLeft = 44.0;
+  static const sheetText = 14.0;
+  static const sheetLine = 20.0;
+  static const sheetInk = BiliColors.text;
+  static const bellWidth = 46 / 3;
+  static const bellHeight = 50 / 3;
+  static const bellStroke = 1.25;
+  static const deleteGlyph = 49 / 3;
+  static const sheetIn = Duration(milliseconds: 280);
+  static const sheetOut = Duration(milliseconds: 220);
+
+  /// The first load's failure and the account's state, the footer's spinner and 加载失败，点击重试 (我的关注's); the next
+  /// page is asked within a screen of the end.
+  static const footerPad = FollowingListTheme.footerPad;
+  static const footerText = FollowingListTheme.footerText;
+  static const footerInk = FollowingListTheme.footerInk;
+  static const spinnerRadius = FollowingListTheme.spinnerRadius;
+
   static const page = BiliColors.card;
 }
 
