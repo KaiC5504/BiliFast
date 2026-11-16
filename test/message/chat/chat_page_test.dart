@@ -2,6 +2,8 @@ import 'dart:async';
 
 import 'package:bili_core/api.dart' hide RichText;
 import 'package:bilifast/comments/emote_panel.dart';
+import 'package:bilifast/comments/emote_store.dart';
+import 'package:bilifast/message/chat/chat_emote_panel.dart';
 import 'package:bilifast/message/chat/chat_glyphs.dart';
 import 'package:bilifast/message/chat/chat_page.dart';
 import 'package:bilifast/message/chat/chat_rows.dart';
@@ -17,8 +19,26 @@ import 'package:flutter_test/flutter_test.dart';
 import 'chat_support.dart';
 
 Color? _fill(WidgetTester tester, Finder bubble) {
-  final box = tester.widget<DecoratedBox>(find.descendant(of: bubble, matching: find.byType(DecoratedBox)).first);
+  final box = tester.widget<DecoratedBox>(
+    find.descendant(of: bubble, matching: find.byType(DecoratedBox), matchRoot: true).first,
+  );
   return (box.decoration as BoxDecoration).color;
+}
+
+Finder _inPanel(String text) => find.descendant(of: byKey('chat-emote-panel'), matching: find.text(text));
+
+/// Answers each messages call with the next of [pages].
+class _PagedApi extends FakeMessageApi {
+  _PagedApi(this.pages) : super(selfMid: selfMid);
+
+  final List<ChatMessagePage> pages;
+  final asked = <int?>[];
+
+  @override
+  Future<ChatMessagePage> messages(ChatSession session, {int? beforeSeqno}) async {
+    asked.add(beforeSeqno);
+    return pages[asked.length < pages.length ? asked.length - 1 : pages.length - 1];
+  }
 }
 
 void main() {
@@ -46,7 +66,9 @@ void main() {
       expect(find.text('不接受推送'), findsOneWidget);
     });
 
-    testWidgets('a push switch with no known call toasts 暂未开放', (tester) async {
+    testWidgets('a push switch the api can\'t change (UnsupportedError, the fakes\' fallback) toasts 暂未开放', (
+      tester,
+    ) async {
       final api = FakeMessageApi(selfMid: selfMid)..failures['setChatPush'] = UnsupportedError('no call');
       await openChat(tester, api, person());
 
@@ -72,6 +94,23 @@ void main() {
       await tester.tap(byKey('chat-follow'));
       await settle(tester);
       expect(api.follows, hasLength(1));
+    });
+
+    testWidgets('加关注 tapped twice while its call is out sends one follow', (tester) async {
+      final api = FakeMessageApi(selfMid: selfMid);
+      await openChat(tester, api, person());
+
+      final hold = api.holds['follow'] = Completer<void>();
+      await tester.tap(byKey('chat-follow'));
+      await tester.pump();
+      await tester.tap(byKey('chat-follow'));
+      await tester.pump();
+      api.holds.clear();
+      hold.complete();
+      await settle(tester);
+
+      expect(api.calls.where((call) => call.startsWith('follow')), hasLength(1));
+      expect(find.text('已关注'), findsOneWidget);
     });
 
     testWidgets('a failed 加关注 toasts the reason and keeps 加关注', (tester) async {
@@ -165,6 +204,33 @@ void main() {
       expect(tester.getRect(byKey('chat-own-face')).right, 440 - MessageChatTheme.side);
       // The account is a 大会员 with the 大 on its face.
       expect(byKey('chat-own-vip'), findsOneWidget);
+    });
+
+    testWidgets('a one-line bubble is as tall on their side as on yours (202: 35 pt)', (tester) async {
+      final api = FakeMessageApi(
+        selfMid: selfMid,
+        chats: {
+          777: [text(1, '他们说的', at: demoTime), text(2, '我说的', sender: selfMid, at: demoTime)],
+        },
+      );
+      await openChat(tester, api, person());
+
+      Rect drawn(String key) =>
+          tester.getRect(find.descendant(of: byKey(key), matching: find.byType(DecoratedBox), matchRoot: true).first);
+      expect(drawn('chat-bubble-1').height, closeTo(drawn('chat-bubble-2').height, 0.01));
+      expect(tester.getSize(byKey('chat-bubble-1')).height, closeTo(drawn('chat-bubble-1').height, 0.01));
+    });
+
+    testWidgets('a short chat whose older page repeats what is shown asks for it once', (tester) async {
+      final api = _PagedApi([
+        ChatMessagePage(messages: [text(8, '八'), text(9, '九')], hasMore: true, minSeqno: 8, maxSeqno: 9),
+        ChatMessagePage(messages: [text(8, '八')], hasMore: true, minSeqno: 8, maxSeqno: 8),
+      ]);
+      await openChat(tester, api, person());
+      await settle(tester, 30);
+
+      expect(api.asked, [null, 8]);
+      expect(find.text('八'), findsOneWidget);
     });
 
     testWidgets('a tap on their face opens their space', (tester) async {
@@ -276,6 +342,31 @@ void main() {
       expect(tester.getSize(byKey('chat-picture-1')), const Size(200, 100));
     });
 
+    testWidgets('a picture of no given size is a square of its own token; the page is 202\'s #F6F7F8', (tester) async {
+      final api = FakeMessageApi(
+        selfMid: selfMid,
+        chats: {
+          777: [
+            ChatMessage(
+              seqno: 1,
+              senderMid: 777,
+              kind: ChatMessageKind.picture,
+              picture: 'https://i0.hdslb.com/bfs/im/demo.png',
+              time: demoTime,
+            ),
+          ],
+        },
+      );
+      await openChat(tester, api, person());
+
+      expect(tester.getSize(byKey('chat-picture-1')), const Size.square(MessageChatTheme.pictureUnsized));
+      expect(MessageChatTheme.page, const Color(0xFFF6F7F8));
+      final page = tester.widget<ColoredBox>(
+        find.descendant(of: find.byType(ChatPage), matching: find.byType(ColoredBox)).first,
+      );
+      expect(page.color, MessageChatTheme.page);
+    });
+
     testWidgets('withdrawn messages and tips are grey lines; 此条消息为自动回复 goes under an auto reply', (tester) async {
       final api = FakeMessageApi(
         selfMid: selfMid,
@@ -361,26 +452,40 @@ void main() {
   });
 
   group('the composer (202, 218, 219)', () {
-    testWidgets('the send key sends, the message shows at once and the field empties', (tester) async {
-      final api = FakeMessageApi(
-        selfMid: selfMid,
-        chats: {
-          777: [text(1, '在吗')],
-        },
-      );
-      final hold = api.holds['send'] = Completer<void>();
+    testWidgets(
+      'the keyboard shows its plain ⏎ (218), whose return sends: the message shows at once, the field empties',
+      (tester) async {
+        final api = FakeMessageApi(
+          selfMid: selfMid,
+          chats: {
+            777: [text(1, '在吗')],
+          },
+        );
+        final hold = api.holds['send'] = Completer<void>();
+        await openChat(tester, api, person());
+
+        expect(tester.widget<TextField>(byKey('chat-field')).textInputAction, TextInputAction.newline);
+        await tester.enterText(byKey('chat-field'), '  演示的消息  ');
+        await pressReturn(tester);
+        await tester.pump();
+
+        expect(find.text('演示的消息'), findsOneWidget);
+        expect(chatField(tester).text, isEmpty);
+        hold.complete();
+        await settle(tester);
+        expect(api.sent, [(talkerId: 777, text: '演示的消息')]);
+        expect(find.text('演示的消息'), findsOneWidget);
+      },
+    );
+
+    testWidgets('a pasted text keeps its line breaks and sends nothing', (tester) async {
+      final api = FakeMessageApi(selfMid: selfMid);
       await openChat(tester, api, person());
 
-      await tester.enterText(byKey('chat-field'), '  演示的消息  ');
-      await tester.testTextInput.receiveAction(TextInputAction.send);
+      await tester.enterText(byKey('chat-field'), '第一行\n第二行');
       await tester.pump();
-
-      expect(find.text('演示的消息'), findsOneWidget);
-      expect(tester.widget<TextField>(byKey('chat-field')).controller!.text, isEmpty);
-      hold.complete();
-      await settle(tester);
-      expect(api.sent, [(talkerId: 777, text: '演示的消息')]);
-      expect(find.text('演示的消息'), findsOneWidget);
+      expect(chatField(tester).text, '第一行\n第二行');
+      expect(api.calls.where((call) => call.startsWith('send')), isEmpty);
     });
 
     testWidgets('a failed send takes the message away, keeps the text and toasts why', (tester) async {
@@ -389,12 +494,31 @@ void main() {
       await openChat(tester, api, person());
 
       await tester.enterText(byKey('chat-field'), '演示的消息');
-      await tester.testTextInput.receiveAction(TextInputAction.send);
+      await pressReturn(tester);
       await settle(tester);
 
-      expect(tester.widget<TextField>(byKey('chat-field')).controller!.text, '演示的消息');
+      expect(chatField(tester).text, '演示的消息');
       expect(find.text('发送过于频繁，请稍后再试'), findsOneWidget);
       expect(find.byType(ChatBubbleRow), findsNothing);
+      await toastGone(tester);
+    });
+
+    testWidgets('a send that fails after more was typed puts its text back in front of the new', (tester) async {
+      final api = FakeMessageApi(selfMid: selfMid)
+        ..failures['send'] = const BiliError.api(code: 21046, message: '发送过于频繁，请稍后再试');
+      final hold = api.holds['send'] = Completer<void>();
+      await openChat(tester, api, person());
+
+      await tester.enterText(byKey('chat-field'), '演示的消息');
+      await pressReturn(tester);
+      await tester.pump();
+      expect(chatField(tester).text, isEmpty);
+      await tester.enterText(byKey('chat-field'), '又一句');
+      hold.complete();
+      await settle(tester);
+
+      expect(chatField(tester).text, '演示的消息又一句');
+      expect(chatField(tester).selection, const TextSelection.collapsed(offset: 8));
       await toastGone(tester);
     });
 
@@ -403,9 +527,10 @@ void main() {
       await openChat(tester, api, person());
 
       await tester.enterText(byKey('chat-field'), '   ');
-      await tester.testTextInput.receiveAction(TextInputAction.send);
+      await pressReturn(tester);
       await settle(tester);
       expect(api.calls.where((call) => call.startsWith('send')), isEmpty);
+      expect(chatField(tester).text, '   ');
     });
 
     testWidgets('logged out, sending asks for the login and sends nothing without one', (tester) async {
@@ -413,36 +538,115 @@ void main() {
       final harness = await openChat(tester, api, person(), loggedIn: false);
 
       await tester.enterText(byKey('chat-field'), '演示的消息');
-      await tester.testTextInput.receiveAction(TextInputAction.send);
+      await pressReturn(tester);
       await settle(tester);
       expect(harness.loginGate.requests, 1);
       expect(api.sent, isEmpty);
-      expect(tester.widget<TextField>(byKey('chat-field')).controller!.text, '演示的消息');
+      expect(chatField(tester).text, '演示的消息');
     });
 
-    testWidgets('the face opens the emote panel in the keyboard\'s place; an emote goes into the field', (
+    testWidgets('the face opens the chat\'s own emote panel in the keyboard\'s place, the field keeping its caret', (
+      tester,
+    ) async {
+      final api = FakeMessageApi(selfMid: selfMid);
+      await openChat(tester, api, person());
+      await tester.tap(byKey('chat-field'));
+      await tester.pump();
+      expect(tester.testTextInput.isVisible, isTrue);
+
+      expect(byKey('chat-emote-panel'), findsNothing);
+      await tester.tap(byKey('chat-emotes'));
+      await settle(tester);
+      expect(find.byType(ChatEmotePanel), findsOneWidget);
+      expect(find.byType(EmotePanel), findsNothing);
+      expect(tester.getSize(byKey('chat-emote-panel')).height, MessageChatTheme.emotePanel);
+      expect(find.text('所有表情'), findsNothing);
+      expect(find.text('最近使用'), findsNothing);
+      Finder glyph(String asset) => find.byWidgetPredicate((widget) => widget is ChatGlyph && widget.asset == asset);
+      expect(glyph(ChatArt.keyboard), findsOneWidget);
+      expect(glyph(ChatArt.emote), findsNothing);
+      // The field keeps its focus and caret, with no keyboard under the panel.
+      final field = tester.widget<TextField>(byKey('chat-field'));
+      expect(field.focusNode!.hasFocus, isTrue);
+      expect(field.readOnly, isTrue);
+      expect(tester.widget<EditableText>(find.byType(EditableText)).showCursor, isTrue);
+      expect(tester.testTextInput.isVisible, isFalse);
+
+      await tester.tap(_inPanel('[大笑]'));
+      await tester.pump();
+      expect(chatField(tester).text, '[大笑]');
+      expect(chatField(tester).selection, const TextSelection.collapsed(offset: 4));
+
+      await tester.tap(byKey('chat-emotes'));
+      await settle(tester);
+      expect(byKey('chat-emote-panel'), findsNothing);
+      expect(glyph(ChatArt.emote), findsOneWidget);
+      expect(tester.testTextInput.isVisible, isTrue);
+    });
+
+    testWidgets('the face with the field idle opens the panel and focuses the field, still with no keyboard', (
       tester,
     ) async {
       final api = FakeMessageApi(selfMid: selfMid);
       await openChat(tester, api, person());
 
-      expect(find.byType(EmotePanel), findsNothing);
       await tester.tap(byKey('chat-emotes'));
       await settle(tester);
-      expect(find.byType(EmotePanel), findsOneWidget);
-      expect(tester.getSize(find.byType(EmotePanel)).height, MessageChatTheme.emotePanel);
-      Finder glyph(String asset) => find.byWidgetPredicate((widget) => widget is ChatGlyph && widget.asset == asset);
-      expect(glyph(ChatArt.keyboard), findsOneWidget);
-      expect(glyph(ChatArt.emote), findsNothing);
+      expect(tester.widget<TextField>(byKey('chat-field')).focusNode!.hasFocus, isTrue);
+      expect(tester.testTextInput.isVisible, isFalse);
 
-      await tester.tap(find.text('[大笑]'));
+      // A tap on the field brings the keyboard back in the panel's place.
+      await tester.tap(byKey('chat-field'));
+      await settle(tester);
+      expect(byKey('chat-emote-panel'), findsNothing);
+      expect(tester.testTextInput.isVisible, isTrue);
+    });
+
+    testWidgets('the panel\'s bar: 🕒 shows the emotes used last, ⚙ 🔍 ★ toast 暂未开放, a package shows its own', (
+      tester,
+    ) async {
+      final shared = RecentEmotes.shared;
+      RecentEmotes.shared = RecentEmotes.memory();
+      addTearDown(() => RecentEmotes.shared = shared);
+      final api = FakeMessageApi(selfMid: selfMid);
+      final harness = await openChat(tester, api, person());
+      harness.pageApi.emotes = [
+        ...harness.pageApi.emotes,
+        EmotePackage(
+          id: 2,
+          name: '颜文字',
+          icon: '',
+          isText: true,
+          emotes: [Emote(token: '(⌒▽⌒)', url: '', large: false)],
+        ),
+      ];
+
+      await tester.tap(byKey('chat-emotes'));
+      await settle(tester);
+      expect(find.text('NEW'), findsOneWidget);
+      await tester.tap(_inPanel('[演示]'));
       await tester.pump();
-      expect(tester.widget<TextField>(byKey('chat-field')).controller!.text, '[大笑]');
 
-      await tester.tap(byKey('chat-emotes'));
-      await settle(tester);
-      expect(find.byType(EmotePanel), findsNothing);
-      expect(glyph(ChatArt.emote), findsOneWidget);
+      await tester.tap(byKey('chat-emote-recent'));
+      await tester.pump();
+      expect(byKey('chat-emote-grid-recent'), findsOneWidget);
+      expect(_inPanel('[演示]'), findsOneWidget);
+      expect(_inPanel('[微笑]'), findsNothing);
+
+      for (final key in ['chat-emote-settings', 'chat-emote-search', 'chat-emote-favourites']) {
+        await tester.tap(byKey(key));
+        await tester.pump();
+        expect(find.text('暂未开放'), findsOneWidget, reason: key);
+        await toastGone(tester);
+      }
+
+      await tester.tap(byKey('chat-emote-tab-2'));
+      await tester.pump();
+      expect(byKey('chat-emote-grid-2'), findsOneWidget);
+      expect(find.text('(⌒▽⌒)'), findsNWidgets(2));
+      await tester.tap(byKey('chat-emote-tab-1'));
+      await tester.pump();
+      expect(_inPanel('[微笑]'), findsOneWidget);
     });
 
     testWidgets('the picture button toasts 暂未开放', (tester) async {

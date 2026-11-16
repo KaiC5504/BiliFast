@@ -32,6 +32,7 @@ class ChatModel extends ChangeNotifier {
   int _minSeqno = 0;
   ChatSettings? _settings;
   bool _changingPush = false;
+  bool _sendingFollow = false;
   bool? _following;
   bool _disposed = false;
 
@@ -92,16 +93,20 @@ class ChatModel extends ChangeNotifier {
 
   /// The page before the oldest shown; one call at a time, and none after a failure until [retryOlder].
   Future<void> loadOlder() async {
-    if (_loadingOlder || _olderFailed || !_hasMore || _loading || _messages.isEmpty) return;
+    if (_loadingOlder || _olderFailed || !_hasMore || _loading || _minSeqno <= 0) return;
     _loadingOlder = true;
     _notify();
     try {
-      final page = await api.messages(session, beforeSeqno: _minSeqno);
+      final before = _minSeqno;
+      final page = await api.messages(session, beforeSeqno: before);
       if (_disposed) return;
       final known = {for (final message in _messages) message.seqno};
       _messages.insertAll(0, page.messages.where((message) => !known.contains(message.seqno)));
-      _hasMore = page.hasMore && page.messages.isNotEmpty;
-      if (page.minSeqno > 0) _minSeqno = page.minSeqno;
+      // Paging goes on only while the cursor moves back: a page of nothing but take-backs decodes empty yet moves it,
+      // and one that repeats what's shown would otherwise be asked again every frame.
+      final moved = page.minSeqno > 0 && page.minSeqno < before;
+      _hasMore = page.hasMore && moved;
+      if (moved) _minSeqno = page.minSeqno;
     } catch (error) {
       _logger.warn(LogCategory.api, 'older chat messages failed', {'error': _reason(error)});
       _olderFailed = true;
@@ -136,7 +141,7 @@ class ChatModel extends ChangeNotifier {
     _notify();
   }
 
-  /// 不接受推送 and back. Throws what the call threw ([UnsupportedError] where no call is known).
+  /// 不接受推送 and back. Throws what the call threw.
   Future<void> togglePush() async {
     final settings = _settings;
     if (settings == null || _changingPush) return;
@@ -153,13 +158,18 @@ class ChatModel extends ChangeNotifier {
     }
   }
 
-  /// 加关注. Throws what the call threw.
+  /// 加关注, once while it is out. Throws what the call threw.
   Future<void> follow() async {
-    if (following) return;
-    await api.follow(session.talkerId, on: true);
-    if (_disposed) return;
-    _following = true;
-    _notify();
+    if (following || _sendingFollow) return;
+    _sendingFollow = true;
+    try {
+      await api.follow(session.talkerId, on: true);
+      if (_disposed) return;
+      _following = true;
+      _notify();
+    } finally {
+      _sendingFollow = false;
+    }
   }
 
   /// Sends [text] (already trimmed, not empty): it shows at once at the bottom and is replaced by the message as

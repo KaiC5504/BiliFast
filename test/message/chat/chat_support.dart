@@ -189,6 +189,22 @@ Future<void> toastGone(WidgetTester tester) async {
 
 Finder byKey(String key) => find.byKey(ValueKey(key));
 
+TextEditingController chatField(WidgetTester tester) => tester.widget<TextField>(byKey('chat-field')).controller!;
+
+/// Return as the phone's keyboard types it with its plain ⏎: a line break at the caret, then the newline action.
+Future<void> pressReturn(WidgetTester tester) async {
+  final value = chatField(tester).value;
+  final selection = value.selection.isValid ? value.selection : TextSelection.collapsed(offset: value.text.length);
+  tester.testTextInput.updateEditingValue(
+    TextEditingValue(
+      text: value.text.replaceRange(selection.start, selection.end, '\n'),
+      selection: TextSelection.collapsed(offset: selection.start + 1),
+    ),
+  );
+  await tester.testTextInput.receiveAction(TextInputAction.newline);
+  await tester.pump();
+}
+
 final demoTime = DateTime(2026, 11, 12, 15, 34);
 
 /// A person (made up), not followed unless [settings] say so.

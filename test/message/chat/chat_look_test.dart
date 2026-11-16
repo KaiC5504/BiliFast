@@ -1,9 +1,10 @@
 import 'dart:io';
 
 import 'package:bili_core/api.dart';
+import 'package:bilifast/message/chat/chat_rows.dart';
 import 'package:bilifast/message/fake_message_api.dart';
 import 'package:bilifast/shared/theme.dart';
-import 'package:flutter/widgets.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import '../../support/look_alike.dart';
@@ -28,6 +29,12 @@ final _chat = [
   text(4, '演示演示演示演示演示演示演示演，示演示演示演示', at: _day2),
   text(5, '演示演', at: _day2.add(const Duration(minutes: 1))),
   text(6, '好，演示', sender: selfMid, at: _day2.add(const Duration(hours: 2, minutes: 2))),
+];
+
+// 203's and 219's: an auto reply, then the tip.
+final _autoReply = [
+  text(1, '演示关注\n演示投稿', autoReply: true, at: DateTime(2026, 11, 12, 15, 34)),
+  tip(2, '对方主动回复或关注你前，最多发送1条消息', at: DateTime(2026, 11, 12, 18, 5)),
 ];
 
 final _cards = [
@@ -88,35 +95,102 @@ void main() {
     expect(yours.top, closeTo(277, 0.5));
     expect(yours.bottom, closeTo(369, 0.5));
     expect(yours.right, 377);
-    // Theirs: the second reply's row 15 under the first's face, at 478.33.
+    // Theirs: the second reply's row 15 under the first's face, at 478.33; a one-line reply's bubble 35 tall, as yours.
     expect(tester.getRect(byKey('chat-bubble-4')).top, closeTo(478.33, 0.5));
+    expect(tester.getRect(byKey('chat-bubble-5')).height, closeTo(35, 0.34));
+    expect(tester.getRect(byKey('chat-bubble-6')).height, closeTo(35, 0.34));
   });
 
   testWidgets('203: no bar for a person followed, an auto reply and a tip', (tester) async {
     final api = FakeMessageApi(
       selfMid: selfMid,
-      chats: {
-        777: [
-          text(1, '演示关注\n演示投稿', autoReply: true, at: DateTime(2026, 11, 12, 15, 34)),
-          tip(2, '对方主动回复或关注你前，最多发送1条消息', at: DateTime(2026, 11, 12, 18, 5)),
-        ],
-      },
+      chats: {777: _autoReply},
       chatSettingsOf: {777: const ChatSettings(following: true)},
     );
     await show(tester, api, person(name: '演示演示'));
     await shoot(tester, '203-chat-auto-reply-ours');
+
+    // 203's auto reply: 83.67 pt from 152.33, its bubble ending 29.67 under the rule; the next time line's box 22 under it.
+    final bubble = tester.getRect(byKey('chat-bubble-1'));
+    expect(bubble.height, closeTo(83.67, 0.34));
+    expect(bubble.top, closeTo(152.33, 0.5));
+    final next = tester.getRect(find.byWidgetPredicate((widget) => widget is ChatTimeLine && widget.time.hour == 18));
+    expect(next.top, closeTo(bubble.bottom + 22, 0.01));
   });
 
-  testWidgets('219: the emote panel under the composer', (tester) async {
-    await show(tester, FakeMessageApi(selfMid: selfMid, chats: {777: _chat}), person(name: '演示演示'));
+  testWidgets('219: the emote panel under the composer, the field keeping its caret', (tester) async {
+    EditableText.debugDeterministicCursor = true;
+    addTearDown(() => EditableText.debugDeterministicCursor = false);
+    final harness = await show(
+      tester,
+      FakeMessageApi(
+        selfMid: selfMid,
+        chats: {777: _autoReply},
+        chatSettingsOf: {777: const ChatSettings(following: true)},
+      ),
+      person(name: '演示演示'),
+    );
+    harness.pageApi.emotes = [
+      EmotePackage(
+        id: 1,
+        name: '小黄脸',
+        icon: '',
+        isText: false,
+        emotes: [for (var i = 0; i < 48; i++) Emote(token: '[演示$i]', url: '', large: false)],
+      ),
+    ];
+    await tester.tap(byKey('chat-field'));
+    await settle(tester);
     await tester.tap(byKey('chat-emotes'));
     await settle(tester);
-    // The keyboard glyph is an asset, decoded off the test's clock.
+    // The bar's glyphs are assets, decoded off the test's clock.
     await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 200)));
     await settle(tester);
     await shoot(tester, '219-chat-emotes-ours');
 
-    expect(tester.getRect(byKey('chat-composer')).top, closeTo(956 - MessageChatTheme.emotePanel - 52, 0.01));
+    void near(Rect actual, Rect expected) {
+      for (final (a, b) in [
+        (actual.left, expected.left),
+        (actual.top, expected.top),
+        (actual.right, expected.right),
+        (actual.bottom, expected.bottom),
+      ]) {
+        expect(a, closeTo(b, 0.01), reason: '$actual against $expected');
+      }
+    }
+
+    near(tester.getRect(byKey('chat-composer')), const Rect.fromLTRB(0, 532, 440, 584));
+    near(tester.getRect(byKey('chat-emote-panel')), const Rect.fromLTRB(0, 584, 440, 956));
+    near(tester.getRect(byKey('chat-emote-handle')), const Rect.fromLTRB(205, 592.67, 235, 595.67));
+    // Eight to a row, centred 52 apart from 38 in, the first row's middle 47.67 under the panel's top.
+    expect(tester.getCenter(find.text('[演示0]')).dx, closeTo(38, 0.01));
+    expect(tester.getCenter(find.text('[演示0]')).dy, closeTo(631.67, 0.01));
+    expect(tester.getCenter(find.text('[演示7]')).dx, closeTo(402, 0.01));
+    expect(tester.getCenter(find.text('[演示8]')).dy, closeTo(679.67, 0.01));
+    near(tester.getRect(byKey('chat-emote-settings')), const Rect.fromLTRB(0, 878, 50, 922));
+    expect(tester.getRect(byKey('chat-emote-tab-1')).left, closeTo(200, 0.01));
+  }, variant: TargetPlatformVariant.only(TargetPlatform.iOS));
+
+  testWidgets('218: the composer over the keyboard', (tester) async {
+    await show(
+      tester,
+      FakeMessageApi(
+        selfMid: selfMid,
+        chats: {777: _autoReply},
+        chatSettingsOf: {777: const ChatSettings(following: true)},
+      ),
+      person(name: '演示演示'),
+    );
+    await tester.tap(byKey('chat-field'));
+    // 218's keyboard, 348 pt from the screen's bottom.
+    tester.view.viewInsets = const FakeViewPadding(bottom: 348 * 3);
+    await settle(tester);
+    await shoot(tester, '218-chat-keyboard-ours');
+
+    final composer = tester.getRect(byKey('chat-composer'));
+    expect(composer.top, closeTo(556, 0.01));
+    expect(composer.bottom, closeTo(608, 0.01));
+    expect(tester.widget<TextField>(byKey('chat-field')).textInputAction, TextInputAction.newline);
   });
 
   testWidgets('200: notice cards and a box\'s bubbles with 网页链接', (tester) async {

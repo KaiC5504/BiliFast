@@ -10,7 +10,6 @@ import 'package:flutter/widgets.dart';
 import '../../app/app_environment.dart';
 import '../../app/app_scope.dart';
 import '../../comments/comments_model.dart' show CommentsModel;
-import '../../comments/emote_panel.dart';
 import '../../comments/emote_store.dart';
 import '../../shared/loading_tv.dart';
 import '../../shared/theme.dart';
@@ -18,6 +17,7 @@ import '../../shared/toast.dart';
 import '../../space/space_route.dart';
 import '../../space/uploader_tap.dart';
 import 'chat_composer.dart';
+import 'chat_emote_panel.dart';
 import 'chat_glyphs.dart';
 import 'chat_links.dart';
 import 'chat_model.dart';
@@ -66,7 +66,6 @@ class _ChatPageState extends State<ChatPage> {
     )..addListener(_modelChanged);
     services.follows.addListener(_followsChanged);
     _scroll.addListener(_nearTop);
-    _focus.addListener(_focusChanged);
     unawaited(_open(model, services));
     unawaited(model.loadSettings());
   }
@@ -142,10 +141,6 @@ class _ChatPageState extends State<ChatPage> {
     if (position.extentAfter < MessageChatTheme.olderAhead) unawaited(model.loadOlder());
   }
 
-  void _focusChanged() {
-    if (_focus.hasFocus && _emotes) setState(() => _emotes = false);
-  }
-
   bool get _loggedOut => switch (_services?.environment.account) {
     LoggedOut() || LoginExpired() => true,
     _ => false,
@@ -197,24 +192,34 @@ class _ChatPageState extends State<ChatPage> {
       await _model!.send(text);
     } catch (error) {
       if (!mounted) return;
-      if (_text.text.isEmpty) {
-        _text.value = TextEditingValue(
-          text: text,
-          selection: TextSelection.collapsed(offset: text.length),
-        );
-      }
+      _restore(text);
       _failed(error);
     }
   }
 
+  /// Puts [failed] back in front of whatever was typed since, the caret where it was in that text.
+  void _restore(String failed) {
+    final now = _text.value;
+    final selection = now.selection;
+    final shift = failed.length;
+    _text.value = TextEditingValue(
+      text: failed + now.text,
+      selection: selection.isValid
+          ? selection.copyWith(baseOffset: selection.baseOffset + shift, extentOffset: selection.extentOffset + shift)
+          : TextSelection.collapsed(offset: failed.length + now.text.length),
+    );
+  }
+
+  /// The field keeps its focus either way: read-only under the panel, so its caret stays with no keyboard, and the
+  /// keyboard comes back as it turns editable again.
   void _toggleEmotes() {
-    if (_emotes) {
-      _focus.requestFocus();
-      return;
-    }
-    _focus.unfocus();
-    setState(() => _emotes = true);
-    if (_packages == null) unawaited(_loadPackages());
+    setState(() => _emotes = !_emotes);
+    if (_emotes && _packages == null) unawaited(_loadPackages());
+    if (_focus.hasFocus) return;
+    // Once the field has rebuilt read-only, or focus would bring the keyboard up under the panel.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && !_focus.hasFocus) _focus.requestFocus();
+    });
   }
 
   Future<void> _loadPackages() async {
@@ -274,7 +279,7 @@ class _ChatPageState extends State<ChatPage> {
       child: DefaultTextStyle(
         style: chatStyle(MessageChatTheme.bubbleText, MessageChatTheme.text),
         child: ColoredBox(
-          color: MessageChatTheme.screen,
+          color: MessageChatTheme.page,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
@@ -299,12 +304,13 @@ class _ChatPageState extends State<ChatPage> {
                   onSend: (text) => unawaited(_send(text)),
                 ),
                 if (_emotes)
-                  EmotePanel(
+                  ChatEmotePanel(
                     packages: _packages,
-                    recent: RecentEmotes.shared.list,
+                    recent: () => RecentEmotes.shared.list,
                     height: math.max(MessageChatTheme.emotePanel, safeBottom),
                     bottomInset: safeBottom,
                     onPick: _pickEmote,
+                    onUnavailable: () => showToast(context, '暂未开放'),
                     onRetry: _packagesFailed ? () => unawaited(_loadPackages()) : null,
                   )
                 else
