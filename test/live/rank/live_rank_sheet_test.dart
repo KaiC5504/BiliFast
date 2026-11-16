@@ -81,7 +81,10 @@ void main() {
       await open(tester, api());
       for (var rank = 1; rank <= 3; rank++) {
         final tag = find.byWidgetPredicate(
-          (widget) => widget is Image && (widget.image as AssetImage).assetName.endsWith('rank_tag_$rank.png'),
+          (widget) =>
+              widget is Image &&
+              widget.image is AssetImage &&
+              (widget.image as AssetImage).assetName.endsWith('rank_tag_$rank.png'),
         );
         expect(tag, findsOneWidget);
       }

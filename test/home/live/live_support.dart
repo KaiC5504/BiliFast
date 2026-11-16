@@ -75,6 +75,20 @@ LiveFeedPage liveFeedPage({
   hasMore: hasMore,
 );
 
+/// The feed's big rooms live, on made-up streams the fake players never open.
+Map<int, LivePlayInfo> livePlays() => {
+  for (final id in [9100, 9101])
+    id: LivePlayInfo(roomId: id, uid: 600, status: LiveStatus.live, url: Uri.parse('https://live.invalid/$id.m3u8')),
+};
+
+extension LiveTabCalls on FakeLiveApi {
+  /// What the tab itself asked, without the carousel's room (its play info and danmaku channel).
+  List<String> get tabCalls => [
+    for (final call in calls)
+      if (call.startsWith('feed ') || call.startsWith('area ') || call.startsWith('following ')) call,
+  ];
+}
+
 /// The app's services as 直播 reaches them, the account logged in or out, the live calls on [api].
 Future<AppServices> liveServices({required FakeLiveApi api, bool loggedIn = true}) async {
   final logger = Logger(session: 'test');
@@ -116,7 +130,7 @@ class LivePlayers {
 
 /// Drives a [LiveTab] on its own: on screen or not, 首页's taps.
 class LiveHarness {
-  LiveHarness({FakeLiveApi? api}) : api = api ?? FakeLiveApi(feedPages: [liveFeedPage()]);
+  LiveHarness({FakeLiveApi? api}) : api = api ?? FakeLiveApi(feedPages: [liveFeedPage()], plays: livePlays());
 
   final FakeLiveApi api;
   final offset = ValueNotifier<double>(0);

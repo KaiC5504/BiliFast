@@ -18,13 +18,13 @@ void main() {
   testWidgets('no 醒目留言, no strip: the chat starts under the box', (tester) async {
     await open(tester, withSuperChats: false);
     expect(key('live-sc-strip'), findsNothing);
-    expect(tester.getRect(key('live-chat')).top, 447.5);
+    expect(tester.getRect(key('live-chat')).top, moreOrLessEquals(1342 / 3));
   });
 
   testWidgets('the strip under the box, newest first, the chat under it', (tester) async {
     await open(tester);
     final strip = tester.getRect(key('live-sc-strip'));
-    expect(strip.top, moreOrLessEquals(447.5 + LiveRoomTheme.stripGap));
+    expect(strip.top, moreOrLessEquals(1342 / 3 + LiveRoomTheme.stripGap));
     expect(strip.height, moreOrLessEquals(LiveRoomTheme.stripHeight));
     final newest = tester.getRect(key('live-sc-pill-2'));
     final older = tester.getRect(key('live-sc-pill-1'));

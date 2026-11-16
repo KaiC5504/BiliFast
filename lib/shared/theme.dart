@@ -9281,8 +9281,9 @@ abstract final class LiveRoomTheme {
   static const chipChevronGap = 4.0;
   static const chipChevronStroke = 1.5;
 
-  /// The player box: the screen's width at 16:9, 138 under the safe area.
-  static const boxTop = 138.0;
+  /// The player box: the screen's width at 16:9, 137.83 under the safe area (207: on the 440 pt screen it ends 1342 px
+  /// down, under the 62 pt safe area, the header, the rank chips and the event row).
+  static const boxTop = 413.5 / 3;
 
   /// 醒目留言's strip: 6.67 under the box, its pills 27.67 tall and 7.33 apart from 12; in each the face 23.67 across 2
   /// in, the battery 9 × 13 5 after it, the amount 13 pt 4 after that, 10 to the pill's end.
@@ -9444,10 +9445,6 @@ abstract final class LiveRoomTheme {
   static const boostIconWidth = 16.0;
   static const boostIconHeight = 20.0;
   static const glyphStroke = 1.6;
-  static const facebookFill = Color(0xFF0079F8);
-  static const xFill = Color(0xFF000000);
-  static const whatsAppFill = Color(0xFF25D366);
-  static const brandMark = Color(0xFFFFFFFF);
 
   /// 荣耀等级's chip (207): 16 tall, the V 8.33 × 7.33 6 in, the level bold 10.5 6.33 after it, 7 to the end; deeper
   /// blues from levels 10 and 20.
@@ -9482,10 +9479,6 @@ abstract final class LiveRoomTheme {
 
 /// The live player's box and full screen (209, 210, 222), measured in px / 3 off KaiC's iPhone.
 abstract final class LivePlayerTheme {
-  /// 207: the 16:9 box ends 1342 px down the page, under the header, the rank chips and the event row.
-  static const boxBottom = 1342 / 3;
-  static const boxTop = boxBottom - 440 * 9 / 16;
-
   /// 弹 and the full-screen button at the box's bottom right (207, 208): 32 pt discs of grey over the picture, their
   /// 20 pt icons centred; the full-screen one 8.33 from the right edge, 弹 16.33 before it, both 8 above the bottom.
   static const boxButton = 32.0;

@@ -160,6 +160,9 @@ abstract final class LiveDecode {
     return data.lenientList('room', _historyMessage);
   }
 
+  /// One 醒目留言: a row of [superChats]' list, or the socket's `SUPER_CHAT_MESSAGE` data.
+  static LiveSuperChat superChat(Object? json) => _superChat(json);
+
   /// `SuperChat/getMessageList`'s `list`, those still showing at [now].
   static List<LiveSuperChat> superChats(Object? json, {required DateTime now}) {
     final data = JsonObject.from(json, 'live super chats');
@@ -621,21 +624,24 @@ LiveEmote _emote(JsonObject emote, {required String text}) {
   );
 }
 
-/// A 醒目留言. `background_color` is the card's top, `background_bottom_color` its message band; the header colour is
-/// a guess at `background_color_start`.
+/// A 醒目留言, from the room's list or the socket's `SUPER_CHAT_MESSAGE` (the same shape). `background_color` is the
+/// card's top, `background_bottom_color` its message band; the header colour is a guess at `background_color_start`.
 LiveSuperChat _superChat(Object? json) {
   final chat = JsonObject.from(json, 'super chat');
   final id = _int(chat.map['id']) ?? (throw const DecodeError('super chat: missing id'));
+  final start =
+      _int(chat.map['start_time']) ?? _int(chat.map['ts']) ?? (throw const DecodeError('super chat: missing start_time'));
   final info = chat.nested('user_info');
-  final uinfo = chat.nested('uinfo');
-  final medal = chat.nested('medal_info');
+  final medal = _medal(chat.nested('medal_info'));
   final user = _user(
-    uinfo ?? const JsonObject({}),
+    chat.nested('uinfo') ?? const JsonObject({}),
     uid: _int(chat.map['uid']),
     name: info?.text('uname'),
     face: info?.text('face'),
-    guard: _int(info?.map['guard_level']) ?? 0,
+    guard: _int(info?.map['guard_level']) ?? medal?.guardLevel ?? 0,
   );
+  final price = chat.map['price'];
+  final background = _anyColor(chat.map['background_color']);
   return LiveSuperChat(
     id: id,
     user: LiveUser(
@@ -643,20 +649,27 @@ LiveSuperChat _superChat(Object? json) {
       name: user.name,
       face: user.face,
       faceFrame: _firstText([info?.text('face_frame'), user.faceFrame]),
-      medal: user.medal ?? _medal(medal),
+      medal: user.medal ?? medal,
       wealthLevel: user.wealthLevel,
       guardLevel: user.guardLevel,
-      nameColor: user.nameColor != 0 ? user.nameColor : _webColor(info?.text('name_color')) ?? 0,
+      nameColor: user.nameColor != 0 ? user.nameColor : _anyColor(info?.map['name_color']) ?? 0,
     ),
     message: chat.text('message') ?? '',
-    price: _int(chat.map['price']) ?? 0,
-    start: _seconds(_int(chat.map['start_time']) ?? 0),
-    end: _seconds(_int(chat.map['end_time']) ?? 0),
-    background: _webColor(chat.map['background_color']) ?? 0,
-    backgroundBottom: _webColor(chat.map['background_bottom_color']) ?? 0,
-    headerColor: _webColor(chat.map['background_color_start']) ?? 0,
-    priceColor: _webColor(chat.map['background_price_color']) ?? 0,
+    price: price is num ? price.round() : _int(price) ?? 0,
+    start: _seconds(start),
+    end: _seconds(_int(chat.map['end_time']) ?? start + (_int(chat.map['time']) ?? 0)),
+    background: background ?? 0,
+    backgroundBottom: _anyColor(chat.map['background_bottom_color']) ?? 0,
+    headerColor: _anyColor(chat.map['background_color_start']) ?? background ?? 0,
+    priceColor: _anyColor(chat.map['background_price_color']) ?? 0,
   );
+}
+
+/// A colour written either way the answers write them: `#RRGGBB(AA)` or an RGB number; null for none or 0.
+int? _anyColor(Object? value) {
+  if (value is String) return _webColor(value);
+  final rgb = _rgb(value);
+  return rgb == 0 ? null : rgb;
 }
 
 LiveRankEntry _rankEntry(Object? json) {

@@ -81,13 +81,7 @@ void main() {
               if (landscape)
                 Positioned.fill(child: view)
               else
-                Positioned(
-                  left: 0,
-                  right: 0,
-                  top: LivePlayerTheme.boxTop,
-                  height: LivePlayerTheme.boxBottom - LivePlayerTheme.boxTop,
-                  child: view,
-                ),
+                Positioned(left: 0, right: 0, top: liveBoxTop, height: liveBoxBottom - liveBoxTop, child: view),
               if (overlay == LiveOverlay.more)
                 Positioned.fill(
                   child: LiveMorePanel(controller: rig.controller, room: rig.room, overlays: overlays),

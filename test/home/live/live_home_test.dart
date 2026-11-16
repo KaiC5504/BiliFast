@@ -87,7 +87,7 @@ void main() {
     await swipe(tester, 300);
     expect(page(tester), 0);
     expect(tab(tester).active, isTrue);
-    expect(live.calls, ['feed page=1']);
+    expect(live.tabCalls, ['feed page=1']);
     expect(tester.widget<Text>(label(HomeTopTab.live)).style!.color, BiliColors.pink);
     expect(find.byKey(const ValueKey('live-carousel')), findsOneWidget);
 
@@ -101,7 +101,7 @@ void main() {
     await tester.tap(label(HomeTopTab.live));
     await settle(tester, 20);
     expect(page(tester), 0);
-    expect(live.calls, ['feed page=1'], reason: 'kept alive: no refresh from the trips');
+    expect(live.tabCalls, ['feed page=1'], reason: 'kept alive: no refresh from the trips');
   });
 
   testWidgets('the header folds by 直播 while it shows, and opens again on 推荐 at its top', (tester) async {
@@ -125,7 +125,7 @@ void main() {
     final asked = List.of(http.asked);
     await tester.tap(find.byKey(const ValueKey('home-tab-home')));
     await settle(tester, 20);
-    expect(live.calls, ['feed page=1', 'feed page=1']);
+    expect(live.tabCalls, ['feed page=1', 'feed page=1']);
     expect(http.asked, asked, reason: '推荐 untouched');
   });
 
