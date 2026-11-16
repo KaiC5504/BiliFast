@@ -492,6 +492,7 @@ final class _EngineHost {
   /// The connection count is app-wide, as in Swift: every session of this engine follows it.
   final _auto = AutoConcurrency();
   final _sessions = <String, RipperSession>{};
+  final _budget = EngineBudget();
 
   /// Sessions prepared warm and not yet promoted: never the stats' playback, and their bytes not its speed.
   final _warmTokens = <String>{};
@@ -840,6 +841,7 @@ final class _EngineHost {
 
   /// Download speed counts the engine's delivered bytes, as the Swift overlay did, a warm session's aside.
   void _tick() {
+    _budget.check(_sessions.values);
     final newestToken = _sessions.containsKey(_newest)
         ? _newest
         : _sessions.keys.where((token) => !_warmTokens.contains(token)).lastOrNull;
