@@ -59,6 +59,9 @@ class ImageDiskCache {
 
   Future<void>? _trimming;
 
+  /// Pictures stored while a trim runs, by file name: its counts come from a listing that may predate them.
+  Map<String, int>? _storedDuringTrim;
+
   /// After a trim failed, stores to let by before the next is tried; doubled for each failure in a row.
   int _trimBackoff = 0;
   int _trimSkips = 0;
@@ -208,6 +211,7 @@ class ImageDiskCache {
       file.delete().ignore();
       return false;
     }
+    _storedDuringTrim?[_nameOf(file.path)] = bytes.length;
     final total = _bytes;
     if (total == null) {
       // [start] couldn't total the folder, or a clear couldn't list it: a trim counts it afresh.
@@ -254,14 +258,36 @@ class ImageDiskCache {
   /// [leftovers], also deletes the temporary files a run that died mid-write left behind.
   Future<TrimResult> _trim({required bool leftovers}) async {
     final generation = _generation;
-    final trim = await _runTrim(TrimPlan(folder: folder, capBytes: capBytes, leftovers: leftovers, runTag: _run));
-    // A clear meanwhile left the index as it counted it.
-    if (generation == _generation) {
-      _bytes = trim.bytes;
-      _files = trim.files;
+    final stored = _storedDuringTrim = <String, int>{};
+    try {
+      final trim = await _runTrim(
+        TrimPlan(
+          folder: folder,
+          capBytes: capBytes,
+          leftovers: leftovers,
+          runTag: _run,
+          freshSince: DateTime.now().subtract(TrimPlan.freshMargin),
+        ),
+      );
+      // After a clear meanwhile, this trim's counts are stale: the clear's stay.
+      if (generation == _generation) {
+        var bytes = trim.bytes;
+        var files = trim.files;
+        for (final MapEntry(key: name, value: size) in stored.entries) {
+          if (trim.fresh.contains(name)) continue;
+          bytes += size;
+          files += 1;
+        }
+        _bytes = bytes;
+        _files = files;
+      }
+      return trim;
+    } finally {
+      if (identical(_storedDuringTrim, stored)) _storedDuringTrim = null;
     }
-    return trim;
   }
+
+  static String _nameOf(String path) => path.substring(math.max(path.lastIndexOf('/'), path.lastIndexOf(r'\')) + 1);
 
   /// Off the UI isolate: some 17,000 awaited stats and deletes there took a second of event-loop turns at launch.
   static Future<TrimResult> _trimInIsolate(TrimPlan plan) => Isolate.run(plan.run, debugName: 'image cache trim');
@@ -597,7 +623,17 @@ final class _AnsweredClient extends http.BaseClient {
 
 /// A trim's plain data, so [run] can go to another isolate.
 final class TrimPlan {
-  const TrimPlan({required this.folder, required this.capBytes, required this.leftovers, required this.runTag});
+  const TrimPlan({
+    required this.folder,
+    required this.capBytes,
+    required this.leftovers,
+    required this.runTag,
+    required this.freshSince,
+  });
+
+  /// A picture's file carries its write time, and a store under way as the trim began wrote it moments before; a
+  /// minute is far past any write.
+  static const freshMargin = Duration(minutes: 1);
 
   final String folder;
   final int capBytes;
@@ -607,6 +643,10 @@ final class TrimPlan {
 
   /// The running cache's tag, whose temporary files are its writes under way.
   final String runTag;
+
+  /// Listed pictures modified since are named in [TrimResult.fresh], so the cache can tell which of the pictures it
+  /// stored meanwhile the listing already counted.
+  final DateTime freshSince;
 
   /// Lists, stats and deletes with blocking calls. A picture written or read since the listing began is never deleted,
   /// as its file is checked again just before; a folder that can't be listed throws.
@@ -619,6 +659,7 @@ final class TrimPlan {
       return const TrimResult(files: 0, bytes: 0, trimmed: 0);
     }
     final pictures = <(File, int, DateTime)>[];
+    final fresh = <String>{};
     var total = 0;
     for (final file in entries.whereType<File>()) {
       if (file.path.endsWith('.tmp')) {
@@ -628,6 +669,7 @@ final class TrimPlan {
       final stat = file.statSync();
       if (stat.type == FileSystemEntityType.notFound) continue;
       pictures.add((file, stat.size, stat.modified));
+      if (!stat.modified.isBefore(freshSince)) fresh.add(ImageDiskCache._nameOf(file.path));
       total += stat.size;
     }
     var trimmed = 0;
@@ -644,7 +686,7 @@ final class TrimPlan {
         }
       }
     }
-    return TrimResult(files: pictures.length - trimmed, bytes: total, trimmed: trimmed);
+    return TrimResult(files: pictures.length - trimmed, bytes: total, trimmed: trimmed, fresh: fresh);
   }
 
   static bool _delete(File file) {
@@ -660,11 +702,14 @@ final class TrimPlan {
 
 /// What a trim left: the pictures and their bytes, and how many it deleted.
 final class TrimResult {
-  const TrimResult({required this.files, required this.bytes, required this.trimmed});
+  const TrimResult({required this.files, required this.bytes, required this.trimmed, this.fresh = const {}});
 
   final int files;
   final int bytes;
   final int trimmed;
+
+  /// The listed pictures modified since [TrimPlan.freshSince], deleted or not, by file name.
+  final Set<String> fresh;
 }
 
 final class _Load {

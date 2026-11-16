@@ -511,8 +511,8 @@ final class RipperSession {
   bool get idle => _idle;
   bool _idle = false;
 
-  /// When the session last played or stopped playing, as an order across sessions: [EngineBudget] sheds the idle
-  /// session with the lowest first.
+  /// When the session last moved its playhead in use, or went idle or back in use (or opened), as an order across
+  /// sessions: [EngineBudget] sheds the idle session with the lowest first.
   int get lastPlayed => _lastPlayed;
   int _lastPlayed = ++_playOrder;
   static var _playOrder = 0;
