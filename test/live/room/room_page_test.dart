@@ -1,9 +1,14 @@
+import 'dart:async';
+
 import 'package:bili_core/api.dart';
+import 'package:bilifast/app/app_scope.dart';
+import 'package:bilifast/app/route_observer.dart';
 import 'package:bilifast/live/danmaku/live_send_input.dart';
 import 'package:bilifast/live/player/live_player_panels.dart';
 import 'package:bilifast/live/player/live_player_view.dart';
 import 'package:bilifast/live/rank/live_rank_sheet.dart';
 import 'package:bilifast/live/room/live_overlays.dart';
+import 'package:bilifast/live/room/live_room_model.dart';
 import 'package:bilifast/live/room/live_room_page.dart';
 import 'package:bilifast/live/room/room_header.dart';
 import 'package:bilifast/live/room/room_more_sheet.dart';
@@ -20,6 +25,7 @@ void main() {
   setUp(() => gate = FakeLoginGate());
 
   Finder key(String name) => find.byKey(ValueKey(name));
+  Finder toast(String text) => find.descendant(of: key('toast'), matching: find.text(text));
 
   testWidgets('opening starts the model shown and the player; leaving disposes the player', (tester) async {
     final harness = await pumpRoom(tester, await roomServices(gate: gate));
@@ -292,6 +298,156 @@ void main() {
     expect(harness.controller!.covered, isEmpty);
   });
 
+  testWidgets('a room that ends while watched toasts 直播已结束 once', (tester) async {
+    final model = _StateModel();
+    await pumpRoom(tester, await roomServices(gate: gate), model: model);
+    model.go(LiveRoomState.live);
+    await settle(tester);
+    expect(toast('直播已结束'), findsNothing);
+    model.go(LiveRoomState.ended);
+    await settle(tester);
+    expect(toast('直播已结束'), findsOneWidget);
+    model.go(LiveRoomState.ended);
+    await settle(tester);
+    expect(toast('直播已结束'), findsOneWidget);
+    await toastGone(tester);
+    expect(toast('直播已结束'), findsNothing);
+  });
+
+  testWidgets('a room already ended when opened toasts nothing', (tester) async {
+    final model = _StateModel()..stateValue = LiveRoomState.ended;
+    await pumpRoom(tester, await roomServices(gate: gate), model: model);
+    model.go(LiveRoomState.ended);
+    await settle(tester);
+    expect(toast('直播已结束'), findsNothing);
+  });
+
+  testWidgets('a write that fails later: a login refusal opens the login, anything else toasts', (tester) async {
+    await tester.pumpWidget(const MaterialApp(home: Scaffold(body: SizedBox.expand())));
+    final context = tester.element(find.byType(SizedBox));
+    var logins = 0;
+    Future<bool> login() async {
+      logins++;
+      return false;
+    }
+
+    roomWriteFailed(context, const BiliAPIError(code: -101, message: '账号未登录'), login: login);
+    expect(logins, 1);
+    expect(find.text('账号未登录'), findsNothing);
+
+    roomWriteFailed(context, const BiliAPIError(code: 1200000, message: '点赞太频繁了'), login: login);
+    await settle(tester);
+    expect(logins, 1);
+    expect(find.text('点赞太频繁了'), findsOneWidget);
+    await toastGone(tester);
+  });
+
+  group('the small window', () {
+    late AppServices services;
+    late TestRoomModel model;
+    _PipController? controller;
+
+    Future<void> open(WidgetTester tester) async {
+      services = await roomServices(gate: gate);
+      model = TestRoomModel(info: roomInfo());
+      tester.view
+        ..physicalSize = const Size(440, 956)
+        ..devicePixelRatio = 1
+        ..padding = const FakeViewPadding(top: 62, bottom: 34);
+      addTearDown(tester.view.reset);
+      await tester.pumpWidget(
+        MaterialApp(
+          navigatorKey: services.navigator,
+          navigatorObservers: [pageRoutes],
+          builder: (context, page) => AppScope(services: services, child: page!),
+          home: const Scaffold(body: SizedBox.expand()),
+        ),
+      );
+      unawaited(
+        services.navigator.currentState!.push(
+          MaterialPageRoute<void>(
+            builder: (_) => LiveRoomPage(
+              entry: roomEntry,
+              createModel: (_, _) => model,
+              createController: (services, room) => controller = _PipController(room: room, services: services),
+            ),
+          ),
+        ),
+      );
+      await settle(tester);
+    }
+
+    testWidgets('a room left while it plays is kept; the restore button brings the room back on the same player', (
+      tester,
+    ) async {
+      await open(tester);
+      final player = controller!;
+      player.setPip(true);
+      expect(services.pipKeeper.showing, isTrue);
+
+      await tester.binding.handlePopRoute();
+      await settle(tester);
+      expect(find.byType(LiveRoomPage), findsNothing);
+      expect(player.disposed, isFalse);
+      final kept = services.pipKeeper.kept;
+      expect(kept, isA<LiveRoomPlayback>());
+      expect(model.shown.last, isFalse, reason: 'no socket without the room');
+
+      (kept! as LiveRoomPlayback).restore();
+      await settle(tester);
+      expect(find.byType(LiveRoomPage), findsOneWidget);
+      expect(tester.widget<LivePlayerView>(find.byType(LivePlayerView)).controller, same(player));
+      expect(controller, same(player), reason: 'no new player made');
+      expect(services.pipKeeper.kept, isNull);
+      expect(model.shown.last, isTrue);
+
+      // The window closes into the room; leaving it now frees the player.
+      player.setPip(false);
+      await tester.binding.handlePopRoute();
+      await settle(tester);
+      expect(player.disposed, isTrue);
+    });
+
+    testWidgets("the small window's ✕ frees the kept room", (tester) async {
+      await open(tester);
+      final player = controller!;
+      player.setPip(true);
+      await tester.binding.handlePopRoute();
+      await settle(tester);
+      expect(player.disposed, isFalse);
+
+      player.setPip(false);
+      await settle(tester);
+      expect(services.pipKeeper.kept, isNull);
+      expect(services.pipKeeper.showing, isFalse);
+      expect(player.disposed, isTrue);
+    });
+
+    testWidgets('another room opening lets the kept one go', (tester) async {
+      await open(tester);
+      final first = controller!;
+      first.setPip(true);
+      await tester.binding.handlePopRoute();
+      await settle(tester);
+      expect(first.disposed, isFalse);
+
+      unawaited(
+        services.navigator.currentState!.push(
+          MaterialPageRoute<void>(
+            builder: (_) => LiveRoomPage(
+              entry: roomEntry,
+              createModel: (_, _) => TestRoomModel(info: roomInfo()),
+              createController: (services, room) => controller = _PipController(room: room, services: services),
+            ),
+          ),
+        ),
+      );
+      await settle(tester);
+      expect(first.disposed, isTrue);
+      expect(controller, isNot(same(first)));
+    });
+  });
+
   group('a wide screen', () {
     testWidgets('lays the room out as the full-screen player with the landscape overlays', (tester) async {
       await pumpRoom(tester, await roomServices(gate: gate), landscape: true);
@@ -356,4 +512,34 @@ void main() {
       expect(find.byType(LiveRoomPage), findsOneWidget);
     });
   });
+}
+
+/// A room whose state the test moves.
+class _StateModel extends TestRoomModel {
+  _StateModel() : super(info: roomInfo());
+
+  LiveRoomState stateValue = LiveRoomState.loading;
+
+  void go(LiveRoomState state) {
+    stateValue = state;
+    notifyListeners();
+  }
+
+  @override
+  LiveRoomState get state => stateValue;
+}
+
+/// A player whose small window the test opens and closes.
+class _PipController extends TestPlayerController {
+  _PipController({required super.room, required super.services});
+
+  bool _pip = false;
+
+  @override
+  bool get pictureInPicture => _pip;
+
+  void setPip(bool on) {
+    _pip = on;
+    notifyListeners();
+  }
 }
