@@ -6,6 +6,7 @@ import 'package:bilifast/app/app_environment.dart';
 import 'package:bilifast/app/app_scope.dart';
 import 'package:bilifast/devtools/log_files.dart';
 import 'package:bilifast/home/recent_store.dart';
+import 'package:bilifast/notify/notify_host.dart';
 import 'package:bilifast/playback/codec_memory.dart';
 import 'package:bilifast/playback/playback_controller.dart';
 import 'package:bilifast/playback/shared_engine.dart';
@@ -162,6 +163,7 @@ class SettingsWorld {
     Completer<void>? startGate,
     ImageDiskCache? imageCache,
     AppIconHost? appIcons,
+    NotifyHost? notify,
   }) async {
     final environment = FakeEnvironment(account);
     final gate = FakeLoginGate();
@@ -189,6 +191,7 @@ class SettingsWorld {
       imageCache: imageCache,
       logFiles: logFiles,
       appIcons: appIcons,
+      notify: notify,
     );
     return SettingsWorld._(services, environment, gate, logFiles, engine, shared, memory);
   }
@@ -205,3 +208,54 @@ class SettingsWorld {
 }
 
 const sampleRecent = RecentVideo(bvid: 'BV1GJ411x7h7', cid: 1, title: '一个视频', part: '', page: 1, pageCount: 1);
+
+/// The phone's notifications without a phone: [kinds] answers [stored], [setKinds] records each save in [saved], and
+/// [requestPermission] counts in [requests] and moves [allowed] to [answer]'s outcome. [available] as on the phone.
+class FakeNotifyHost implements NotifyHost {
+  FakeNotifyHost({this.stored = NotifyKinds.none, this.allowed = NotifyPermission.notDetermined, this.answer = true});
+
+  NotifyKinds stored;
+  NotifyPermission allowed;
+
+  /// What the user picks in iOS's prompt.
+  bool answer;
+  final saved = <NotifyKinds>[];
+  int requests = 0;
+  int permissionReads = 0;
+
+  @override
+  bool available = true;
+
+  @override
+  Future<NotifyKinds> kinds() async => stored;
+
+  @override
+  Future<void> setKinds(NotifyKinds kinds) async {
+    saved.add(kinds);
+    stored = kinds;
+  }
+
+  @override
+  Future<NotifyPermission> permission() async {
+    permissionReads += 1;
+    return allowed;
+  }
+
+  @override
+  Future<bool> requestPermission() async {
+    requests += 1;
+    if (allowed == NotifyPermission.notDetermined) {
+      allowed = answer ? NotifyPermission.allowed : NotifyPermission.denied;
+    }
+    return allowed == NotifyPermission.allowed;
+  }
+
+  @override
+  Future<NotifyRoute?> takeLaunchRoute() async => null;
+
+  @override
+  Future<List<NotifyTrip>> takeTrips() async => const [];
+
+  @override
+  set onTap(void Function(NotifyRoute route)? callback) {}
+}

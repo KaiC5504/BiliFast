@@ -8126,4 +8126,11 @@ abstract final class SettingsListTheme {
   static const pickerCheckLong = 7.2;
   static const pickerCheckStroke = 1.0;
   static const pickerTitleText = SettingsTheme.rowTitleText;
+
+  /// 推送设置 (189, 190): 35 px of grey over its first section, where 设置's is 41. 接收通知总开关's [已开启] is set in
+  /// the second line's grey 13 pt after the title, its '[' from 22 px past the title's end and its glyphs' middle
+  /// 9.5 px below the title's; the gap and the drop are what put the stand-ins' 已开启 there.
+  static const pushTop = 35 / 3;
+  static const pushStateGap = 17 / 3;
+  static const pushStateDrop = 3.0;
 }
