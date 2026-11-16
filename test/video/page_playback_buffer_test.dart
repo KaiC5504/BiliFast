@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:bili_core/devlog.dart';
 import 'package:bili_core/shared.dart' show ManualClock;
 import 'package:bilifast/account/keychain_store.dart';
@@ -35,6 +37,8 @@ void main() {
   late AppServices services;
   late List<FakePlayer> players;
   late List<FakeEngine> engines;
+  late CannedHttp http;
+  late MemorySink logs;
 
   setUp(() {
     players = [];
@@ -50,8 +54,9 @@ void main() {
   });
 
   Future<void> host(WidgetTester tester) async {
-    final http = Canned.http();
-    final logger = Logger(session: 'test');
+    http = Canned.http();
+    logs = MemorySink();
+    final logger = Logger(session: 'test')..add(logs);
     final environment = await AppEnvironment.load(
       keychain: FakeKeychain(const StoredCookies(Canned.cookies)),
       http: http,
@@ -98,13 +103,20 @@ void main() {
     }
   }
 
-  PagePlayback playback({bool inline = false}) => PagePlayback(
-    services: services,
-    route: const VideoRoute(bvid: bv, cid: p1, start: 0),
-    createSession: pageSession,
-    restorePage: (_) => const SizedBox(),
-    inline: inline,
-  );
+  PagePlayback playback({bool inline = false, VideoRoute route = const VideoRoute(bvid: bv, cid: p1, start: 0)}) =>
+      PagePlayback(
+        services: services,
+        route: route,
+        createSession: pageSession,
+        restorePage: (_) => const SizedBox(),
+        inline: inline,
+      );
+
+  List<String?> playUrlCids() => [
+    for (final request in http.to(Canned.playUrlPath)) request.url.queryParameters['cid'],
+  ];
+
+  Object? loadParallel() => logs.events.lastWhere((event) => event.msg == 'load').f['parallel']?.toJson();
 
   Future<void> closed(WidgetTester tester, PagePlayback playback) async {
     playback.close();
@@ -143,10 +155,48 @@ void main() {
     await frames(tester);
     expect(players.single.forwardBuffers, [PagePlayback.heldBuffer]);
     expect(page.controller!.idle, isTrue);
+    expect(players.single.loaded?.master, FakeEngine.masterOf('tok1'));
+    expect(engines.single.idles.last, (token: 'tok1', idle: true), reason: 'its token starts in use on the engine');
     page.show(resuming: true);
     await tester.pump();
     expect(players.single.forwardBuffers.last, PagePlayback.pageBuffer);
     expect(page.controller!.idle, isFalse);
+    expect(engines.single.idles.last, (token: 'tok1', idle: false));
+    await closed(tester, page);
+  });
+
+  testWidgets("the route's cidHint asks that part's playurl beside the view, for its own open only", (tester) async {
+    await host(tester);
+    final view = http.gates[Canned.signedViewPath] = Completer<void>();
+    final page = playback(route: const VideoRoute(bvid: bv, cidHint: p1))..start();
+    await frames(tester);
+    expect(page.controller!.video, isNull, reason: 'the view is still out');
+    expect(playUrlCids(), ['$p1']);
+    view.complete();
+    await frames(tester);
+    expect(page.controller!.page?.cid, p1);
+    expect(playUrlCids(), ['$p1'], reason: 'the open kept what it asked beside the view');
+    expect(loadParallel(), 'kept');
+
+    final next = http.gates[Canned.signedViewPath] = Completer<void>();
+    page.openOnPage('BV1EF411e9oF');
+    await frames(tester);
+    expect(playUrlCids(), ['$p1'], reason: 'another video opened on the page has no hint');
+    next.complete();
+    await frames(tester);
+    await closed(tester, page);
+  });
+
+  testWidgets('without a hint or a part, nothing is asked before the view', (tester) async {
+    await host(tester);
+    final view = http.gates[Canned.signedViewPath] = Completer<void>();
+    final page = playback(route: const VideoRoute(bvid: bv))..start();
+    await frames(tester);
+    expect(page.controller!.video, isNull);
+    expect(playUrlCids(), isEmpty);
+    view.complete();
+    await frames(tester);
+    expect(playUrlCids(), hasLength(1));
     await closed(tester, page);
   });
 

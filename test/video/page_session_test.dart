@@ -1526,6 +1526,67 @@ void main() {
     expect(session.related.single.bvid, 'BV1EF411e9oF');
   });
 
+  test('a card\'s session (set inactive as made) asks nothing at the open; released before its view, nothing at all',
+      () async {
+    final gate = http.gates[Canned.signedViewPath] = Completer<void>();
+    final controller = makeController();
+    unawaited(controller.openVideo(bv));
+    final card = makeSession(on: controller)..active = false;
+    await settle();
+    expect(controller.video, isNull, reason: 'the view is still out');
+    expect(http.to(relatedPath), isEmpty);
+    card.dispose();
+    sessions.remove(card);
+    controller.close();
+    gate.complete();
+    await settle();
+    expect(http.to(relatedPath), isEmpty);
+  });
+
+  test('a card handed to a page before its view lands asks then; after, on its video', () async {
+    final gate = http.gates[Canned.signedViewPath] = Completer<void>();
+    final controller = makeController();
+    unawaited(controller.openVideo(bv));
+    final card = makeSession(on: controller)..active = false;
+    await settle();
+    card.active = true;
+    await settle();
+    expect(controller.video, isNull);
+    expect(http.to(relatedPath), hasLength(1));
+    expect(card.related.single.bvid, 'BV1EF411e9oF');
+    gate.complete();
+    await settle();
+    expect(http.to(relatedPath), hasLength(1), reason: 'the view landing asks nothing more');
+  });
+
+  test('a card whose view lands while inactive asks once a page takes it over', () async {
+    final gate = http.gates[Canned.signedViewPath] = Completer<void>();
+    final controller = makeController();
+    unawaited(controller.openVideo(bv));
+    final card = makeSession(on: controller)..active = false;
+    gate.complete();
+    await settle();
+    expect(controller.video?.bvid, bv);
+    expect(http.to(relatedPath), isEmpty);
+    card.active = true;
+    await settle();
+    expect(http.to(relatedPath), hasLength(1));
+    expect(card.related.single.bvid, 'BV1EF411e9oF');
+  });
+
+  test('a failed related call logs its kind and code, never its text', () async {
+    http.routes[relatedPath] = (200, '{"code":-352,"message":"https://api.bilibili.com/secret"}');
+    final session = makeSession();
+    await controller.openVideo(bv, cid: p1);
+    await settle();
+    expect(session.related, isEmpty);
+    final line = logs.events.singleWhere((event) => event.msg == 'related failed');
+    final fields = line.f.map((key, value) => MapEntry(key, value.toJson()));
+    expect(fields['error'], 'BiliAPIError');
+    expect(fields['code'], -352);
+    expect('$fields', isNot(contains('http')));
+  });
+
   test('once its page left, the session ignores the next page\'s video', () async {
     final session = makeSession();
     await controller.openVideo(bv, cid: p1);

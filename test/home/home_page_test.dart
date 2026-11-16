@@ -321,6 +321,39 @@ void main() {
     expect(find.byKey(const ValueKey('feed-error')), findsNothing);
   });
 
+  testWidgets('a load more starting and failing under the cards shows in the footer alone: no card is rebuilt', (
+    tester,
+  ) async {
+    http.pages[1] = twenty();
+    http.failing.add(2);
+    final more = http.gates[2] = Completer<void>();
+    await show(tester);
+    await settle(tester);
+    await tester.drag(find.byKey(const ValueKey('feed')), const Offset(0, -3000));
+    await settle(tester, 60);
+    expect(http.asked, [1, 2]);
+    expect(find.byKey(const ValueKey('feed-more')), findsOneWidget);
+    String? cardKey(Widget widget) => switch (widget.key) {
+      ValueKey<String>(:final value) when value.startsWith('feed-card-') => value,
+      _ => null,
+    };
+    Map<String, Widget> cards() => {
+      for (final element in find.byWidgetPredicate((widget) => cardKey(widget) != null).evaluate())
+        cardKey(element.widget)!: element.widget,
+    };
+    final before = cards();
+    expect(before, isNotEmpty);
+    more.complete();
+    await settle(tester, 20);
+    expect(find.byKey(const ValueKey('feed-error')), findsOneWidget);
+    expect(find.byKey(const ValueKey('feed-more')), findsNothing);
+    final after = cards();
+    expect(after.keys, before.keys);
+    for (final MapEntry(:key, :value) in before.entries) {
+      expect(identical(after[key], value), isTrue, reason: '$key was rebuilt');
+    }
+  });
+
   testWidgets('a pull to refresh that fails keeps the cards and says why in a toast', (tester) async {
     http.pages[1] = twenty();
     await show(tester);
@@ -589,6 +622,26 @@ void main() {
     await settle(tester, 20);
     expect(controller.video?.title, '测试视频');
     expect(shownTitle(tester), '测试视频', reason: 'the page shows the video it opened');
+  });
+
+  testWidgets("a card's page gets the card's part as its hint, and none when the card names no part", (tester) async {
+    http.pages[1] = [
+      {...feedItem('BV1aaa'), 'cid': 42},
+      {...feedItem('BV1bbb'), 'cid': 0},
+    ];
+    await show(tester);
+    await settle(tester);
+    await tester.tap(card('BV1aaa'));
+    await settle(tester, 20);
+    final route = tester.widget<VideoPage>(find.byType(VideoPage)).route;
+    expect(route.cidHint, 42);
+    expect(route.cid, isNull, reason: 'a hint chooses nothing');
+    await tester.tap(find.byKey(const ValueKey('video-back')));
+    await settle(tester, 20);
+    expect(find.byType(VideoPage), findsNothing);
+    await tester.tap(card('BV1bbb'));
+    await settle(tester, 20);
+    expect(tester.widget<VideoPage>(find.byType(VideoPage)).route.cidHint, isNull);
   });
 
   testWidgets("a card's page is told it came from 推荐: the website's card with no track data", (tester) async {
