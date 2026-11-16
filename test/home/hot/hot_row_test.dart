@@ -118,6 +118,14 @@ void main() {
       final drawn = tester.getRect(find.text('测试作者', findRichText: true));
       expect(target.right, moreOrLessEquals(drawn.right, epsilon: 0.01));
       expect(target.left, moreOrLessEquals(HotListTheme.metaLeft));
+      final plays = tester.getRect(find.byKey(const ValueKey('hot-plays-BV1hot1')));
+      final upTop = plays.top - (HotListTheme.upCentreAbove - HotListTheme.playsCentreAbove);
+      expect(target.top, moreOrLessEquals(upTop - HotListTheme.uploaderSlopAbove), reason: 'from 6 above the line');
+      expect(
+        target.bottom,
+        moreOrLessEquals((upTop + HotListTheme.metaLine + plays.top) / 2),
+        reason: "half way down to the ▷ line",
+      );
       await tester.tapAt(Offset(target.right + 12, target.center.dy));
       await pumpRoute(tester);
       expect(opened, ['BV1hot1']);
