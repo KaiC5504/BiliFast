@@ -1,0 +1,40 @@
+{
+ "cmd": "INTERACT_WORD",
+ "data": {
+  "contribution": {
+   "grade": 0
+  },
+  "dmscore": 12,
+  "fans_medal": {
+   "anchor_roomid": 30001,
+   "guard_level": 3,
+   "icon_id": 0,
+   "is_lighted": 1,
+   "medal_color": 398668,
+   "medal_color_border": 398668,
+   "medal_color_end": 6850801,
+   "medal_color_start": 398668,
+   "medal_level": 12,
+   "medal_name": "测试牌",
+   "score": 5000,
+   "special": "",
+   "target_id": 20001
+  },
+  "identities": [
+   3,
+   1
+  ],
+  "is_spread": 0,
+  "msg_type": 1,
+  "roomid": 30001,
+  "score": 1763350000000,
+  "spread_desc": "",
+  "spread_info": "",
+  "tail_icon": 0,
+  "timestamp": 1763350000,
+  "trigger_time": 1763350000000000000,
+  "uid": 10005,
+  "uname": "进来的人",
+  "uname_color": "#00D1F1"
+ }
+}

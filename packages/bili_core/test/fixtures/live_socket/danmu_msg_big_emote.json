@@ -1,0 +1,138 @@
+{
+ "cmd": "DANMU_MSG",
+ "info": [
+  [
+   0,
+   1,
+   25,
+   16777215,
+   1763350000123,
+   1763349990,
+   0,
+   "a1b2c3d4",
+   0,
+   0,
+   0,
+   "",
+   0,
+   {
+    "bulge_display": 1,
+    "emoticon_unique": "room_30001_1234",
+    "height": 162,
+    "in_player_area": 1,
+    "is_dynamic": 1,
+    "url": "https://i0.hdslb.com/bfs/live/emote-big-0001.png",
+    "width": 162
+   },
+   "{}",
+   {
+    "extra": "{\"send_from_me\": false, \"mode\": 0, \"color\": 16777215, \"dm_type\": 1, \"font_size\": 25, \"player_mode\": 1, \"show_player_type\": 0, \"content\": \"赞\", \"user_hash\": \"2700000001\", \"emoticon_unique\": \"room_30001_1234\", \"bulge_display\": 0, \"recommend_score\": 3, \"direction\": 0, \"pk_direction\": 0, \"quartet_direction\": 0, \"anniversary_crowd\": 0, \"jump_to_url\": \"\", \"space_type\": \"\", \"space_url\": \"\", \"animation\": {}, \"emots\": null, \"is_audited\": false, \"id_str\": \"made0up0000000000000000002\", \"icon\": null, \"show_reply\": true, \"reply_mid\": 0, \"reply_uname\": \"\", \"reply_uname_color\": \"\", \"reply_is_mystery\": false, \"hit_combo\": 0}",
+    "mode": 0,
+    "show_player_type": 0,
+    "user": {
+     "base": {
+      "face": "https://i0.hdslb.com/bfs/face/face-0101.jpg",
+      "is_mystery": false,
+      "name": "测试观众",
+      "name_color": 0,
+      "name_color_str": "#00D1F1",
+      "official_info": {
+       "desc": "",
+       "role": 0,
+       "title": "",
+       "type": -1
+      },
+      "origin_info": {
+       "face": "",
+       "name": ""
+      },
+      "risk_ctrl_info": null
+     },
+     "guard": null,
+     "guard_leader": {
+      "is_guard_leader": false
+     },
+     "medal": {
+      "color": 398668,
+      "color_border": 398668,
+      "color_end": 6850801,
+      "color_start": 398668,
+      "guard_icon": "",
+      "guard_level": 3,
+      "honor_icon": "",
+      "id": 0,
+      "is_light": 1,
+      "level": 21,
+      "name": "测试牌",
+      "ruid": 20001,
+      "score": 50001,
+      "typ": 0,
+      "user_receive_count": 0,
+      "v2_medal_color_border": "#5866C799",
+      "v2_medal_color_end": "#5866C799",
+      "v2_medal_color_level": "#000B7099",
+      "v2_medal_color_start": "#5866C799",
+      "v2_medal_color_text": "#FFFFFFFF"
+     },
+     "title": {
+      "old_title_css_id": "",
+      "title_css_id": ""
+     },
+     "uhead_frame": null,
+     "uid": 10002,
+     "wealth": {
+      "dm_icon_key": "",
+      "level": 24
+     }
+    }
+   },
+   {
+    "activity_identity": "",
+    "activity_source": 0,
+    "not_show": 0
+   },
+   0,
+   null
+  ],
+  "赞",
+  [
+   10002,
+   "测试观众",
+   0,
+   0,
+   0,
+   10000,
+   1,
+   "#00D1F1"
+  ],
+  [],
+  [
+   10,
+   0,
+   9868950,
+   ">50000",
+   0
+  ],
+  [
+   "",
+   ""
+  ],
+  0,
+  0,
+  null,
+  {
+   "ct": "A1B2C3D5",
+   "ts": 1763350200
+  },
+  0,
+  0,
+  null,
+  null,
+  0,
+  105,
+  [
+   0
+  ],
+  null
+ ]
+}
