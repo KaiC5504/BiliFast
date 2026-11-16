@@ -457,8 +457,8 @@ void main() {
       await settle(tester, 40);
       expect(http.asked, [1, 1]);
       expect(tester.widget<SkinLoadingView>(view).playing, isTrue);
-      final room = SkinLoadingTheme.room;
-      expect(tester.getTopLeft(card('BV1c0')).dy, moreOrLessEquals(cardTop + room), reason: '85.33 pt held open');
+      final room = SkinLoadingTheme.size;
+      expect(tester.getTopLeft(card('BV1c0')).dy, moreOrLessEquals(cardTop + room), reason: "the picture's 60 pt open");
       expect(tester.getRect(view).bottom, moreOrLessEquals(cardTop + room - BiliMetrics.feedSpacing));
 
       http.pages[1] = [for (var i = 0; i < 20; i++) feedItem('BV1n$i')];
@@ -481,7 +481,7 @@ void main() {
         if (tester.widget<SkinLoadingView>(view).playing) armedAt = tester.getTopLeft(card('BV1c0')).dy - cardTop;
       }
       expect(armedAt, isNotNull);
-      expect(armedAt, inInclusiveRange(SkinLoadingTheme.trigger, SkinLoadingTheme.trigger + 4));
+      expect(armedAt, inInclusiveRange(SkinLoadingTheme.size, SkinLoadingTheme.size + 4));
       await pull.up();
       await settle(tester, 40);
       expect(http.asked, [1, 1], reason: 'let go past 60 pt, it refreshes');
@@ -489,14 +489,14 @@ void main() {
       await settle(tester, 20);
     });
 
-    testWidgets("首页's tap holds it at the bottom of its 85.33 pt band, in the TV's 60 pt box", (tester) async {
+    testWidgets("首页's tap holds it in a band of its own 60 pt, in the TV's 60 pt box", (tester) async {
       await wearing(tester);
       final cardTop = tester.getTopLeft(card('BV1c0')).dy;
       http.gates[1] = Completer<void>();
       await tester.tap(find.byKey(const ValueKey('home-tab-home')));
       await settle(tester, 10);
       final band = tester.getRect(find.byKey(const ValueKey('feed-reload')));
-      expect(band.height, moreOrLessEquals(SkinLoadingTheme.room));
+      expect(band.height, moreOrLessEquals(SkinLoadingTheme.size));
       final drawn = find.descendant(of: find.byKey(const ValueKey('feed-reload')), matching: view);
       expect(drawn, findsOneWidget);
       expect(find.byType(LoadingTv), findsNothing);
@@ -504,7 +504,7 @@ void main() {
       expect(tester.getCenter(drawn).dx, moreOrLessEquals(band.center.dx));
       expect(tester.getSize(drawn), const Size.square(LoadingTvTheme.size));
       expect(tester.widget<SkinLoadingView>(drawn).playing, isTrue);
-      expect(tester.getTopLeft(card('BV1c0')).dy, moreOrLessEquals(cardTop + SkinLoadingTheme.room));
+      expect(tester.getTopLeft(card('BV1c0')).dy, moreOrLessEquals(cardTop + SkinLoadingTheme.size));
       http.gates[1]!.complete();
       await settle(tester, 20);
       expect(view, findsNothing);

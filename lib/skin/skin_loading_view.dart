@@ -7,7 +7,7 @@ import 'package:flutter/widgets.dart';
 import '../shared/theme.dart';
 import 'skin_loading.dart';
 
-/// The equipped 加载动画 (119), contained in a [size] square. While [playing] it loops from its first frame, each
+/// The equipped 加载动画 (119), drawn whole in a [size] square and sized to the picture inside it. While [playing] it loops from its first frame, each
 /// frame for the time the file gives it; held (a pull short of the trigger), under Reduce Motion or a muted
 /// [TickerMode] it shows the first frame, as the TV shows its first face.
 class SkinLoadingView extends StatefulWidget {
@@ -145,8 +145,8 @@ class _SkinLoadingViewState extends State<SkinLoadingView> {
     child: RawImage(
       key: const ValueKey('skin-loading'),
       image: _frame ?? widget.animation.first,
-      width: widget.size,
-      height: widget.size,
+      width: widget.animation.widthIn(widget.size),
+      height: widget.animation.heightIn(widget.size),
       fit: BoxFit.contain,
       filterQuality: FilterQuality.medium,
     ),

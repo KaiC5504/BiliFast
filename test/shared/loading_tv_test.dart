@@ -1,6 +1,7 @@
 import 'package:bilifast/app/app_scope.dart';
 import 'package:bilifast/shared/loading_tv.dart';
 import 'package:bilifast/shared/theme.dart';
+import 'package:bilifast/skin/skin_loading.dart';
 import 'package:bilifast/skin/skin_loading_view.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -118,7 +119,7 @@ void main() {
       final animation = await standInLoading(tester);
       skin.shownLoading.value = animation;
 
-      await tester.pumpWidget(indicator(services, RefreshIndicatorMode.drag, 30, room: SkinLoadingTheme.room));
+      await tester.pumpWidget(indicator(services, RefreshIndicatorMode.drag, 30, room: SkinLoadingTheme.size));
       expect(find.byType(LoadingTv), findsNothing);
       expect(tester.widget<SkinLoadingView>(find.byType(SkinLoadingView)).playing, isFalse);
       expect(identical(drawn(tester).image, animation.first), isTrue);
@@ -132,7 +133,7 @@ void main() {
       );
 
       await tester.pumpWidget(
-        indicator(services, RefreshIndicatorMode.refresh, SkinLoadingTheme.room, room: SkinLoadingTheme.room),
+        indicator(services, RefreshIndicatorMode.refresh, SkinLoadingTheme.size, room: SkinLoadingTheme.size),
       );
       expect(tester.widget<SkinLoadingView>(find.byType(SkinLoadingView)).playing, isTrue);
       for (var round = 0; round < 3; round++) {
@@ -172,19 +173,55 @@ void main() {
       expect(find.byType(SkinLoadingView), findsNothing);
     });
 
-    testWidgets("a state with SkinRefreshRoom holds the 加载动画's room while one is worn", (tester) async {
+    testWidgets("a state with SkinRefreshRoom holds the 加载动画's own height while one is worn", (tester) async {
       final (services, skin) = (await tester.runAsync(skinOnlyServices))!;
       await tester.pumpWidget(AppScope(services: services, child: const _Room()));
-      expect(find.text('${LoadingTvTheme.size}'), findsOneWidget);
+      expect(find.text('${LoadingTvTheme.size} ${LoadingTvTheme.trigger}'), findsOneWidget);
+      skin.shownLoading.value = _wide(await standInLoading(tester));
+      await tester.pump();
+      expect(find.text('${SkinLoadingTheme.size / 2} ${SkinLoadingTheme.size / 2}'), findsOneWidget);
       skin.shownLoading.value = await standInLoading(tester);
       await tester.pump();
-      expect(find.text('${SkinLoadingTheme.room}'), findsOneWidget);
+      expect(find.text('${SkinLoadingTheme.size} ${SkinLoadingTheme.size}'), findsOneWidget);
       skin.shownLoading.value = null;
       await tester.pump();
-      expect(find.text('${LoadingTvTheme.size}'), findsOneWidget);
+      expect(find.text('${LoadingTvTheme.size} ${LoadingTvTheme.trigger}'), findsOneWidget);
+    });
+
+    testWidgets('a picture twice as wide as tall opens half the room, drawn whole at its foot', (tester) async {
+      final (services, skin) = (await tester.runAsync(skinOnlyServices))!;
+      skin.shownLoading.value = _wide(await standInLoading(tester));
+      const room = SkinLoadingTheme.size / 2;
+      await tester.pumpWidget(indicator(services, RefreshIndicatorMode.refresh, room, room: room));
+      expect((drawn(tester).width, drawn(tester).height), (SkinLoadingTheme.size, room));
+      expect(tester.getSize(find.byType(SkinLoadingView)).height, room);
+      expect(tester.getRect(find.byType(SkinLoadingView)).bottom, tester.getRect(find.byType(ClipRect)).bottom);
+
+      await tester.pumpWidget(_host(AppScope(services: services, child: const RefreshLoading())));
+      expect(tester.getSize(find.byType(RefreshLoading)).height, room, reason: 'with no list room, its own');
+    });
+
+    testWidgets('a list room smaller than the picture scales it down to fit', (tester) async {
+      final (services, skin) = (await tester.runAsync(skinOnlyServices))!;
+      skin.shownLoading.value = await standInLoading(tester);
+      await tester.pumpWidget(indicator(services, RefreshIndicatorMode.refresh, 40, room: 40));
+      expect((drawn(tester).width, drawn(tester).height), (40.0, 40.0));
     });
   });
 }
+
+/// [animation] as if its file were twice as wide as tall.
+SkinLoadingAnimation _wide(SkinLoadingAnimation animation) => SkinLoadingAnimation(
+  id: animation.id,
+  ver: animation.ver + 1,
+  name: animation.name,
+  picture: animation.picture,
+  format: animation.format,
+  frames: animation.frames,
+  width: animation.height * 2,
+  height: animation.height,
+  first: animation.first,
+);
 
 class _Room extends StatefulWidget {
   const _Room();
@@ -195,5 +232,5 @@ class _Room extends StatefulWidget {
 
 class _RoomState extends State<_Room> with SkinRefreshRoom {
   @override
-  Widget build(BuildContext context) => Text('$refreshRoom', textDirection: TextDirection.ltr);
+  Widget build(BuildContext context) => Text('$refreshRoom $refreshTrigger', textDirection: TextDirection.ltr);
 }

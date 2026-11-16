@@ -142,14 +142,15 @@ Widget loadingTvRefreshIndicator(
 }
 
 /// What a refresh shows: the equipped 加载动画 when [AppScope]'s skin has one that decodes, else the TV. The 加载动画
-/// draws in [SkinLoadingTheme.size] at the bottom of [room] (the height the refresh holds open), or in [room] where
-/// a list keeps a smaller one. Pages' first loads ([LoadingTvState]) keep the TV.
+/// draws whole in a [SkinLoadingTheme.size] square at the bottom of [room] (the height the refresh holds open; null:
+/// the picture's own), scaled down where a list keeps a smaller room. Pages' first loads ([LoadingTvState]) keep the
+/// TV.
 class RefreshLoading extends StatelessWidget {
-  const RefreshLoading({super.key, this.playing = true, this.room = SkinLoadingTheme.room, this.pulled = false});
+  const RefreshLoading({super.key, this.playing = true, this.room, this.pulled = false});
 
   /// False holds the first frame, as a pull short of the trigger does.
   final bool playing;
-  final double room;
+  final double? room;
 
   /// Drawn at the bottom of what the pull opens, clipped by what's above.
   final bool pulled;
@@ -162,19 +163,27 @@ class RefreshLoading extends StatelessWidget {
   }
 
   Widget _draw(SkinLoadingAnimation? animation) {
-    final size = animation == null ? LoadingTvTheme.size : math.min(SkinLoadingTheme.size, room);
-    final shown = animation == null
-        ? LoadingTv(playing: playing)
-        : SkinLoadingView(animation: animation, playing: playing, size: size);
+    if (animation == null) {
+      const size = LoadingTvTheme.size;
+      final tv = LoadingTv(playing: playing);
+      if (!pulled) return tv;
+      return ClipRect(
+        child: OverflowBox(alignment: Alignment.bottomCenter, minHeight: size, maxHeight: size, child: tv),
+      );
+    }
+    final own = animation.heightIn(SkinLoadingTheme.size);
+    final room = this.room ?? own;
+    final side = own > room ? SkinLoadingTheme.size * room / own : SkinLoadingTheme.size;
+    final height = math.min(own, room);
+    final shown = SkinLoadingView(animation: animation, playing: playing, size: side);
     if (!pulled) {
-      if (animation == null) return shown;
       return SizedBox(
-        height: math.max(room, size),
+        height: math.max(room, height),
         child: Align(alignment: Alignment.bottomCenter, child: shown),
       );
     }
     return ClipRect(
-      child: OverflowBox(alignment: Alignment.bottomCenter, minHeight: size, maxHeight: size, child: shown),
+      child: OverflowBox(alignment: Alignment.bottomCenter, minHeight: height, maxHeight: height, child: shown),
     );
   }
 }
@@ -183,15 +192,15 @@ class RefreshLoading extends StatelessWidget {
 ValueListenable<SkinLoadingAnimation?>? skinLoadingOf(BuildContext context) =>
     context.dependOnInheritedWidgetOfExactType<AppScope>()?.services.skin.loading;
 
-/// For a list that holds its refresh open: [refreshRoom] is the 加载动画's room (119) while one is equipped, else the
-/// TV's, and the state builds again when it changes.
+/// For a list that holds its refresh open: [refreshRoom] is the equipped 加载动画's own height (119), else the TV's,
+/// and the state builds again when it changes.
 mixin SkinRefreshRoom<T extends StatefulWidget> on State<T> {
   ValueListenable<SkinLoadingAnimation?>? _skinLoading;
 
-  double get refreshRoom => _skinLoading?.value == null ? LoadingTvTheme.size : SkinLoadingTheme.room;
+  double get refreshRoom => _skinLoading?.value?.heightIn(SkinLoadingTheme.size) ?? LoadingTvTheme.size;
 
-  /// The pull that arms the refresh: [ReleaseRefreshControl]'s own for the TV.
-  double get refreshTrigger => _skinLoading?.value == null ? LoadingTvTheme.trigger : SkinLoadingTheme.trigger;
+  /// The pull that arms the refresh: the whole 加载动画 showing, else [ReleaseRefreshControl]'s own for the TV.
+  double get refreshTrigger => _skinLoading?.value?.heightIn(SkinLoadingTheme.size) ?? LoadingTvTheme.trigger;
 
   @override
   void didChangeDependencies() {

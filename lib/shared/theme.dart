@@ -5630,18 +5630,15 @@ abstract final class OwnSpaceTabsTheme {
   static const loadAhead = 360.0;
 }
 
-/// The equipped 加载动画 in a refresh, in place of the loading TV (119 and KaiC's 15, 推荐 mid-refresh, measured in
-/// px / 3): the header ends at 142 pt and the first card starts at 233.33 pt, so the room the refresh holds open is
-/// 85.33 pt under the feed's 6 pt spacing. The picture is drawn whole in the TV's own 60 pt box: Violet's 300 px
-/// file draws its chibi 42 × 52 pt there, as the official app does (an 85.33 pt box drew it 57 × 73). The box sits at
-/// the room's bottom: the ink ends 6 pt above the spacing in 119.
+/// The equipped 加载动画 in a refresh, in place of the loading TV (119, measured in px / 3). The picture is drawn whole
+/// in the TV's own 60 pt square: Violet's 300 px file draws its chibi 42 × 52 pt there, as the official app does. The
+/// refresh holds open the picture's own height ([SkinLoadingAnimation.heightIn]), so a square one opens 60 pt: in the
+/// official app's Violet refresh the header ends at 142 pt and the first card starts at 208.33, its 6 pt spacing
+/// under 60.33 (an 85.33 pt room, taken from the TV's refresh, left Violet 26 pt too low). A pull arms once the whole
+/// picture shows, as the official app's starts playing then (KaiC: Violet plays at a 68 pt pull, ours waited for the
+/// TV's 100); let go short of the room, the refresh holds what was pulled.
 abstract final class SkinLoadingTheme {
-  static const room = 256 / 3;
   static const size = LoadingTvTheme.size;
-
-  /// A pull arms once the whole picture shows, as the official app's starts playing then (KaiC: Violet plays at a
-  /// 68 pt pull, ours waited for the TV's 100). Let go short of the room, the refresh holds what was pulled.
-  static const trigger = size;
 
   /// Decoded at most this many pixels a side: the box at the phone's 3×.
   static const decodePixels = 180;

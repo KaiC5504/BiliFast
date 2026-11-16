@@ -87,6 +87,12 @@ final class SkinLoadingAnimation {
   final int height;
   final ui.Image first;
 
+  /// Drawn whole in a [side] square, its height: a picture wider than it is tall leaves the square's top and bottom.
+  double heightIn(double side) => width > height ? side * height / width : side;
+
+  /// Drawn whole in a [side] square, its width.
+  double widthIn(double side) => height > width ? side * width / height : side;
+
   String get key => SkinLoadingKeeper.fileName(id, ver);
 
   /// The frames from the first, each decoded at [first]'s size. [ui.Codec.getNextFrame] wraps after the last, so it
