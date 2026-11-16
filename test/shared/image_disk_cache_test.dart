@@ -169,16 +169,37 @@ final class _AddressedError implements Exception {
   String toString() => 'ClientException: connection lost, uri=$url';
 }
 
+/// Whether the folder can be listed, and how often it was tried, by walks and trims alike.
+final class _Listing {
+  Object? error;
+  int tries = 0;
+
+  /// Inline, so a test sees the trim's IO in its own isolate.
+  Future<TrimResult> trim(TrimPlan plan) async {
+    tries += 1;
+    final failure = error;
+    if (failure != null) throw failure;
+    return plan.run();
+  }
+}
+
 /// A cache whose folder can't be listed while [listError] is set; [listings] counts the tries.
 final class _Unlisted extends ImageDiskCache {
-  _Unlisted({required super.folder, required super.capBytes, required ImageFetch fetch}) : super(fetch: fetch);
+  _Unlisted({required String folder, required int capBytes, required ImageFetch fetch})
+    : this._(folder, capBytes, fetch, _Listing());
 
-  Object? listError;
-  int listings = 0;
+  _Unlisted._(String folder, int capBytes, ImageFetch fetch, this._listing)
+    : super(folder: folder, capBytes: capBytes, fetch: fetch, trimRunner: _listing.trim);
+
+  final _Listing _listing;
+
+  Object? get listError => _listing.error;
+  set listError(Object? error) => _listing.error = error;
+  int get listings => _listing.tries;
 
   @override
   Stream<FileSystemEntity> listFolder() {
-    listings += 1;
+    _listing.tries += 1;
     final error = listError;
     return error == null ? super.listFolder() : Stream.error(error);
   }
@@ -214,6 +235,14 @@ void main() {
   Iterable<LogEvent> logged(String message) => logs.events.where((event) => event.msg == message);
 
   Future<void> age(File file, Duration by) => file.setLastModified(DateTime.now().subtract(by));
+
+  /// Until the [count]th download is out: the stored copy's read before it is real IO, which an event-queue pump
+  /// doesn't wait for under load.
+  Future<void> untilAsked(int count) async {
+    while (fetch.asked.length < count) {
+      await Future<void>.delayed(const Duration(milliseconds: 1));
+    }
+  }
 
   setUp(() async {
     folder = await Directory.systemTemp.createTemp('image_cache');
@@ -313,7 +342,7 @@ void main() {
       final release = Completer<void>();
       fetch.hold = release.future;
       final stored = cache.storedFile(_c);
-      await pumpEventQueue();
+      await untilAsked(3);
       await cache.clear();
       release.complete();
       expect(await stored, isNull);
@@ -431,6 +460,151 @@ void main() {
     expect(cache.listings - before, 2);
   });
 
+  group('the trim, off the UI isolate', () {
+    /// Forty pictures of mixed sizes and ages, a dead run's temporary file and a folder.
+    void seed(Directory into) {
+      final names = ImageDiskCache(folder: into.path);
+      for (var i = 0; i < 40; i++) {
+        final file = names.fileOf('$_c?n=$i')..writeAsBytesSync(List.filled(50 + (i * 37) % 200, i));
+        file.setLastModifiedSync(DateTime.now().subtract(Duration(minutes: 10 + (i * 17) % 40 * 3)));
+      }
+      File('${names.fileOf(_a).path}.deadrun-0.tmp').writeAsBytesSync([1, 2]);
+      Directory(names.fileOf(_b).path).createSync();
+    }
+
+    /// The trim as it ran on the UI isolate before: the oldest first, to 80% of the cap.
+    Set<String> keptBefore(Directory from, int capBytes) {
+      final pictures = [
+        for (final entity in from.listSync())
+          if (entity is File && !entity.path.endsWith('.tmp')) (entity, entity.statSync()),
+      ]..sort((a, b) => a.$2.modified.compareTo(b.$2.modified));
+      var total = pictures.fold(0, (sum, picture) => sum + picture.$2.size);
+      final kept = {for (final (file, _) in pictures) file.uri.pathSegments.last};
+      for (final (file, stat) in pictures) {
+        if (total <= capBytes * 0.8) break;
+        kept.remove(file.uri.pathSegments.last);
+        total -= stat.size;
+      }
+      return kept;
+    }
+
+    test('deletes the same pictures as before, in an isolate or inline', () async {
+      const capBytes = 3000;
+      final inline = Directory('${folder.path}${Platform.pathSeparator}inline')..createSync();
+      seed(folder);
+      seed(inline);
+      final expected = keptBefore(folder, capBytes);
+      expect(expected.length, inInclusiveRange(10, 35), reason: 'the fixture trims some, not all');
+
+      await cacheOf(capBytes: capBytes).start();
+      final runs = <TrimPlan>[];
+      final inlineCache = ImageDiskCache(
+        folder: inline.path,
+        capBytes: capBytes,
+        trimRunner: (plan) async => (runs..add(plan)).last.run(),
+      );
+      caches.add(inlineCache);
+      await inlineCache.start();
+      expect(runs, hasLength(1));
+
+      for (final at in [folder, inline]) {
+        final files = {
+          for (final entity in at.listSync())
+            if (entity is File) entity.uri.pathSegments.last,
+        };
+        expect(files, expected, reason: "the same pictures kept, the dead run's temporary file gone");
+      }
+      final lines = logged('image cache').toList();
+      expect(lines, hasLength(2));
+      for (final line in lines) {
+        expect(line.f['files']?.toJson(), expected.length);
+        expect(line.f['trimmed']?.toJson(), 40 - expected.length);
+      }
+    });
+
+    test('never deletes a picture written or read after its listing began', () async {
+      final cache = cacheOf(capBytes: 100);
+      final old = cache.fileOf(_a)..writeAsBytesSync(List.filled(300, 1));
+      await age(old, const Duration(hours: 2));
+      final later = cache.fileOf(_b)..writeAsBytesSync(List.filled(300, 2));
+      // Stands in for a store or a read landing between the listing and the deletes.
+      await later.setLastModified(DateTime.now().add(const Duration(minutes: 1)));
+      await cache.start();
+      expect(old.existsSync(), isFalse);
+      expect(later.existsSync(), isTrue);
+      final log = logged('image cache').single;
+      expect(log.f['files']?.toJson(), 1);
+      expect(log.f['trimmed']?.toJson(), 1);
+      expect(await cache.sizeBytes(), 300);
+    });
+
+    test('sizeBytes answers the tracked total without walking the folder again', () async {
+      final cache = unlisted();
+      await cache.start();
+      fetch.size = 250;
+      await cache.bytes(_a);
+      await cache.bytes(_b);
+      await cache.settle();
+      final listed = cache.listings;
+      File('${folder.path}${Platform.pathSeparator}unseen').writeAsBytesSync(List.filled(1000, 0));
+      expect(await cache.sizeBytes(), 500);
+      expect(cache.listings, listed, reason: 'no walk');
+    });
+
+    test('runs through the runner given: the plan as plain data, the index and the log from its result', () async {
+      final plans = <TrimPlan>[];
+      final cache = ImageDiskCache(
+        folder: folder.path,
+        capBytes: 1000,
+        fetch: fetch.call,
+        trimRunner: (plan) async {
+          plans.add(plan);
+          return const TrimResult(files: 7, bytes: 1500, trimmed: 2);
+        },
+      );
+      caches.add(cache);
+      await cache.start();
+      expect(plans.single.folder, folder.path);
+      expect(plans.single.capBytes, 1000);
+      expect(plans.single.leftovers, isTrue);
+      expect(plans.single.runTag, isNotEmpty);
+      final log = logged('image cache').single;
+      expect(log.f['files']?.toJson(), 7);
+      expect(log.f['trimmed']?.toJson(), 2);
+      expect(await cache.sizeBytes(), 1500);
+
+      await cache.bytes(_a);
+      await cache.settle();
+      expect(plans, hasLength(2), reason: 'still past the cap');
+      expect(plans.last.leftovers, isFalse);
+      expect(plans.last.runTag, plans.first.runTag);
+      expect(logged('image cache trimmed'), hasLength(1));
+    });
+
+    test("a clear while a trim runs keeps the clear's count", () async {
+      final release = Completer<void>();
+      var trims = 0;
+      final cache = ImageDiskCache(
+        folder: folder.path,
+        capBytes: 50,
+        fetch: fetch.call,
+        trimRunner: (plan) async {
+          if (trims++ == 0) return const TrimResult(files: 0, bytes: 0, trimmed: 0);
+          await release.future;
+          return const TrimResult(files: 3, bytes: 999, trimmed: 0);
+        },
+      );
+      caches.add(cache);
+      await cache.start();
+      await cache.storedFile(_a);
+      expect(trims, 2, reason: 'the store passed the cap');
+      await cache.clear();
+      release.complete();
+      await cache.settle();
+      expect(await cache.sizeBytes(), 0);
+    });
+  });
+
   test('sizeBytes totals the folder; a folder not made yet is empty', () async {
     expect(await cacheOf(at: '${folder.path}${Platform.pathSeparator}missing').sizeBytes(), 0);
     final cache = cacheOf();
@@ -466,7 +640,7 @@ void main() {
     final release = Completer<void>();
     fetch.hold = release.future;
     final flying = cache.bytes(_b);
-    await pumpEventQueue();
+    await untilAsked(2);
 
     await cache.clear();
     release.complete();

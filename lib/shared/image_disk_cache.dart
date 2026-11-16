@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:isolate';
 import 'dart:math' as math;
 
 import 'package:bili_core/api.dart' show BiliClient, ClientHTTPTransport, HTTPRequest, HTTPResponse, HTTPTransport;
@@ -24,7 +25,13 @@ typedef PictureDownload = ({int firstByteMs, int totalMs, int bytes});
 /// hash of the address, in the caches folder iOS may empty when storage runs short; past [capBytes] the least recently
 /// read go first.
 class ImageDiskCache {
-  ImageDiskCache({required this.folder, this.capBytes = defaultCapBytes, this._fetch});
+  /// [trimRunner] runs each trim's plan; a test runs it inline or stands in a failure.
+  ImageDiskCache({
+    required this.folder,
+    this.capBytes = defaultCapBytes,
+    this._fetch,
+    Future<TrimResult> Function(TrimPlan plan)? trimRunner,
+  }) : _runTrim = trimRunner ?? _trimInIsolate;
 
   static const defaultCapBytes = 500 * 1024 * 1024;
 
@@ -38,6 +45,7 @@ class ImageDiskCache {
   final String folder;
   final int capBytes;
   final ImageFetch? _fetch;
+  final Future<TrimResult> Function(TrimPlan plan) _runTrim;
 
   /// Asks in flight by address, so a second ask for one shares the first's download.
   final _loads = <String, _Load>{};
@@ -244,40 +252,21 @@ class ImageDiskCache {
 
   /// Totals the folder and, past the cap, deletes the least recently read pictures until well under it. With
   /// [leftovers], also deletes the temporary files a run that died mid-write left behind.
-  Future<({int files, int bytes, int trimmed})> _trim({required bool leftovers}) async {
-    final pictures = <(File, int, DateTime)>[];
-    var total = 0;
-    await for (final file in _listed()) {
-      if (file.path.endsWith('.tmp')) {
-        if (leftovers && !file.path.contains('.$_run-')) await _delete(file);
-        continue;
-      }
-      try {
-        final stat = await file.stat();
-        pictures.add((file, stat.size, stat.modified));
-        total += stat.size;
-      } on FileSystemException {
-        continue;
-      }
+  Future<TrimResult> _trim({required bool leftovers}) async {
+    final generation = _generation;
+    final trim = await _runTrim(TrimPlan(folder: folder, capBytes: capBytes, leftovers: leftovers, runTag: _run));
+    // A clear meanwhile left the index as it counted it.
+    if (generation == _generation) {
+      _bytes = trim.bytes;
+      _files = trim.files;
     }
-    var trimmed = 0;
-    if (total > capBytes) {
-      pictures.sort((a, b) => a.$3.compareTo(b.$3));
-      final target = capBytes * 0.8;
-      for (final (file, size, _) in pictures) {
-        if (total <= target) break;
-        if (await _delete(file)) {
-          total -= size;
-          trimmed += 1;
-        }
-      }
-    }
-    _bytes = total;
-    _files = pictures.length - trimmed;
-    return (files: pictures.length - trimmed, bytes: total, trimmed: trimmed);
+    return trim;
   }
 
-  Map<String, Object> _summary(({int files, int bytes, int trimmed}) trim) => {
+  /// Off the UI isolate: some 17,000 awaited stats and deletes there took a second of event-loop turns at launch.
+  static Future<TrimResult> _trimInIsolate(TrimPlan plan) => Isolate.run(plan.run, debugName: 'image cache trim');
+
+  Map<String, Object> _summary(TrimResult trim) => {
     'files': trim.files,
     'mb': _megabytes(trim.bytes),
     'trimmed': trim.trimmed,
@@ -300,8 +289,10 @@ class ImageDiskCache {
     }
   }
 
-  /// What the folder takes in bytes, temporary files included.
+  /// What the stored pictures take in bytes: the total kept since the last trim, or, before one could count the folder,
+  /// the folder walked, temporary files included.
   Future<int> sizeBytes() async {
+    if (_bytes case final known?) return known;
     var total = 0;
     try {
       await for (final file in _listed()) {
@@ -602,6 +593,78 @@ final class _AnsweredClient extends http.BaseClient {
 
   @override
   void close() => _inner.close();
+}
+
+/// A trim's plain data, so [run] can go to another isolate.
+final class TrimPlan {
+  const TrimPlan({required this.folder, required this.capBytes, required this.leftovers, required this.runTag});
+
+  final String folder;
+  final int capBytes;
+
+  /// Whether to delete the temporary files other runs left.
+  final bool leftovers;
+
+  /// The running cache's tag, whose temporary files are its writes under way.
+  final String runTag;
+
+  /// Lists, stats and deletes with blocking calls. A picture written or read since the listing began is never deleted,
+  /// as its file is checked again just before; a folder that can't be listed throws.
+  TrimResult run() {
+    final began = DateTime.now();
+    final List<FileSystemEntity> entries;
+    try {
+      entries = Directory(folder).listSync(followLinks: false);
+    } on PathNotFoundException {
+      return const TrimResult(files: 0, bytes: 0, trimmed: 0);
+    }
+    final pictures = <(File, int, DateTime)>[];
+    var total = 0;
+    for (final file in entries.whereType<File>()) {
+      if (file.path.endsWith('.tmp')) {
+        if (leftovers && !file.path.contains('.$runTag-')) _delete(file);
+        continue;
+      }
+      final stat = file.statSync();
+      if (stat.type == FileSystemEntityType.notFound) continue;
+      pictures.add((file, stat.size, stat.modified));
+      total += stat.size;
+    }
+    var trimmed = 0;
+    if (total > capBytes) {
+      pictures.sort((a, b) => a.$3.compareTo(b.$3));
+      final target = capBytes * 0.8;
+      for (final (file, size, modified) in pictures) {
+        if (total <= target) break;
+        // A store renames over the same name, so the listing's stat can be older than the file now there.
+        if (!modified.isBefore(began) || !file.statSync().modified.isBefore(began)) continue;
+        if (_delete(file)) {
+          total -= size;
+          trimmed += 1;
+        }
+      }
+    }
+    return TrimResult(files: pictures.length - trimmed, bytes: total, trimmed: trimmed);
+  }
+
+  static bool _delete(File file) {
+    try {
+      file.deleteSync();
+      return true;
+    } on FileSystemException {
+      // Windows can't delete a file another reader still holds.
+      return false;
+    }
+  }
+}
+
+/// What a trim left: the pictures and their bytes, and how many it deleted.
+final class TrimResult {
+  const TrimResult({required this.files, required this.bytes, required this.trimmed});
+
+  final int files;
+  final int bytes;
+  final int trimmed;
 }
 
 final class _Load {
