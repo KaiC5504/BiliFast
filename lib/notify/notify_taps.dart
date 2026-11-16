@@ -6,6 +6,7 @@ import 'package:flutter/widgets.dart';
 import '../app/app_environment.dart';
 import '../account/login_gate.dart';
 import '../app/app_scope.dart';
+import '../app/form_factor.dart';
 import '../dynamic/post/post_route.dart';
 import '../message/message_routes.dart' as message;
 import '../video/video_route.dart';
@@ -93,7 +94,8 @@ class NotifyTaps {
       NotifyMessages() => 'messages',
       NotifyApp() => 'app',
     };
-    if (route is NotifyApp) {
+    // The iPad has no 消息 place, and its pages make no 消息 calls.
+    if (route is NotifyApp || (FormFactor.device.isPad && (route is NotifyLikes || route is NotifyMessages))) {
       _logger.info(LogCategory.app, 'notify open', {'kind': kind});
       return;
     }

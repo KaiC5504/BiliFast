@@ -28,9 +28,9 @@ class FakeHotApi implements HotApi {
   factory FakeHotApi.demo({DateTime? now}) => FakeHotApi(videos: demoVideos(now ?? DateTime.now()));
 
   /// Real videos, so their pages open on the PC: the 消息 demo's and `--fake-notify-tap`'s (FakePageApi's demo thread),
-  /// then FakePageApi's first 历史记录 row's. One row each, as the list keeps one row per BV id; their parts are left
-  /// for the page to ask.
-  static const demoOpens = [(bvid: 'BV13as367Ebh', aid: 117614407850785), (bvid: 'BV1GJ411x7h7', aid: 80433022)];
+  /// then av170001, public for years. One row each, as the list keeps one row per BV id; their parts are left for the
+  /// page to ask.
+  static const demoOpens = [(bvid: 'BV13as367Ebh', aid: 117614407850785), (bvid: 'BV17x411w7KC', aid: 170001)];
 
   static const _plays = [1831000, 238000, 1519000, 1611000, 1161000, 1380000, 62000, 9876, 405000, 27300000];
   static const _lengths = [358, 4908, 70, 411, 475, 394, 174, 33, 1265, 3601];

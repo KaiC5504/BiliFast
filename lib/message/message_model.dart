@@ -324,7 +324,8 @@ class MessageModel extends ChangeNotifier {
       if (_sessions[i].unread > 0) _sessions[i] = _sessions[i].copyWith(unread: 0, ackSeqno: _sessions[i].maxSeqno);
     }
     _read(const MessageUnread(), _Count.values.toSet(), listChanged: true);
-    await _recount(generation);
+    // Bilibili acks only its first page of sessions: the list is asked again so rows past it show what's left.
+    await Future.wait([_recount(generation), _refreshSessions()]);
   }
 
   /// The counts asked after a read here. A call already out was asked before it, so its answer is held down to what

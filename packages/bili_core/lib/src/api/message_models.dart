@@ -690,15 +690,13 @@ ChatSession _session(Object? json) {
   );
 }
 
+/// Never [NoticeBox.system]: the app reads that box as 系统通知's own list (`sys-msg`), so a session marked so would
+/// be paged and acked as that list instead of as itself.
 NoticeBox? _box(String? officialName, int systemType) {
   for (final box in NoticeBox.values) {
-    if (box.label == officialName) return box;
+    if (box != NoticeBox.system && box.label == officialName) return box;
   }
-  return switch (systemType) {
-    5 => NoticeBox.system,
-    7 => NoticeBox.creator,
-    _ => null,
-  };
+  return systemType == 7 ? NoticeBox.creator : null;
 }
 
 bool _vipPink(JsonObject? vip) =>

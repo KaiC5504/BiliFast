@@ -96,6 +96,10 @@ void main() {
     );
     expect(tester.takeException(), isNull);
     expect(messages.unread, const MessageUnread(like: 1));
+    await settle(tester);
+    expect(api.calls, containsAll(['replies 0', 'mentions 0']), reason: 'an unread @ is read on Bilibili too');
+    await messages.refreshUnread(force: true);
+    expect(messages.unread.at, 0, reason: 'so the count stays cleared');
   });
 
   testWidgets('a first page refused by risk control waits for 重试: the account\'s checks ask nothing again', (

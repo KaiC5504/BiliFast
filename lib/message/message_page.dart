@@ -265,6 +265,14 @@ class _MessagePageState extends State<MessagePage> with SkinRefreshRoom, Widgets
 
   Future<void> _readAll() async {
     if (_readingAll) return;
+    if (_environment.account is AccountUnknown) {
+      await _environment.refreshAccount();
+      if (!mounted) return;
+      if (_environment.account is AccountUnknown) {
+        showToast(context, '账号确认失败，请稍后重试');
+        return;
+      }
+    }
     if (_loggedOut) {
       unawaited(_login());
       return;

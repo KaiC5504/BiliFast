@@ -107,8 +107,13 @@ class _RepliesPageState extends State<RepliesPage> with SkinRefreshRoom, FeedPag
   @override
   NoticeFeed get openedFeed => NoticeFeed.reply;
 
+  /// 全部 asks only 回复我的, but opening 回复与@ clears the @ count too (MessageModel.feedOpened), and Bilibili clears
+  /// it only once @我 is read: so its first page is asked as well while there are unread mentions.
   @override
-  void startLists() => unawaited(_shown.start());
+  void startLists() {
+    unawaited(_shown.start());
+    if (!_mentions && services.messages.unread.at > 0) unawaited(_at.start());
+  }
 
   @override
   void dispose() {

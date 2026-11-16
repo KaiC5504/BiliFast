@@ -509,7 +509,7 @@ void main() {
       expect(model.badge, 0);
     });
 
-    test('一键已读 then asks the counts again: Bilibili\'s say what is left past the first page of sessions', () async {
+    test('一键已读 then asks the counts and the list again: Bilibili\'s say what is left past the first page of sessions', () async {
       final model = make();
       model.start();
       await model.refresh();
@@ -523,7 +523,7 @@ void main() {
       api.counts = const MessageUnread(chat: 2);
       counting.complete();
       await reading;
-      expect(api.calls.sublist(api.calls.indexOf('readAll')), ['readAll', 'unread']);
+      expect(api.calls.sublist(api.calls.indexOf('readAll')), unorderedEquals(['readAll', 'unread', 'sessions 0']));
       expect(model.unread, const MessageUnread(chat: 2));
     });
 

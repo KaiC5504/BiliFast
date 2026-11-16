@@ -28,7 +28,7 @@ void main() {
     final videos = FakeHotApi.demoVideos(DateTime(2026, 11, 16, 12));
     expect([for (final video in videos.take(3)) (video.card.bvid, video.card.aid, video.card.cid)], [
       ('BV13as367Ebh', 117614407850785, 0),
-      ('BV1GJ411x7h7', 80433022, 0),
+      ('BV17x411w7KC', 170001, 0),
       ('BV1hotdemo02', 9002, 19002),
     ]);
     expect(videos.first.card.title, '演示热门视频0', reason: 'still a 演示 row');

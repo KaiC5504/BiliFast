@@ -174,7 +174,7 @@ void main() {
       expect(untimed.time.millisecondsSinceEpoch, 1760000000000);
     });
 
-    test('official boxes by name, else by system_msg_type; a person named like one stays a person', () {
+    test('official boxes by name, else by system_msg_type; a person named like one stays a person; never 系统通知', () {
       NoticeBox? box(Map<String, Object?> extra) => session(_message(seqno: 1), extra: extra).box;
       expect(
         box({
@@ -193,7 +193,13 @@ void main() {
           'account_info': {'name': '测试小助手'},
           'system_msg_type': 5,
         }),
-        NoticeBox.system,
+        isNull,
+      );
+      expect(
+        box({
+          'account_info': {'name': '系统通知', 'pic_url': ''},
+        }),
+        isNull,
       );
       expect(
         box({

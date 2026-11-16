@@ -5,6 +5,7 @@ import 'package:bilifast/account/keychain_store.dart';
 import 'package:bilifast/account/login_gate.dart';
 import 'package:bilifast/app/app_environment.dart';
 import 'package:bilifast/app/app_scope.dart';
+import 'package:bilifast/app/form_factor.dart';
 import 'package:bilifast/app/swipe_back_route.dart';
 import 'package:bilifast/home/recent_store.dart';
 import 'package:bilifast/notify/notify_host.dart';
@@ -385,6 +386,32 @@ void main() {
     expect(find.byKey(const ValueKey('home')), findsOneWidget);
     expect(navigator.currentState!.canPop(), isFalse);
     expect(logged('notify open').last, {'kind': 'messages'});
+  });
+
+  testWidgets("on the iPad, which has no 消息, a like's or a 私信's route opens nothing and closes nothing", (
+    tester,
+  ) async {
+    FormFactor.device = FormFactor.pad;
+    addTearDown(() => FormFactor.device = FormFactor.phone);
+    taps().start();
+    await mount(tester);
+    await tester.pumpAndSettle();
+    var shows = 0;
+    services.messages.showRequests.addListener(() => shows += 1);
+    host.tap(const NotifyVideo(bvid: 'BV1first'));
+    await tester.pumpAndSettle();
+    host.tap(const NotifyLikes());
+    await tester.pumpAndSettle();
+    host.tap(const NotifyMessages());
+    await tester.pumpAndSettle();
+    expect(pages.likes, 0);
+    expect(shows, 0);
+    expect(find.byKey(const ValueKey('video-BV1first')), findsOneWidget, reason: 'the video page stays');
+    expect(logged('notify open'), [
+      {'kind': 'video'},
+      {'kind': 'likes'},
+      {'kind': 'messages'},
+    ]);
   });
 
   testWidgets('logged out, a like\'s or a 私信\'s route opens nothing', (tester) async {

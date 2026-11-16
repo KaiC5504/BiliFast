@@ -146,8 +146,18 @@ class _ChatPageState extends State<ChatPage> {
     _ => false,
   };
 
-  /// True when there's an account to act as, after the login page if it took one.
+  /// True when there's an account to act as, after the login page if it took one. An account still being checked
+  /// is asked first: sending under it would go out as nobody.
   Future<bool> _signedIn() async {
+    final environment = _services!.environment;
+    if (environment.account is AccountUnknown) {
+      await environment.refreshAccount();
+      if (!mounted) return false;
+      if (environment.account is AccountUnknown) {
+        showToast(context, '账号确认失败，请稍后重试');
+        return false;
+      }
+    }
     if (!_loggedOut) return true;
     return _services!.loginGate.request(context);
   }
