@@ -357,6 +357,39 @@ void main() {
     expect(find.byType(FollowTabPage), findsOneWidget);
   });
 
+  testWidgets('the face sheet frosts the whole screen while it moves, only the strip above it once open', (tester) async {
+    await showShell(tester, api: FakeDynamicApi(posts: posts(3, mid: 101), upList: faces));
+    await tapTab(tester, HomeTab.follow);
+    await settle(tester);
+    CustomClipper<Rect>? clipper() => tester
+        .widget<ClipRect>(
+          find.descendant(of: find.byKey(const ValueKey('face-sheet-frost')), matching: find.byType(ClipRect)),
+        )
+        .clipper;
+
+    await tester.tap(find.byKey(const ValueKey('follow-face-101')));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 30));
+    expect(clipper(), isNull, reason: 'opening');
+    await settle(tester, 12);
+    final sheetTop = tester.getRect(find.byKey(const ValueKey('face-sheet'))).top;
+    expect(clipper()!.getClip(const Size(440, 956)).height, sheetTop + DynamicFeedTheme.sheetRadius);
+
+    await tester.tap(find.byKey(const ValueKey('face-sheet-close')));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 30));
+    expect(clipper(), isNull, reason: 'closing');
+    await settle(tester, 12);
+    expect(find.byKey(const ValueKey('face-sheet')), findsNothing);
+
+    await tester.tap(find.byKey(const ValueKey('follow-face-101')));
+    await settle(tester, 12);
+    expect(clipper(), isNotNull);
+    await tester.tapAt(const Offset(400, 70));
+    await settle(tester, 12);
+    expect(find.byKey(const ValueKey('face-sheet')), findsNothing, reason: 'the frost above the sheet still closes it');
+  });
+
   testWidgets('cards play while 关注 shows with nothing over it: not under 首页, the face sheet or a page', (tester) async {
     await showShell(tester, routes: {'/other': (_) => const Scaffold(body: Text('other page'))});
     await tapTab(tester, HomeTab.follow);
