@@ -459,22 +459,12 @@ class FeedModel extends ChangeNotifier {
           _insert(page);
         } else {
           final above = extras.top;
-          final fresh = _appending(page.cards, above).sublist(above.length);
-          // A refresh shows one big card, at its top, as the official app does: an extra page's goes up there only
-          // while page 1 brought none and nothing shows yet; any other is drawn as an ordinary card.
-          final big = above.any((card) => card.big != null)
-              ? null
-              : fresh.where((card) => card.big != null).firstOrNull;
-          final added = [
-            for (final card in fresh)
-              if (!identical(card, big)) card.small,
-          ];
+          final added = _appending(page.cards, above).sublist(above.length);
           extras
-            ..top = [?big, ...above, ...added]
+            ..top = [...above, ...added]
             ..waiting.add(page);
-          _logPage(page, fresh.length, extra: true);
-          if (big != null) _askInsertCovers(const [], [big]);
-          _askInsertCovers([?big, ...above], added);
+          _logPage(page, added.length, extra: true);
+          _askInsertCovers(above, added);
         }
         // The token was refused on the way: the rest of this scroll is the website's, and so is its page size.
         if (page.source == FeedSource.web) break;
@@ -493,8 +483,7 @@ class FeedModel extends ChangeNotifier {
 
   /// An extra page that came after page 1 showed: its new cards under [newest], their covers asked for first.
   void _insert(_Page page) {
-    // The batch's top shows already, so a big card here is drawn as an ordinary one.
-    final added = [for (final card in _appending(page.cards, _cards).sublist(_cards.length)) card.small];
+    final added = _appending(page.cards, _cards).sublist(_cards.length);
     if (added.isNotEmpty) {
       final top = _newest.length;
       _askInsertCovers(_newest, added);

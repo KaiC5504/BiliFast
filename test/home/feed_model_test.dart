@@ -1563,8 +1563,8 @@ void main() {
 
     List<String> newest(FeedModel feed) => [for (final card in feed.newest) card.bvid];
 
-    test('one big card a refresh, at its top: an extra page in before the swap brings it up when page 1 has none, '
-        'and every other big card is drawn as an ordinary one', () async {
+    test('every page keeps its big cards where the server puts them, as the official app shows them when scrolling, '
+        'whether the extra page comes before the swap or after', () async {
       // The extra pages land within the hold a refresh over cards on screen keeps, as on the phone.
       final model = FeedModel(
         client: BiliClient(transport: http, cookies: CookieJar(Canned.cookies), logger: Logger(session: 'test'))
@@ -1584,9 +1584,8 @@ void main() {
       await model.refresh();
       await settled(model);
       final cards = model.cards;
-      expect([for (final card in cards) card.bvid].take(2), ['BVbig1', 'BVa0']);
-      expect([for (final card in cards) if (card.big != null) card.bvid], ['BVbig1']);
-      expect(cards.map((card) => card.bvid), contains('BVbig2'));
+      expect([for (final card in cards) card.bvid].take(3), ['BVa0', 'BVa1', 'BVbig1']);
+      expect([for (final card in cards) if (card.big != null) card.bvid], ['BVbig1', 'BVbig2']);
     });
 
     test('page 1\'s big card stays on top and the extra pages\' are drawn as ordinary ones', () async {
@@ -1597,10 +1596,10 @@ void main() {
       await model.refresh();
       await settled(model);
       expect(model.cards.first.bvid, 'BVbig0');
-      expect([for (final card in model.cards) if (card.big != null) card.bvid], ['BVbig0']);
+      expect([for (final card in model.cards) if (card.big != null) card.bvid], ['BVbig0', 'BVbig1']);
     });
 
-    test('a big card on an extra page that comes after the swap goes in as an ordinary card', () async {
+    test('a big card on an extra page that comes after the swap stays big, under page 1', () async {
       final model = FeedModel(
         client: BiliClient(transport: http, cookies: CookieJar(Canned.cookies), logger: Logger(session: 'test'))
           ..appToken = fakeAppToken,
@@ -1617,7 +1616,7 @@ void main() {
       http.officialGates[1]!.complete();
       await settled(model);
       expect(model.cards.first.bvid, 'BVa0');
-      expect([for (final card in model.cards) if (card.big != null) card.bvid], isEmpty);
+      expect([for (final card in model.cards) if (card.big != null) card.bvid], ['BVbig1']);
     });
 
     test('one page shows as before: one call, and the refresh is done when it comes back', () async {
