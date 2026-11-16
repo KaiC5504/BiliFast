@@ -247,7 +247,7 @@ class _ShareSheetRoute extends PopupRoute<_Choice> {
     if (asset == null) {
       return SizedBox.square(
         dimension: HotListTheme.targetIcon,
-        child: CustomPaint(painter: _BrandPainter(target)),
+        child: CustomPaint(painter: ShareBrandPainter(ShareBrand.of(target)!)),
       );
     }
     return Image.asset(
@@ -341,12 +341,25 @@ class _ClosePainter extends CustomPainter {
   bool shouldRepaint(_ClosePainter oldDelegate) => false;
 }
 
-/// Facebook's, X's and WhatsApp's marks on their circles, which the APK doesn't carry: drawn on a 44 grid measured
-/// off 217.
-class _BrandPainter extends CustomPainter {
-  const _BrandPainter(this.target);
+enum ShareBrand {
+  facebook,
+  x,
+  whatsApp;
 
-  final HotShareTarget target;
+  static ShareBrand? of(HotShareTarget target) => switch (target) {
+    HotShareTarget.facebook => facebook,
+    HotShareTarget.x => x,
+    HotShareTarget.whatsApp => whatsApp,
+    HotShareTarget.weChat || HotShareTarget.moments || HotShareTarget.download || HotShareTarget.qq => null,
+  };
+}
+
+/// Facebook's, X's and WhatsApp's marks on their circles, which the APK doesn't carry: drawn on a 44 grid measured
+/// off 217 (热门's share sheet; a room's 221 shows the same).
+class ShareBrandPainter extends CustomPainter {
+  const ShareBrandPainter(this.brand);
+
+  final ShareBrand brand;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -354,8 +367,8 @@ class _BrandPainter extends CustomPainter {
     canvas.scale(size.width / 44, size.height / 44);
     final circle = Path()..addOval(const Rect.fromLTWH(0, 0, 44, 44));
     final mark = Paint()..color = HotListTheme.brandMark;
-    switch (target) {
-      case HotShareTarget.facebook:
+    switch (brand) {
+      case ShareBrand.facebook:
         canvas
           ..clipPath(circle)
           ..drawPath(circle, Paint()..color = HotListTheme.facebookFill)
@@ -373,7 +386,7 @@ class _BrandPainter extends CustomPainter {
             mark,
           )
           ..drawPath(_polygon(const [(13.33, 21.83), (31.33, 21.83), (30.73, 28.17), (13.33, 28.17)]), mark);
-      case HotShareTarget.x:
+      case ShareBrand.x:
         canvas
           ..drawPath(circle, Paint()..color = HotListTheme.xFill)
           ..drawPath(_polygon(const [(9.83, 10.73), (17.5, 10.73), (34.33, 33.27), (26.67, 33.27)]), mark)
@@ -382,7 +395,7 @@ class _BrandPainter extends CustomPainter {
             Paint()..color = HotListTheme.xFill,
           )
           ..drawPath(_polygon(const [(28.83, 10.73), (32.93, 10.73), (14.17, 33.27), (10.07, 33.27)]), mark);
-      case HotShareTarget.whatsApp:
+      case ShareBrand.whatsApp:
         const centre = Offset(21.75, 21.7);
         const radius = 11.78;
         final ring = Paint()
@@ -414,8 +427,6 @@ class _BrandPainter extends CustomPainter {
           );
         _earpiece(canvas, const Offset(17.6, 18), const Size(4.2, 5.6), mark);
         _earpiece(canvas, const Offset(26.9, 25.9), const Size(5.6, 4.2), mark);
-      case HotShareTarget.weChat || HotShareTarget.moments || HotShareTarget.download || HotShareTarget.qq:
-        break;
     }
     canvas.restore();
   }
@@ -445,5 +456,5 @@ class _BrandPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(_BrandPainter oldDelegate) => oldDelegate.target != target;
+  bool shouldRepaint(ShareBrandPainter oldDelegate) => oldDelegate.brand != brand;
 }

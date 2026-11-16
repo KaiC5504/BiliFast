@@ -1,5 +1,6 @@
 import 'package:flutter/widgets.dart';
 
+import '../../home/hot/hot_share_sheet.dart' show ShareBrand, ShareBrandPainter;
 import '../../shared/theme.dart';
 import '../live_badges.dart';
 import 'room_glyphs.dart';
@@ -66,13 +67,13 @@ class RoomMoreSheet extends StatelessWidget {
       );
     }
     final brand = switch (target) {
-      RoomShareTarget.facebook => RoomBrand.facebook,
-      RoomShareTarget.x => RoomBrand.x,
-      _ => RoomBrand.whatsApp,
+      RoomShareTarget.facebook => ShareBrand.facebook,
+      RoomShareTarget.x => ShareBrand.x,
+      _ => ShareBrand.whatsApp,
     };
     return SizedBox.square(
       dimension: LiveRoomTheme.sheetCircle,
-      child: CustomPaint(painter: RoomBrandPainter(brand)),
+      child: CustomPaint(painter: ShareBrandPainter(brand)),
     );
   }
 

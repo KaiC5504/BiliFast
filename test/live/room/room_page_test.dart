@@ -40,7 +40,7 @@ void main() {
     expect(key('live-room-page'), findsOneWidget);
   });
 
-  testWidgets("207's places: the capsule 7 under the safe area, the chips 52, the 16:9 box 137.83, the bar on the inset", (
+  testWidgets("207's places: the capsule 7 under the safe area, the chips 52, the 16:9 box 138, the bar on the inset", (
     tester,
   ) async {
     await pumpRoom(tester, await roomServices(gate: gate));
@@ -315,7 +315,11 @@ void main() {
         expect(find.byType(type), findsOneWidget, reason: '$overlay');
       }
       expect(tester.widget<LiveSendInput>(find.byType(LiveSendInput)).landscape, isTrue);
-      expect(tester.getRect(find.byType(LiveSendInput)), const Rect.fromLTWH(0, 0, 956, 440), reason: 'the whole screen');
+      expect(
+        tester.getRect(find.byType(LiveSendInput)),
+        const Rect.fromLTWH(0, 0, 956, 440),
+        reason: 'the whole screen',
+      );
     });
 
     testWidgets('a 关注 that wants a login turns the room upright before the login page', (tester) async {

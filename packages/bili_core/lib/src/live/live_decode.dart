@@ -104,36 +104,8 @@ abstract final class LiveSocketDecode {
     );
   }
 
-  /// `SUPER_CHAT_MESSAGE`'s data; the same shape as the room's 醒目留言 list.
-  static LiveSuperChat superChat(Map<String, Object?> data) {
-    final info = _map(data['user_info']) ?? const <String, Object?>{};
-    final uinfo = _map(data['uinfo']);
-    final medalInfo = _map(data['medal_info']);
-    final medal = _medal(medalInfo) ?? _medal(_map(uinfo?['medal']));
-    final start = _int(data['start_time']) ?? _int(data['ts']) ?? (throw _missing('start_time'));
-    final price = data['price'];
-    return LiveSuperChat(
-      id: _int(data['id']) ?? (throw _missing('id')),
-      user: LiveUser(
-        uid: _int(data['uid']) ?? 0,
-        name: _str(info['uname']) ?? '',
-        face: _str(info['face']) ?? '',
-        faceFrame: _str(info['face_frame']) ?? '',
-        medal: medal,
-        wealthLevel: _int(_map(uinfo?['wealth'])?['level']) ?? 0,
-        guardLevel: _int(info['guard_level']) ?? medal?.guardLevel ?? 0,
-        nameColor: _color(info['name_color']) ?? 0,
-      ),
-      message: _str(data['message']) ?? '',
-      price: price is num ? price.round() : _int(price) ?? 0,
-      start: DateTime.fromMillisecondsSinceEpoch(start * 1000),
-      end: DateTime.fromMillisecondsSinceEpoch((_int(data['end_time']) ?? start + (_int(data['time']) ?? 0)) * 1000),
-      background: _color(data['background_color']) ?? 0,
-      backgroundBottom: _color(data['background_bottom_color']) ?? 0,
-      headerColor: _color(data['background_color_start']) ?? _color(data['background_color']) ?? 0,
-      priceColor: _color(data['background_price_color']) ?? 0,
-    );
-  }
+  /// `SUPER_CHAT_MESSAGE`'s data: the same shape as the room's 醒目留言 list, read by its decoder.
+  static LiveSuperChat superChat(Map<String, Object?> data) => LiveDecode.superChat(data);
 
   static LiveEvent? _topFaces(Map<String, Object?> data) {
     final rows = [

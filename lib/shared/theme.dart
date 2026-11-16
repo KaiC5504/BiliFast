@@ -9445,10 +9445,6 @@ abstract final class LiveRoomTheme {
   static const boostIconWidth = 16.0;
   static const boostIconHeight = 20.0;
   static const glyphStroke = 1.6;
-  static const facebookFill = Color(0xFF0079F8);
-  static const xFill = Color(0xFF000000);
-  static const whatsAppFill = Color(0xFF25D366);
-  static const brandMark = Color(0xFFFFFFFF);
 
   /// 荣耀等级's chip (207): 16 tall, the V 8.33 × 7.33 6 in, the level bold 10.5 6.33 after it, 7 to the end; deeper
   /// blues from levels 10 and 20.

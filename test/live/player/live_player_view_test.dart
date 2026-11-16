@@ -74,13 +74,7 @@ void main() {
             if (landscape)
               Positioned.fill(child: view)
             else
-              Positioned(
-                left: 0,
-                right: 0,
-                top: liveBoxTop,
-                height: liveBoxBottom - liveBoxTop,
-                child: view,
-              ),
+              Positioned(left: 0, right: 0, top: liveBoxTop, height: liveBoxBottom - liveBoxTop, child: view),
             Positioned.fill(
               child: ValueListenableBuilder(
                 valueListenable: overlays,

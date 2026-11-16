@@ -358,11 +358,10 @@ void main() {
       expect(players.made, hasLength(1), reason: 'the middle card only');
       expect(players.last.calls, contains('muted true'));
       expect(find.byKey(const ValueKey('live-big-loading')), findsOneWidget);
-      expect(
-        harness.api.calls.where((call) => call.contains('9100')),
-        ['playInfo 9100 qn=-', 'channel 9100'],
-        reason: "the stream and its danmaku only: nothing of the room page's, no 历史记录 entry",
-      );
+      expect(harness.api.calls.where((call) => call.contains('9100')), [
+        'playInfo 9100 qn=-',
+        'channel 9100',
+      ], reason: "the stream and its danmaku only: nothing of the room page's, no 历史记录 entry");
 
       await playing(tester);
       expect(find.byKey(const ValueKey('live-big-loading')), findsNothing);
