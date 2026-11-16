@@ -8168,4 +8168,83 @@ abstract final class MessageChatTheme {
 /// 消息设置 and its pickers (188, 195, 215, 216). Filled by 消息设置's builder.
 abstract final class MessageSettingsTheme {
   static const page = BiliColors.pageGrey;
+
+  /// The bar, 44 under the status bar: the 装扮's second-page colour and text colour (KaiC's green, 188), else white
+  /// with the page's text. Its title is 17 pt semibold, centred on the screen, its glyphs' middle 0.4 below the row's;
+  /// ‹ as 离线缓存's: 1.5 strokes, its tip 20.08 in and its ends 27.92 in, 8.25 above and below the row's middle.
+  static const barRow = 44.0;
+  static const bar = BiliColors.card;
+  static const barInk = BiliColors.text;
+  static const barLightInk = Color(0xFFFFFFFF);
+  static const titleText = 17.0;
+  static const titleWeight = FontWeight.w600;
+  static const titleLine = 24.0;
+  static const titleDrop = 0.4;
+  static const backTarget = 44.0;
+  static const backTipX = 20.08;
+  static const backEndX = 27.92;
+  static const backHalfHeight = 8.25;
+  static const backStroke = 1.5;
+
+  /// 10 pt of grey over the first rows; a labelled group's 91 px, its 12 pt grey label 12 in with its middle 17
+  /// down. No hairline at either edge of a group.
+  static const top = 10.0;
+  static const labelHeight = 91 / 3;
+  static const labelCentre = 17.0;
+  static const labelInset = 12.0;
+  static const labelText = 12.0;
+  static const label = BiliColors.secondaryText;
+
+  /// Rows, white: 153 px, 206 with a 13 pt grey second line; titles 16 pt, both lines 16 in. The title's middle is
+  /// 25.83 down, the second line's 45; the value and › sit 25.67 down a one-line row, the ✓ 25.5, and the value, ›
+  /// and switch on a two-line row's middle.
+  static const row = BiliColors.card;
+  static const rowHeight = 51.0;
+  static const tallHeight = 206 / 3;
+  static const titleCentre = 25.83;
+  static const subtitleCentre = 45.0;
+  static const trailingCentre = 25.67;
+  static const checkCentre = 25.5;
+  static const rowInset = 16.0;
+  static const rowTitleText = 16.0;
+  static const rowTitle = BiliColors.text;
+  static const subtitleText = 13.0;
+  static const subtitle = BiliColors.secondaryText;
+
+  /// Between two rows of a group, 2 px of the page's grey, the upper one a hairline from 12 in.
+  static const rule = 2 / 3;
+  static const hairline = 1 / 3;
+  static const hairlineInset = 12.0;
+  static const hairlineColor = BiliColors.divider;
+
+  /// The value, 13 pt grey, its ink 7.33 before ›'s; › 20 × 35 px of ink, a little heavier than 设置's, ending 62 px
+  /// from the edge.
+  static const valueText = 13.0;
+  static const value = BiliColors.secondaryText;
+  static const valueGap = 7.0;
+  static const chevronWidth = 20 / 3;
+  static const chevronHeight = 35 / 3;
+  static const chevronStroke = 0.95;
+  static const chevronRight = 62 / 3;
+  static const chevron = BiliColors.secondaryText;
+
+  /// 188's switch: a 48 × 30 pill ending 16 from the edge, its knob a white 24 circle 3 inside it; pink on, and off
+  /// the grey of 设置's (188 shows none off).
+  static const switchWidth = 48.0;
+  static const switchHeight = 30.0;
+  static const switchKnob = 24.0;
+  static const switchRight = 16.0;
+  static const switchOn = BiliColors.pink;
+  static const switchOff = SettingsListTheme.switchOff;
+  static const switchKnobFill = BiliColors.card;
+  static const switchMotion = SettingsTheme.switchMotion;
+
+  /// A picker's chosen row (215, 216, 195): its words pink and semibold, the ✓ 12.67 × 8.33 of ink with a 1 pt
+  /// stroke, ending 53 px from the edge.
+  static const chosen = BiliColors.pink;
+  static const chosenWeight = FontWeight.w600;
+  static const checkEnd = 53 / 3;
+  static const checkShort = 4.33;
+  static const checkLong = 7.33;
+  static const checkStroke = 1.0;
 }
