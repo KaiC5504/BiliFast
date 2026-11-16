@@ -8148,6 +8148,119 @@ abstract final class HomeTabRowTheme {
 /// 首页's 热门 (204, 217). Filled by 热门's builder.
 abstract final class HotListTheme {
   static const page = BiliColors.card;
+
+  /// A row (204): 114.67 apart, the 167 × 94 cover 10 down and 12 in, and a 0.5 #E3E5E7 line across the whole page 10
+  /// under the cover.
+  static const rowHeight = 344 / 3;
+  static const gutter = 12.0;
+  static const coverTop = 10.0;
+  static const coverWidth = 167.0;
+  static const coverHeight = 94.0;
+  static const coverRadius = 11 / 3;
+  static const coverPlaceholder = BiliColors.pageGrey;
+  static const hairlineTop = 114.0;
+  static const hairline = 0.5;
+  static const hairlineInk = BiliColors.divider;
+
+  /// The title: 14 on 21.33 lines, two at most, its first line's ink centred 8.17 under the cover's top, its glyphs
+  /// from 189.83 (the stand-ins' bearings put the box 0.67 before that); it wraps before 428.
+  static const titleLeft = 189.17;
+  static const titleRight = 12.0;
+  static const titleTop = -2.6;
+  static const titleText = 14.0;
+  static const titleLine = 64 / 3;
+  static const titleInk = BiliColors.text;
+
+  /// The UP and ▷ lines: their 13.33 × 11.33 icons (the APK's, cut to their ink) from 190.33, centred 26.17 and 8.17
+  /// above the cover's bottom, the 12 pt grey words' ink 3.67 after the icon.
+  static const metaLeft = 571 / 3;
+  static const metaIconWidth = 40 / 3;
+  static const metaIconHeight = 34 / 3;
+  static const metaIconGap = 3.3;
+  static const metaText = 12.0;
+  static const metaLine = 17.0;
+  static const metaInk = BiliColors.secondaryText;
+  static const upCentreAbove = 26.17;
+  static const playsCentreAbove = 8.17;
+
+  /// ⋮ centred 20.17 from the right edge on the ▷ line (History's dots: 2 wide, 4.33 apart, #C9CCCF).
+  static const moreCentreRight = 20.17;
+  static const moreTarget = 32.0;
+
+  /// The length on the cover: a 14 tall pill 4 in from its right and bottom, black at 38%.
+  static const durationText = 10.0;
+  static const durationHeight = 14.0;
+  static const durationPadX = 8 / 3;
+  static const durationRight = 4.0;
+  static const durationBottom = 4.0;
+  static const durationRadius = 3.0;
+  static const durationFill = Color(0x61000000);
+  static const durationInk = BiliColors.onCover;
+
+  /// Rows this close to the end ask for the next page.
+  static const loadAhead = rowHeight * 3;
+
+  /// Under the rows: the next page's small spinner, the end or the failure with 重试; before the first page the TV,
+  /// the failure or the empty list in the middle.
+  static const footerPad = 16.0;
+  static const footerLine = 20.0;
+  static const spinnerRadius = 10.0;
+  static const stateText = 14.0;
+  static const stateInk = BiliColors.secondaryText;
+  static const stateGap = 16.0;
+  static const retryText = SearchResultTheme.retryText;
+  static const retryHeight = SearchResultTheme.retryHeight;
+  static const retryPadX = SearchResultTheme.retryPadX;
+  static const retryRim = SearchResultTheme.retryRim;
+  static const retryPressedScale = SearchResultTheme.followPressedScale;
+  static const retryPressMotion = SearchResultTheme.followPressMotion;
+
+  /// 首页's tap: back to the top, then the refresh's room held open there, as 推荐's.
+  static const reloadScroll = HomeTabBarTheme.reloadScroll;
+  static const reloadHeader = HomeTabBarTheme.reloadHeader;
+  static const reloadCollapse = HomeTabBarTheme.reloadCollapse;
+
+  /// ⋮'s share sheet (217): white with 12 corners over the page dimmed by half, 222 tall above the home indicator; all
+  /// its words and glyphs #61666D.
+  static const sheetDim = BiliColors.sheetDim;
+  static const sheetFill = BiliColors.card;
+  static const sheetRadius = 12.0;
+  static const sheetHeight = 222.0;
+  static const sheetIn = SearchResultTheme.sheetIn;
+  static const sheetOut = SearchResultTheme.sheetOut;
+  static const sheetInk = Color(0xFF61666D);
+
+  /// 分享, 19 pt and heavy, 16 in, its ink centred 23.67 down; × (12 square, 1.33 strokes) centred 26.17 from the
+  /// right edge on the same line.
+  static const sheetTitleText = 19.0;
+  static const sheetTitleWeight = FontWeight.w600;
+  static const sheetTitleLeft = 16.0;
+  static const sheetTitleCentre = 23.67;
+  static const closeCentreRight = 26.17;
+  static const closeSize = 12.0;
+  static const closeStroke = 4 / 3;
+  static const closeTarget = 44.0;
+
+  /// The share targets, 66 apart from 12 in: 44 circles 47.33 down, their 12 pt names centred 37 under the circles'
+  /// middle. The row runs off the right edge and scrolls sideways.
+  static const targetsLeft = 12.0;
+  static const targetWidth = 66.0;
+  static const targetIcon = 44.0;
+  static const targetIconTop = 47.33;
+  static const targetLabelBelow = 37.0;
+  static const targetText = 12.0;
+
+  /// A 1 pt #E3E5E7 rule across the sheet 141.33 down, then 稍后再看's 44 box 154 down under the first target.
+  static const ruleTop = 141.33;
+  static const rule = 1.0;
+  static const ruleInk = BiliColors.divider;
+  static const laterTop = 154.0;
+
+  /// The brand circles drawn in place of art the APK lacks, sampled on 217.
+  static const facebookFill = Color(0xFF0079F8);
+  static const xFill = Color(0xFF000000);
+  static const whatsAppFill = Color(0xFF32DA51);
+  static const brandMark = Color(0xFFFFFFFF);
 }
 
 /// The bottom bar's 消息 (196, 211, 212) and the tab's badge (214). Filled by 消息's builder.
