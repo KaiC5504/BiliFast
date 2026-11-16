@@ -112,6 +112,12 @@ class StoryPager extends ChangeNotifier {
     _from = drag.offset;
     _to = to;
     _ticker.stop();
+    final feed = _feed;
+    feed?.settling(switch (to) {
+      < 0 => feed.next,
+      > 0 => feed.previous,
+      _ => null,
+    });
     if ((_from - _to).abs() < StoryPagerTheme.landWithin) {
       _land();
       return;
@@ -143,6 +149,8 @@ class StoryPager extends ChangeNotifier {
     if (moved) {
       _arrived = feed?.current;
       clean?.value = false;
+    } else if (_to != 0) {
+      feed?.settling(null);
     }
     drag.land();
     if (moved) notifyListeners();

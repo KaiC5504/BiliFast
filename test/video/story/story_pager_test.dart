@@ -247,6 +247,32 @@ void main() {
     expect(feed.moves, [1, 0]);
   });
 
+  testWidgets('the lift tells the feed where the page goes before it lands, and when it goes back', (tester) async {
+    await swipe(tester, -100, velocity: -1000);
+    expect(feed.settlings, ['BV2'], reason: 'at the lift');
+    expect(feed.moves, isEmpty, reason: 'before the settle lands');
+    await settle(tester);
+    expect(feed.moves, [1]);
+
+    await swipe(tester, 100, velocity: 1000);
+    await tester.pump(frame);
+    drag.start();
+    drag.update(-900);
+    expect(drag.offset, lessThan(0));
+    drag.end(-1000);
+    expect(feed.settlings, ['BV2', 'BV1', 'BV3'], reason: 'caught mid-settle and flung the other way');
+    await settle(tester);
+    expect(feed.moves, [1, 2]);
+
+    await swipe(tester, -screen * 0.3, frames: 30, velocity: -150);
+    await settle(tester);
+    expect(feed.settlings.last, isNull, reason: 'a short drag goes back');
+
+    expect(pager.movePrevious(), isTrue);
+    expect(feed.settlings.last, 'BV2', reason: '上一个视频 settles as a swipe does');
+    await settle(tester);
+  });
+
   testWidgets('landing turns 清屏 off and holds the arrived still until the player shows its first frame',
       (tester) async {
     expect(pager.arrived, isNull);

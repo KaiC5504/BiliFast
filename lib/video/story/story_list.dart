@@ -72,7 +72,9 @@ abstract class StoryHost extends ChangeNotifier {
 /// neighbour, and handed to its open. With [warmsNext] too, the next video is then loaded ahead on the page's player
 /// ([StoryHost.warm]) once the video settled on has shown its first frame and holds enough ahead: once for each video
 /// settled on (a warm the page couldn't start yet, covered, is asked again when it can), never while halted, let go
-/// when the feed starts over or 竖屏 ends.
+/// when the feed starts over or 竖屏 ends. The page let go towards a neighbour that isn't loaded ahead (its details
+/// in hand) loads it at once, without waiting for those, so it loads during the settle: one for each release, let go
+/// if the page goes back instead, unless it is the next video's warm due now anyway.
 class StoryList extends StoryFeed {
   StoryList({
     required StoryHost host,
@@ -107,8 +109,18 @@ class StoryList extends StoryFeed {
   int? _detailAskedIn;
   int? _warmAskedIn;
 
-  /// The video moved to, until its first frame shows.
-  ({String bvid, Stopwatch since, bool prefetched})? _arrival;
+  /// The video moved to, until its first frame shows: timed from the release towards it where there was one, with
+  /// the settle's own share.
+  ({String bvid, Stopwatch since, bool prefetched, int? settleMs})? _arrival;
+
+  /// The page let go towards this video, until it opens.
+  ({String bvid, Stopwatch since})? _released;
+
+  /// The video loaded ahead last, until the page opens a video or it is let go.
+  String? _warmedBvid;
+
+  /// [_warmedBvid] when it was loaded at a release rather than for the video settled on.
+  String? _releaseWarm;
 
   /// Where 竖屏 was entered from; every entry's reports name it, after a start over too.
   PlaySource? _entrySource;
@@ -150,6 +162,7 @@ class StoryList extends StoryFeed {
       _logger.info(LogCategory.player, 'story arrival', {
         'ms': arrival.since.elapsedMilliseconds,
         'prefetched': arrival.prefetched,
+        'settleMs': ?arrival.settleMs,
       });
     }
     _askWarm();
@@ -191,6 +204,9 @@ class StoryList extends StoryFeed {
     _details.clear();
     _settles++;
     _arrival = null;
+    _released = null;
+    _warmedBvid = null;
+    _releaseWarm = null;
     _host.dropWarm();
     _logger.info(LogCategory.api, 'story feed restarted');
     notifyListeners();
@@ -220,7 +236,17 @@ class StoryList extends StoryFeed {
 
   void _arrive(StoryEntry entry, {required bool entered}) {
     final detail = _details[entry.bvid];
-    _arrival = (bvid: entry.bvid, since: Stopwatch()..start(), prefetched: detail != null);
+    final released = _released?.bvid == entry.bvid ? _released : null;
+    _arrival = (
+      bvid: entry.bvid,
+      since: released?.since ?? (Stopwatch()..start()),
+      prefetched: detail != null,
+      settleMs: released?.since.elapsedMilliseconds,
+    );
+    _released = null;
+    // The open takes the warm, or lets another video's go.
+    _warmedBvid = null;
+    _releaseWarm = null;
     _settles++;
     final near = {?previous?.bvid, entry.bvid, ?next?.bvid};
     _details.removeWhere((bvid, _) => !near.contains(bvid));
@@ -231,6 +257,33 @@ class StoryList extends StoryFeed {
   void wantMore() {
     if (_disposed) return;
     _userMoved();
+  }
+
+  @override
+  void settling(StoryEntry? entry) {
+    if (_disposed) return;
+    if (_releaseWarm != null && _releaseWarm != entry?.bvid) _letReleaseWarmGo();
+    if (entry == null) {
+      _released = null;
+      return;
+    }
+    _released = (bvid: entry.bvid, since: Stopwatch()..start());
+    if (!_warmsNext || _host.halted || _warmedBvid == entry.bvid) return;
+    final detail = _details[entry.bvid];
+    if (detail == null) return;
+    if (_startWarm(entry, detail)) _releaseWarm = entry.bvid;
+  }
+
+  void _letReleaseWarmGo() {
+    final bvid = _releaseWarm;
+    _releaseWarm = null;
+    final current = this.current;
+    if (bvid == next?.bvid && current != null && (_warmAskedIn == _settles || _warmDue(current))) {
+      _warmAskedIn = _settles;
+      return;
+    }
+    _warmedBvid = null;
+    _host.dropWarm();
   }
 
   void _userMoved() {
@@ -284,16 +337,27 @@ class StoryList extends StoryFeed {
     final current = this.current;
     final next = this.next;
     if (!_warmsNext || _disposed || _host.halted || current == null || next == null) return;
-    if (_warmAskedIn == _settles || _host.framed != current.bvid || !_host.comfortable) return;
+    if (_warmAskedIn == _settles || !_warmDue(current)) return;
+    // Loaded already as the page was let go towards it: that one serves.
+    if (_warmedBvid == next.bvid) {
+      _warmAskedIn = _settles;
+      _releaseWarm = null;
+      return;
+    }
     final detail = _details[next.bvid];
     if (detail == null) return;
     _warmAskedIn = _settles;
-    final warming = _host.warm(next, detail);
     // Nothing started (the page covered, its player not in yet): the host's next change asks again.
-    if (warming == null) {
-      _warmAskedIn = null;
-      return;
-    }
+    if (!_startWarm(next, detail)) _warmAskedIn = null;
+  }
+
+  bool _warmDue(StoryEntry current) => _host.framed == current.bvid && _host.comfortable;
+
+  /// False when the page can't start one now.
+  bool _startWarm(StoryEntry entry, VideoDetail detail) {
+    final warming = _host.warm(entry, detail);
+    if (warming == null) return false;
+    _warmedBvid = entry.bvid;
     final round = _round;
     unawaited(
       warming.then(
@@ -306,6 +370,7 @@ class StoryList extends StoryFeed {
         },
       ),
     );
+    return true;
   }
 
   void _askIfNear() {

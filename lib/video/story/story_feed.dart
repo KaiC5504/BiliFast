@@ -180,6 +180,10 @@ abstract class StoryFeed extends ChangeNotifier {
 
   /// The user swiped on past the last video known: a feed that stopped asking after a failure may ask again.
   void wantMore() {}
+
+  /// The page is let go towards [entry], the next video or the one before, and settles there before [moveNext] or
+  /// [movePrevious] opens it; null when it goes back to the one playing.
+  void settling(StoryEntry? entry) {}
 }
 
 /// Makes 竖屏's feed for [playback]'s video as 竖屏 begins.
