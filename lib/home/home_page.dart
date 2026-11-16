@@ -581,6 +581,9 @@ class _FeedGridState extends State<_FeedGrid> with SingleTickerProviderStateMixi
   /// The cards fading out, by grid slot, while a refresh's cards come in; null otherwise.
   List<_Going>? _going;
 
+  /// How many slots the hand-off's batch had at the swap: an extra page going in under it mid-fade takes no part.
+  int _handOffSlots = 0;
+
   /// The refresh [FeedModel.beforeShow] last saw, until its cards show (a held pull's may never): its cards, the
   /// ones they replace, and those as they will fade out.
   ({List<FeedCard> fresh, List<FeedCard> old, List<_Going> going})? _coming;
@@ -630,11 +633,13 @@ class _FeedGridState extends State<_FeedGrid> with SingleTickerProviderStateMixi
 
   void _attach(FeedModel feed) => feed
     ..addListener(_feedChanged)
-    ..beforeShow = _beforeShow;
+    ..beforeShow = _beforeShow
+    ..beforeInsert = _beforeInsert;
 
   void _detach(FeedModel feed) {
     feed.removeListener(_feedChanged);
     if (feed.beforeShow == _beforeShow) feed.beforeShow = null;
+    if (feed.beforeInsert == _beforeInsert) feed.beforeInsert = null;
   }
 
   /// Whether the last build laid the cards out as the iPad's three columns, where a big card is an ordinary one.
@@ -666,6 +671,19 @@ class _FeedGridState extends State<_FeedGrid> with SingleTickerProviderStateMixi
     final feed = widget.feed;
     final old = feed.cards;
     _coming = (fresh: fresh, old: old, going: _goingOf(old));
+    return _coversOnScreen(fresh);
+  }
+
+  /// A refresh's extra page going in under [above]: the covers of its cards that land on screen, as the list is
+  /// scrolled now. On the iPad page 1 is about three rows, so these show at once.
+  CoverPrefetch _beforeInsert(List<FeedCard> above, List<FeedCard> added) {
+    if (!mounted) return const CoverPrefetch.skipped(CoverSkip.unmounted);
+    final scrolled = _scroll.hasClients ? math.max(0.0, _scroll.position.pixels) : 0.0;
+    return _coversOnScreen([...above, ...added], from: above.length, scrolled: scrolled);
+  }
+
+  /// Asks for the covers of [cards] from [from] on whose rows the list's top shows, [scrolled] down.
+  CoverPrefetch _coversOnScreen(List<FeedCard> cards, {int from = 0, double scrolled = 0}) {
     final viewport = _viewport;
     if (viewport == null) return const CoverPrefetch.skipped(CoverSkip.noLayout);
     const spacing = BiliMetrics.feedSpacing;
@@ -674,20 +692,25 @@ class _FeedGridState extends State<_FeedGrid> with SingleTickerProviderStateMixi
     final bigWidth = _bigWidth(viewport.width);
     final rowExtent = _cardHeight(width) + _rowGap;
     final size = _pad ? Size(width, PadHomeTheme.coverHeight(width)) : FeedCardSize.cover(width);
-    final bottom = viewport.height - _inset;
+    final bottom = viewport.height - _inset + scrolled;
     final asks = <Future<bool>>[];
+    void ask(int slot) {
+      if (slot >= from) asks.add(HomePage.precacheCover(context, cards[slot].cover, size));
+    }
+
     var top = _pad ? PadHomeTheme.firstRow : spacing;
     var slot = 0;
-    while (slot < fresh.length && top < bottom) {
-      final card = fresh[slot++];
+    while (slot < cards.length && top < bottom) {
+      final card = cards[slot];
       if (_isBig(card)) {
-        asks.add(HomePage.precacheBigCover(context, card.cover, FeedBigCardSize.video(bigWidth)));
+        if (slot >= from) asks.add(HomePage.precacheBigCover(context, card.cover, FeedBigCardSize.video(bigWidth)));
+        slot++;
         top += FeedBigCardSize.height(bigWidth) + spacing;
         continue;
       }
-      asks.add(HomePage.precacheCover(context, card.cover, size));
-      for (var column = 1; column < columns && slot < fresh.length && !_isBig(fresh[slot]); column++) {
-        asks.add(HomePage.precacheCover(context, fresh[slot++].cover, size));
+      ask(slot++);
+      for (var column = 1; column < columns && slot < cards.length && !_isBig(cards[slot]); column++) {
+        ask(slot++);
       }
       top += rowExtent;
     }
@@ -702,9 +725,9 @@ class _FeedGridState extends State<_FeedGrid> with SingleTickerProviderStateMixi
   void _feedChanged() {
     final cards = widget.feed.cards;
     final coming = _coming;
-    if (coming != null && identical(widget.feed.newest, coming.fresh)) {
+    if (coming != null && identical(widget.feed.refreshed, coming.fresh)) {
       _coming = null;
-      _handOffFrom(coming.going, coming.fresh);
+      _handOffFrom(coming.going, widget.feed.newest);
     } else if (coming != null && identical(cards, coming.old)) {
       // A 不感兴趣 or 撤销 before the swap, read now: by the swap the refresh has dropped every one.
       _coming = (fresh: coming.fresh, old: coming.old, going: _goingOf(cards));
@@ -723,6 +746,7 @@ class _FeedGridState extends State<_FeedGrid> with SingleTickerProviderStateMixi
   void _handOffFrom(List<_Going> old, List<FeedCard> fresh) {
     if (old.isEmpty) return;
     _entered.addAll([for (final card in fresh) card.bvid]);
+    _handOffSlots = fresh.length;
     if (_still || !_ticking) {
       _going = null;
       _handOff.value = 1;
@@ -816,12 +840,13 @@ class _FeedGridState extends State<_FeedGrid> with SingleTickerProviderStateMixi
           final slot = from + index;
           final card = cards[slot];
           final enter = !still && _entered.add(card.bvid);
-          final gone = going != null && slot < going.length && !_isBig(going[slot].card) ? going[slot] : null;
+          final handOff = going != null && slot < _handOffSlots;
+          final gone = handOff && slot < going.length && !_isBig(going[slot].card) ? going[slot] : null;
           return _Entrance(
             key: ValueKey('feed-card-${card.bvid}'),
             delay: enter ? _nextStagger() : null,
             child: _HandOffSlot(
-              incoming: going == null ? null : _incoming,
+              incoming: handOff ? _incoming : null,
               outgoing: _outgoing,
               going: gone == null
                   ? null
@@ -860,7 +885,8 @@ class _FeedGridState extends State<_FeedGrid> with SingleTickerProviderStateMixi
   Widget _bigCard(List<FeedCard> cards, int slot, {required List<_Going>? going, required bool still}) {
     final feed = widget.feed;
     final card = cards[slot];
-    final gone = going != null && slot < going.length && going[slot].card.big != null ? going[slot] : null;
+    final handOff = going != null && slot < _handOffSlots;
+    final gone = handOff && slot < going.length && going[slot].card.big != null ? going[slot] : null;
     return SliverList(
       delegate: SliverChildBuilderDelegate((context, _) {
         final enter = !still && _entered.add(card.bvid);
@@ -868,7 +894,7 @@ class _FeedGridState extends State<_FeedGrid> with SingleTickerProviderStateMixi
           key: ValueKey('feed-card-${card.bvid}'),
           delay: enter ? _nextStagger() : null,
           child: _HandOffSlot(
-            incoming: going == null ? null : _incoming,
+            incoming: handOff ? _incoming : null,
             outgoing: _outgoing,
             going: gone == null
                 ? null

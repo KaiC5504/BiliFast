@@ -34,6 +34,7 @@ import 'package:bilifast/playback/playback_controller.dart';
 import 'package:bilifast/skin/skin_loading_view.dart';
 import 'package:bilifast/skin/skin_model.dart';
 import 'package:bilifast/video/intro/title_block.dart';
+import 'package:bilifast/video/player_prefs.dart';
 import 'package:bilifast/video/video_page.dart';
 import 'package:flutter/cupertino.dart' show CupertinoActivityIndicator;
 import 'package:flutter/gestures.dart' show kPressTimeout;
@@ -1855,6 +1856,39 @@ void main() {
       expect(slotOpacity(tester, 'BV1n2'), 1);
       expect(going('BV1c0'), findsNothing);
       expect(tester.binding.transientCallbackCount, 0);
+    });
+
+    testWidgets('每次刷新数量: an extra page that goes in mid-fade gets no old card over it, and its covers are asked '
+        'before it shows', (tester) async {
+      final prefs = PlayerPrefs.shared;
+      addTearDown(() => PlayerPrefs.shared = prefs);
+      PlayerPrefs.shared = PlayerPrefs.memory();
+      http.officialPages[0] = [for (var i = 0; i < 20; i++) officialItem('BV1c$i')];
+      await show(tester, token: fakeAppToken);
+      await settle(tester);
+      expect(card('BV1c0'), findsOneWidget);
+      PlayerPrefs.shared.feedRefreshSize = FeedRefreshSize.two;
+      covers.asked.clear();
+      http.officialPages[0] = [for (var i = 0; i < 4; i++) officialItem('BV1n$i')];
+      http.officialPages[1] = [for (var i = 0; i < 6; i++) officialItem('BV1e$i')];
+      final extra = http.officialGates[1] = Completer<void>();
+      await tapHome(tester);
+      await untilHandOff(tester);
+      expect(card('BV1n3'), findsOneWidget);
+      expect(going('BV1c3'), findsOneWidget, reason: "page 1's last slot fades its old card out");
+
+      extra.complete();
+      for (var i = 0; i < 10 && card('BV1e0').evaluate().isEmpty; i++) {
+        await tester.pump(const Duration(milliseconds: 1));
+      }
+      expect(card('BV1e0'), findsOneWidget);
+      expect(going('BV1c0'), findsOneWidget, reason: 'still mid-fade');
+      for (var slot = 4; slot < 10; slot++) {
+        expect(going('BV1c$slot'), findsNothing, reason: 'the extra page took slot $slot after the swap');
+      }
+      expect(covers.asked, containsAll(['BV1e0', 'BV1e1']), reason: 'the row under page 1 is on screen');
+      await settle(tester, 20);
+      expect(going('BV1c0'), findsNothing);
     });
 
     testWidgets("with the real precache the first screen's new covers are downloaded once, at the size their cards "

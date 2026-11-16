@@ -1764,5 +1764,197 @@ void main() {
       expect(bvids(model)[25], 'BVold0');
       expect(bvids(model).last, 'BVold${FeedModel.keptCards - 25 - 1}');
     });
+
+    test("extra pages are logged as extra; page 1's and load more's lines are not", () async {
+      http.officialPages[0] = items('a', 1);
+      http.officialPages[1] = items('b', 1);
+      http.officialPages[2] = items('c', 1);
+      final model = feed();
+      await model.refresh();
+      await settled(model);
+      http.officialPages[3] = items('d', 1);
+      await model.loadMore();
+      final logged = [
+        for (final event in logs.events.where((event) => event.msg == 'feed page'))
+          (event.f['index']?.toJson(), event.f['extra']?.toJson()),
+      ];
+      expect(logged, [(0, null), (1, true), (2, true), (3, null)]);
+    });
+
+    group('with the minimum refresh held', () {
+      final start = DateTime(2026, 11, 16, 12);
+
+      /// Showing BVold0 after a one-page first load, with three pages a refresh from then on: `changes` lists the cards
+      /// at each notify that changed [FeedModel.cards], `inserts` each [FeedModel.beforeInsert] call.
+      ({FeedModel model, List<List<String>> changes, List<String> inserts}) showing(
+        FakeAsync async,
+      ) {
+        pages = 1;
+        client = BiliClient(transport: http, cookies: CookieJar(Canned.cookies), logger: Logger(session: 'test'))
+          ..appToken = fakeAppToken;
+        final model = FeedModel(
+          client: client,
+          logger: Logger(session: 'test')..add(logs),
+          officialWanted: () => true,
+          refreshPages: () => pages,
+          now: () => start.add(async.elapsed),
+          pictures: () => null,
+        );
+        http.officialPages[0] = items('old', 1);
+        unawaited(model.refresh());
+        async.flushMicrotasks();
+        expect(bvids(model), ['BVold0']);
+        pages = 3;
+        http.officialAsked.clear();
+        final changes = <List<String>>[];
+        var last = model.cards;
+        model.addListener(() {
+          if (identical(model.cards, last)) return;
+          last = model.cards;
+          changes.add(bvids(model));
+        });
+        final inserts = <String>[];
+        model.beforeInsert = (above, added) {
+          String names(List<FeedCard> cards) => [for (final card in cards) card.bvid].join(' ');
+          final shown = added.any((card) => model.cards.any((other) => identical(other, card)));
+          inserts.add('${names(above)} + ${names(added)}${shown ? ' already shown' : ''}');
+          return CoverPrefetch([for (final _ in added) Future.value(true)]);
+        };
+        return (model: model, changes: changes, inserts: inserts);
+      }
+
+      test('extra pages in during the hold show with page 1 in the one swap, their covers asked as they come', () {
+        fakeAsync((async) {
+          final (:model, :changes, :inserts) = showing(async);
+          http.officialPages[0] = items('a', 2);
+          http.officialPages[1] = items('b', 2);
+          http.officialPages[2] = [officialItem('BVa0'), officialItem('BVold0'), officialItem('BVc0')];
+          unawaited(model.refresh());
+          async.elapse(const Duration(milliseconds: 300));
+          expect(http.officialAsked, [0, 1, 2], reason: 'asked while the TV is held');
+          expect(bvids(model), ['BVold0'], reason: 'nothing shows before the minimum');
+          expect(inserts, [
+            'BVa0 BVa1 + BVb0 BVb1',
+            'BVa0 BVa1 BVb0 BVb1 + BVold0 BVc0',
+          ]);
+          expect(model.loading, isTrue);
+
+          async.elapse(const Duration(milliseconds: 1200));
+          expect(changes, [
+            ['BVa0', 'BVa1', 'BVb0', 'BVb1', 'BVold0', 'BVc0'],
+          ], reason: 'one swap; an old card an extra page brings moves up into the batch, as page 1 does');
+          expect(model.dividerAt, isNull, reason: 'no card from before is left under it');
+          expect([for (final card in model.refreshed) card.bvid], ['BVa0', 'BVa1']);
+          expect(model.newest, model.cards);
+          expect(model.loading, isFalse, reason: 'the extra pages are all in');
+
+          http.officialPages[3] = items('d', 1);
+          unawaited(model.loadMore());
+          async.flushMicrotasks();
+          expect(http.officialAsked, [0, 1, 2, 3], reason: 'load more goes on from the last extra page');
+        });
+      });
+
+      test('an extra page in after the swap goes in under page 1, its covers asked before it shows', () {
+        fakeAsync((async) {
+          final (:model, :changes, :inserts) = showing(async);
+          http.officialPages[0] = items('a', 2);
+          http.officialPages[1] = items('b', 2);
+          http.officialPages[2] = items('c', 1);
+          final late = http.officialGates[1] = Completer<void>();
+          unawaited(model.refresh());
+          async.elapse(const Duration(milliseconds: 1500));
+          expect(changes, [
+            ['BVa0', 'BVa1', 'BVold0'],
+          ], reason: 'page 1 never waits for them');
+          expect(model.dividerAt, 2);
+          expect(model.loading, isTrue);
+          expect(model.canLoadMore, isFalse);
+
+          late.complete();
+          async.flushMicrotasks();
+          expect(changes.sublist(1), [
+            ['BVa0', 'BVa1', 'BVb0', 'BVb1', 'BVold0'],
+            ['BVa0', 'BVa1', 'BVb0', 'BVb1', 'BVc0', 'BVold0'],
+          ]);
+          expect(inserts, [
+            'BVa0 BVa1 + BVb0 BVb1',
+            'BVa0 BVa1 BVb0 BVb1 + BVc0',
+          ], reason: 'asked before the cards went in');
+          expect(model.dividerAt, 5);
+          expect(model.loading, isFalse);
+          expect(http.officialAsked, [0, 1, 2]);
+        });
+      });
+
+      test("a held pull's extra pages start at the release: a pull let go under its trigger costs one call", () {
+        fakeAsync((async) {
+          final (:model, :changes, inserts: _) = showing(async);
+          http.officialPages[0] = items('a', 1);
+          http.officialPages[1] = items('b', 1);
+          model.pullArmed();
+          async.elapse(const Duration(milliseconds: 600));
+          expect(http.officialAsked, [0], reason: 'page 1 alone while held');
+          model.pullDisarmed();
+          async.elapse(const Duration(seconds: 2));
+          expect(http.officialAsked, [0]);
+
+          model.pullArmed();
+          async.elapse(const Duration(milliseconds: 600));
+          expect(http.officialAsked, [0], reason: 'the unseen answer is taken again');
+          unawaited(model.refresh(pulled: true));
+          async.flushMicrotasks();
+          expect(http.officialAsked, [0, 1, 2], reason: 'the extra pages once let go');
+          expect(changes, [
+            ['BVa0', 'BVold0'],
+            ['BVa0', 'BVb0', 'BVold0'],
+          ], reason: 'held past the minimum already, page 1 shows at the release and the extra pages after');
+        });
+      });
+
+      test('a refresh during the hold stops the extra pages of the one it replaced', () {
+        fakeAsync((async) {
+          final (:model, :changes, inserts: _) = showing(async);
+          http.officialPages[0] = items('a', 1);
+          http.officialPages[1] = items('b', 1);
+          final gate = http.officialGates[1] = Completer<void>();
+          unawaited(model.refresh());
+          async.elapse(const Duration(milliseconds: 300));
+          pages = 1;
+          http.officialPages[0] = items('n', 1);
+          unawaited(model.refresh());
+          gate.complete();
+          async.elapse(const Duration(seconds: 2));
+          expect(changes, [
+            ['BVn0', 'BVold0'],
+          ]);
+          expect(http.officialAsked, [0, 1, 0]);
+          expect(model.loading, isFalse);
+          final stopped = logs.events.singleWhere((event) => event.msg == 'feed extra pages stopped');
+          expect(stopped.f['why']?.toJson(), 'refresh');
+        });
+      });
+
+      test('an extra page that fails during the hold leaves page 1 to show on time', () {
+        fakeAsync((async) {
+          final (:model, :changes, inserts: _) = showing(async);
+          http.officialPages[0] = items('a', 1);
+          final gate = http.officialGates[1] = Completer<void>();
+          String? result = 'unfinished';
+          unawaited(model.refresh().then((value) => result = value));
+          async.elapse(const Duration(milliseconds: 300));
+          http.officialCode = -352;
+          gate.complete();
+          async.elapse(const Duration(milliseconds: 1200));
+          expect(result, isNull);
+          expect(changes, [
+            ['BVa0', 'BVold0'],
+          ]);
+          expect(model.loading, isFalse);
+          expect(model.error, isNull);
+          expect(http.officialAsked, [0, 1]);
+        });
+      });
+    });
   });
 }

@@ -62,6 +62,22 @@ Map<String, Object> feedLogFields(Object error) => {
 
 typedef _Page = ({List<FeedCard> cards, FeedSource source, int index});
 
+/// A refresh's official pages past page 1 (每次刷新数量), asked one at a time from as soon as page 1 is in.
+class _Extras {
+  _Extras({required this.generation, required this.top, required this.next});
+
+  final int generation;
+
+  /// Page 1's cards and, until page 1 shows, those of the extra pages already in, which go in with it.
+  List<FeedCard> top;
+  final waiting = <_Page>[];
+
+  /// The official index the next one asks.
+  int next;
+  bool shown = false;
+  bool done = false;
+}
+
 /// Page 1 asked for while a pull is held past its trigger, kept out of sight until the pull lets go there.
 class _EarlyPage {
   _EarlyPage({
@@ -266,6 +282,7 @@ class FeedModel extends ChangeNotifier {
   final Future<List<FeedCard>> Function(int index)? _webPage;
   List<FeedCard> _cards = const [];
   List<FeedCard> _newest = const [];
+  List<FeedCard> _refreshed = const [];
   int? _dividerAt;
   bool _loading = false;
   String? _error;
@@ -291,6 +308,10 @@ class FeedModel extends ChangeNotifier {
   /// a cover still loading when its card shows pops in over the placeholder rather than holding the swap.
   CoverPrefetch Function(List<FeedCard> fresh)? beforeShow;
 
+  /// Called with an extra page's new cards ([added]) just before they go in under [above], the batch's cards before
+  /// them, whether page 1 shows yet or not; it gets the covers ready that will show, as [beforeShow] does.
+  CoverPrefetch Function(List<FeedCard> above, List<FeedCard> added)? beforeInsert;
+
   /// A refresh changes the list (its page on top, or all of it), so a load more already running must not append.
   int _generation = 0;
 
@@ -303,8 +324,11 @@ class FeedModel extends ChangeNotifier {
 
   List<FeedCard> get cards => _cards;
 
-  /// The last refresh's page, at the top of [cards]: the list [beforeShow] was handed for it.
+  /// The last refresh's cards, at the top of [cards]: its page 1 ([refreshed]), then its extra pages'.
   List<FeedCard> get newest => _newest;
+
+  /// The last shown refresh's page 1: the list [beforeShow] was handed for it.
+  List<FeedCard> get refreshed => _refreshed;
 
   /// How many of [cards] are above 刚刚看到这里，点击刷新: [newest]'s, when cards from before that refresh follow them.
   /// Null after the first load and a [refresh] that replaced everything.
@@ -343,9 +367,11 @@ class FeedModel extends ChangeNotifier {
   /// it shows, counted for a held pull from when it armed, so a long hold still shows the page at the release; a
   /// failure doesn't wait.
   ///
-  /// With 每次刷新数量 above one page, an official page 1 is followed by the next pages one at a time, after the
-  /// refresh has come back (its TV is gone): their new cards join [newest], above 刚刚看到这里, and [loading] holds
-  /// until they are in, so load more asks nothing meanwhile.
+  /// With 每次刷新数量 above one page, an official page 1 is followed by the next pages one at a time from the moment
+  /// it is in, so they come while the TV is held (for a held pull, from the release: a cancelled pull still costs
+  /// one call). Those in by the swap show with page 1, the rest go in under it as they come; their new cards join
+  /// [newest], above 刚刚看到这里, and [loading] holds until they are in, so load more asks nothing meanwhile. The swap
+  /// never waits for them.
   Future<String?> refresh({bool pulled = false, bool replace = false}) async {
     final early = pulled ? _joinable() : null;
     _early = null;
@@ -357,7 +383,7 @@ class FeedModel extends ChangeNotifier {
     _notify();
     final heldMs = early == null ? null : _now().difference(early.started).inMilliseconds;
     String? failure;
-    var extra = 0;
+    _Extras? extras;
     try {
       final page = await (early?.page ?? _fetch(refresh: true));
       if (_disposed || mine != _generation) return null;
@@ -370,57 +396,71 @@ class FeedModel extends ChangeNotifier {
         final asked = _askCovers(fresh);
         // A held pull's covers were asked for when its page came in; those are the ones that can be ready by now.
         final shown = early?.covers ?? asked;
+        // The website's page is 12 already.
+        final more = page.source == FeedSource.official ? math.max(_refreshPages() - 1, 0) : 0;
+        if (more > 0) {
+          final run = extras = _Extras(generation: mine, top: fresh, next: page.index + 1);
+          unawaited(_extend(run, more, firstIdx: fresh.map((card) => card.idx).nonNulls.firstOrNull));
+        }
         if (hold != null) {
           await hold;
           if (_disposed || mine != _generation) return null;
         }
         _logCovers(shown, heldMs: heldMs);
         if (shown != null) _whenCoversDone(shown, early: heldMs != null, warm: warm);
-        final kept = replace ? const <FeedCard>[] : _keptUnder(fresh);
-        _cards = kept.isEmpty ? fresh : [...fresh, ...kept];
-        _newest = fresh;
-        _dividerAt = kept.isEmpty ? null : fresh.length;
-        _advance(page);
+        final top = extras?.top ?? fresh;
+        final kept = replace ? const <FeedCard>[] : _keptUnder(top);
+        _cards = kept.isEmpty ? top : [...top, ...kept];
+        _newest = top;
+        _refreshed = fresh;
+        _dividerAt = kept.isEmpty ? null : top.length;
         _source = page.source;
+        _advance(page);
+        for (final extra in extras?.waiting ?? const <_Page>[]) {
+          _advance(extra);
+          _source = extra.source;
+        }
+        extras?.shown = true;
         _dislikes.clear();
         _error = null;
         _exhausted = false;
-        // The website's page is 12 already.
-        if (page.source == FeedSource.official) extra = math.max(_refreshPages() - 1, 0);
       }
     } catch (error) {
       if (_disposed || mine != _generation) return null;
       _logger.warn(LogCategory.ui, 'feed refresh failed', feedLogFields(error));
       failure = requestFailureMessage(error);
     }
-    _loading = extra > 0;
+    _loading = extras != null && !extras.done;
     final kept = _cards.isNotEmpty;
     if (failure != null && !kept) _error = failure;
     _notify();
-    if (extra > 0) unawaited(_extend(mine, extra));
     return kept ? failure : null;
   }
 
   /// A refresh's [pages] past page 1, asked one after another as load more asks them, each counted whether it adds
-  /// anything or not. Their new cards go in under [newest] and over the cards kept from before. A failure, a refresh
-  /// since or dispose ends them, logged only: page 1 is shown already.
-  Future<void> _extend(int mine, int pages) async {
+  /// anything or not. Before page 1 shows their new cards wait in [_Extras.top]; after, they go in under [newest] and
+  /// over the cards kept from before. A failure, a refresh since or dispose ends them, logged only: page 1 shows
+  /// regardless. [firstIdx] is page 1's, which the iPhone identity's request names whether page 1 shows yet or not.
+  Future<void> _extend(_Extras extras, int pages, {int? firstIdx}) async {
+    final mine = extras.generation;
     var asked = 0;
     try {
       while (asked < pages) {
         asked++;
-        final page = await _fetch(refresh: false);
+        final page = await _fetch(refresh: false, index: extras.next, firstIdx: firstIdx ?? _firstIdx);
         if (_disposed || mine != _generation) return _stopped();
-        final added = _appending(page.cards, _cards).sublist(_cards.length);
-        final top = _newest.length;
-        _newest = [..._newest, ...added];
-        final cards = [..._cards.take(top), ...added, ..._cards.skip(top)];
-        _cards = cards.length > keptCards ? cards.take(math.max(keptCards, _newest.length)).toList() : cards;
-        _dividerAt = _cards.length > _newest.length ? _newest.length : null;
-        _advance(page);
-        _source = page.source;
-        _logPage(page, added.length);
-        _notify();
+        extras.next = page.index + 1;
+        if (extras.shown) {
+          _insert(page);
+        } else {
+          final above = extras.top;
+          final added = _appending(page.cards, above).sublist(above.length);
+          extras
+            ..top = [...above, ...added]
+            ..waiting.add(page);
+          _logPage(page, added.length, extra: true);
+          _askInsertCovers(above, added);
+        }
         // The token was refused on the way: the rest of this scroll is the website's, and so is its page size.
         if (page.source == FeedSource.web) break;
       }
@@ -428,11 +468,29 @@ class FeedModel extends ChangeNotifier {
       if (_disposed || mine != _generation) return _stopped();
       _logger.warn(LogCategory.ui, 'feed extra page failed', {...feedLogFields(error), 'page': asked + 1});
     } finally {
-      if (!_disposed && mine == _generation) {
+      extras.done = true;
+      if (!_disposed && mine == _generation && extras.shown) {
         _loading = false;
         _notify();
       }
     }
+  }
+
+  /// An extra page that came after page 1 showed: its new cards under [newest], their covers asked for first.
+  void _insert(_Page page) {
+    final added = _appending(page.cards, _cards).sublist(_cards.length);
+    if (added.isNotEmpty) {
+      final top = _newest.length;
+      _askInsertCovers(_newest, added);
+      _newest = [..._newest, ...added];
+      final cards = [..._cards.take(top), ...added, ..._cards.skip(top)];
+      _cards = cards.length > keptCards ? cards.take(math.max(keptCards, _newest.length)).toList() : cards;
+      _dividerAt = _cards.length > _newest.length ? _newest.length : null;
+    }
+    _advance(page);
+    _source = page.source;
+    _logPage(page, added.length, extra: true);
+    _notify();
   }
 
   void _stopped() =>
@@ -599,6 +657,19 @@ class FeedModel extends ChangeNotifier {
     }
   }
 
+  /// Hands an extra page's [added] cards to [beforeInsert]; nothing counts or logs them, as page 1's covers are.
+  void _askInsertCovers(List<FeedCard> above, List<FeedCard> added) {
+    final hook = beforeInsert;
+    if (hook == null || added.isEmpty) return;
+    try {
+      for (final cover in hook(above, added).covers) {
+        cover.ignore();
+      }
+    } catch (error, stack) {
+      CrashLog.report(error, stack, source: 'feed covers', logger: _logger);
+    }
+  }
+
   /// As the cards show: how many of the first screen's covers were ready then and how many had failed (the rest still
   /// loading), or why none were asked for, and whether the page was a held pull's ([heldMs] since it was asked for).
   void _logCovers(_CoverCount? count, {int? heldMs}) {
@@ -651,16 +722,22 @@ class FeedModel extends ChangeNotifier {
   }
 
   /// One page from the source this load should read, with the index it asked for. The indexes only move once the
-  /// caller knows the page still counts. An [early] page leaves the refused token for its refresh to note.
-  Future<_Page> _fetch({required bool refresh, bool early = false}) async {
+  /// caller knows the page still counts. An [early] page leaves the refused token for its refresh to note. A refresh's
+  /// extra pages name their official [index] and [firstIdx], as they may be asked before page 1 shows.
+  Future<_Page> _fetch({required bool refresh, bool early = false, int? index, int? firstIdx}) async {
     if (early ? _officialPossible : wantsOfficial) {
-      final index = refresh ? 0 : _nextOfficialIndex;
+      final official = refresh ? 0 : index ?? _nextOfficialIndex;
       final cold = !_officialSeen && !_coldOut;
       if (cold) _coldOut = true;
       try {
-        final cards = await _client.officialFeed(index: index, pad: _pad(), firstIdx: _firstIdx, cold: cold);
+        final cards = await _client.officialFeed(
+          index: official,
+          pad: _pad(),
+          firstIdx: firstIdx ?? _firstIdx,
+          cold: cold,
+        );
         _officialSeen = true;
-        return (cards: cards, source: FeedSource.official, index: index);
+        return (cards: cards, source: FeedSource.official, index: official);
       } catch (error) {
         if (!_refused(error)) rethrow;
         _logger.warn(LogCategory.ui, 'official feed refused, web feed instead', feedLogFields(error));
@@ -671,9 +748,9 @@ class FeedModel extends ChangeNotifier {
     }
     // The first launch reaches here before the account check has fetched the fingerprint cookies.
     if (refresh) await _client.ensureRiskCookies();
-    final index = refresh ? 1 : _nextWebIndex;
-    final cards = await (_webPage?.call(index) ?? _client.recommendFeed(index: index));
-    return (cards: cards, source: FeedSource.web, index: index);
+    final web = refresh ? 1 : _nextWebIndex;
+    final cards = await (_webPage?.call(web) ?? _client.recommendFeed(index: web));
+    return (cards: cards, source: FeedSource.web, index: web);
   }
 
   /// The official feed's number for the first card in the list that has one, which the iPhone identity's request names for
@@ -771,11 +848,13 @@ class FeedModel extends ChangeNotifier {
     feedbackId: reason.kind == FeedReasonKind.feedback ? reason.id : null,
   );
 
-  void _logPage(_Page page, int added) => _logger.info(LogCategory.ui, 'feed page', {
+  /// An [extra] page is one of a refresh's pages past page 1, which a load more's line would otherwise look like.
+  void _logPage(_Page page, int added, {bool extra = false}) => _logger.info(LogCategory.ui, 'feed page', {
     'source': page.source.name,
     'index': page.index,
     'got': page.cards.length,
     'new': added,
+    if (extra) 'extra': true,
   });
 
   /// The cards on screen that stay under a refresh's [fresh] page: not one it brings again, nor one turned over by
