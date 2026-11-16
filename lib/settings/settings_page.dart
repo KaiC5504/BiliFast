@@ -21,6 +21,7 @@ import 'btr_page.dart';
 import 'playback/autoplay_settings_page.dart' show AutoplayLabels;
 import 'playback/home_feed_settings_page.dart';
 import 'playback/playback_settings_page.dart';
+import 'push_settings_page.dart';
 import 'settings_confirm.dart';
 
 /// What 设置 asks before doing (BiliNative SettingsView's `ClearAction`, and 51's 退出登录).
@@ -46,8 +47,8 @@ String buildVersionLabel() => switch ((appBuildName, appBuildNumber)) {
   _ => '未知',
 };
 
-/// 设置 (50): 登录 while logged out, the playback pages, BTR, clearing what the app keeps, 开发者 in dev builds, a
-/// sideloaded install's 签名, 退出登录 (51), and the version under it all.
+/// 设置 (50): 登录 while logged out, the playback pages, 推送设置, BTR, clearing what the app keeps, 开发者 in dev
+/// builds, a sideloaded install's 签名, 退出登录 (51), and the version under it all.
 class SettingsPage extends StatefulWidget {
   const SettingsPage({
     super.key,
@@ -269,6 +270,15 @@ class _SettingsPageState extends State<SettingsPage> with SingleTickerProviderSt
                         key: const ValueKey('settings-playback'),
                         title: '播放设置',
                         onTap: () => _push((_) => PlaybackSettingsPage(prefs: _prefs)),
+                      ),
+                    ],
+                  ),
+                  SettingsSection(
+                    children: [
+                      SettingsRow(
+                        key: const ValueKey('settings-push'),
+                        title: '推送设置',
+                        onTap: () => _push((_) => PushSettingsPage(host: services.notify)),
                       ),
                     ],
                   ),
