@@ -3,19 +3,21 @@ import 'dart:async';
 import 'package:bili_core/api.dart';
 import 'package:bili_core/devlog.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:flutter/widgets.dart';
 
+import '../../app/app_environment.dart';
 import '../../app/app_scope.dart';
 import '../../shared/toast.dart';
 import '../../skin/skin.dart';
-import '../message_api.dart';
 import '../message_model.dart';
 import '../message_routes.dart';
 import 'message_settings_parts.dart';
 import 'notice_picker_page.dart';
 
 /// 消息设置 (188). 消息提醒 is [MessageModel.badgeOn]; 回复与@, 收到喜欢 and 新增粉丝 show the account's choice and open
-/// their pickers, or toast where no call for them is known; every other row is drawn and toasts.
+/// their pickers, asking for the login first while logged out or once Bilibili answers -101; every other row is drawn
+/// and toasts.
 class MessageSettingsPage extends StatefulWidget {
   const MessageSettingsPage({super.key, @visibleForTesting this.skin});
 
@@ -27,9 +29,13 @@ class MessageSettingsPage extends StatefulWidget {
 }
 
 class _MessageSettingsPageState extends State<MessageSettingsPage> {
-  MessageApi? _api;
+  AppServices? _services;
   Map<NoticeSettingKind, NoticeAudience>? _settings;
   bool _unsupported = false;
+
+  /// Bilibili answered -101 since the last login here, though the app may still read logged in.
+  bool _loginGone = false;
+  bool _askingLogin = false;
 
   /// The switch as last flipped, shown until the model has it.
   bool? _badgeFlipped;
@@ -38,34 +44,73 @@ class _MessageSettingsPageState extends State<MessageSettingsPage> {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    if (_api != null) return;
-    final api = _api = AppScope.of(context).messageApi;
-    unawaited(_read(api));
+    if (_services != null) return;
+    _services = AppScope.of(context);
+    if (_needsLogin) {
+      // The login page can't be pushed while this one is still building.
+      SchedulerBinding.instance.addPostFrameCallback((_) => unawaited(_login()));
+    } else {
+      unawaited(_read());
+    }
   }
 
-  Future<void> _read(MessageApi api) async {
+  bool get _needsLogin =>
+      _loginGone ||
+      switch (_services!.environment.account) {
+        LoggedOut() || LoginExpired() => true,
+        _ => false,
+      };
+
+  /// Back logged in, the settings are read again; the row that asked doesn't open.
+  Future<void> _login() async {
+    final services = _services!;
+    if (_askingLogin || !mounted) return;
+    _askingLogin = true;
+    final bool loggedIn;
     try {
-      final settings = await api.noticeSettings();
+      loggedIn = await services.loginGate.request(context);
+    } finally {
+      _askingLogin = false;
+    }
+    if (!loggedIn || !mounted) return;
+    _loginGone = false;
+    await _read();
+  }
+
+  /// [quiet] for the read back after a picker, which has already told of its own failures and asked its own login.
+  Future<void> _read({bool quiet = false}) async {
+    try {
+      final settings = await _services!.messageApi.noticeSettings();
       if (mounted) setState(() => _settings = settings);
     } on UnsupportedError {
       if (mounted) setState(() => _unsupported = true);
     } catch (error) {
       Logger.shared.warn(LogCategory.app, 'notice settings not read', {'error': '${error.runtimeType}'});
+      if (!mounted) return;
+      if (error is BiliError && error.needsLogin) {
+        _loginGone = true;
+        if (!quiet) unawaited(_login());
+      } else if (!quiet) {
+        showToast(context, '加载失败，请稍后重试');
+      }
     }
   }
 
   void _soon() => showToast(context, '暂未开放');
 
   void _open(NoticeSettingKind kind) {
-    final api = _api;
-    if (_unsupported || api == null) {
+    if (_unsupported) {
       _soon();
+      return;
+    }
+    if (_needsLogin) {
+      unawaited(_login());
       return;
     }
     // The picker may have changed it; what it wrote is read back rather than passed.
     unawaited(
       openNoticePicker(context, kind).then((_) {
-        if (mounted) unawaited(_read(api));
+        if (mounted && !_needsLogin) unawaited(_read(quiet: true));
       }),
     );
   }

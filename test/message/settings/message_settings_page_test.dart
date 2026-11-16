@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:ui' show Tristate;
 
 import 'package:bili_core/api.dart';
+import 'package:bilifast/app/app_environment.dart';
 import 'package:bilifast/message/fake_message_api.dart';
 import 'package:bilifast/message/settings/message_settings_page.dart';
 import 'package:bilifast/message/settings/notice_picker_page.dart';
@@ -22,10 +23,19 @@ const _drawn = {
 
 const _soon = '暂未开放';
 
+const _failed = '加载失败，请稍后重试';
+
 void main() {
-  Future<MessageSettingsWorld> show(WidgetTester tester, {FakeMessageApi? api, bool badgeOn = true}) async {
+  Future<MessageSettingsWorld> show(
+    WidgetTester tester, {
+    FakeMessageApi? api,
+    bool badgeOn = true,
+    Account account = testAccount,
+    bool login = false,
+  }) async {
     phone(tester);
-    final world = await MessageSettingsWorld.create(api: api, badgeOn: badgeOn);
+    final world = await MessageSettingsWorld.create(api: api, badgeOn: badgeOn, account: account);
+    world.gate.answer = login;
     await world.pump(tester, const MessageSettingsPage());
     return world;
   }
@@ -145,9 +155,9 @@ void main() {
       });
     }
 
-    testWidgets('where no call for them is known: no value, and a tap toasts instead of opening', (tester) async {
+    testWidgets('a read the API refuses as unsupported: no value, and a tap toasts instead of opening', (tester) async {
       final api = FakeMessageApi();
-      api.failures['noticeSettings'] = UnsupportedError('no call');
+      api.failures['noticeSettings'] = UnsupportedError('unsupported');
       await show(tester, api: api);
       for (final kind in NoticeSettingKind.values) {
         expect(valueOf(tester, kind), isNull, reason: kind.name);
@@ -160,16 +170,105 @@ void main() {
       expect(callCount(api, 'noticeSettings'), 1);
     });
 
-    testWidgets('a read that fails otherwise: no value, and the picker still opens', (tester) async {
+    testWidgets('a read that fails otherwise: no value, one toast, and the picker still opens', (tester) async {
       final api = FakeMessageApi();
       api.failures['noticeSettings'] = StateError('offline');
-      await show(tester, api: api);
+      final world = await show(tester, api: api);
       expect(valueOf(tester, NoticeSettingKind.replies), isNull);
+      expect(find.text(_failed), findsOneWidget);
+      await runOutToast(tester);
+
       await tap(tester, 'message-settings-likes');
       await tester.pumpAndSettle();
       expect(find.byType(NoticePickerPage), findsOneWidget);
       expect(find.text(_soon), findsNothing);
       await runOutToast(tester);
+      await tester.tap(byKey('message-settings-back'));
+      await tester.pumpAndSettle();
+      expect(callCount(api, 'noticeSettings'), 3, reason: 'the page, the picker and the read back');
+      expect(find.text(_failed), findsNothing, reason: 'the read back after the picker is quiet');
+      expect(world.gate.requests, 0);
+    });
+  });
+
+  group('logged out, or a login Bilibili no longer takes', () {
+    testWidgets('opened logged out, asks for the login before reading; cancelled, the page still works', (
+      tester,
+    ) async {
+      final api = FakeMessageApi();
+      final world = await show(tester, api: api, account: const LoggedOut());
+      expect(world.gate.requests, 1);
+      expect(api.calls, isEmpty);
+      for (final kind in NoticeSettingKind.values) {
+        expect(valueOf(tester, kind), isNull, reason: kind.name);
+      }
+
+      await tap(tester, 'message-settings-replies');
+      await tester.pumpAndSettle();
+      expect(world.gate.requests, 2, reason: 'a row is an account action too');
+      expect(find.byType(NoticePickerPage), findsNothing);
+      expect(find.text(_soon), findsNothing);
+
+      await tap(tester, 'message-settings-badge');
+      expect(world.messages.saves, [false]);
+      expect(world.gate.requests, 2);
+      expect(api.calls, isEmpty);
+    });
+
+    testWidgets('opened logged out, a login reads the values', (tester) async {
+      final api = FakeMessageApi(settings: const {NoticeSettingKind.fans: NoticeAudience.off});
+      final world = await show(tester, api: api, account: const LoginExpired(), login: true);
+      expect(world.gate.requests, 1);
+      expect(callCount(api, 'noticeSettings'), 1);
+      expect(valueOf(tester, NoticeSettingKind.fans), '永不提醒');
+    });
+
+    testWidgets('a read answering -101 asks for the login instead of toasting; a row then asks it again', (
+      tester,
+    ) async {
+      final api = FakeMessageApi(settings: const {NoticeSettingKind.likes: NoticeAudience.off});
+      api.failures['noticeSettings'] = loginGone;
+      final world = await show(tester, api: api);
+      expect(world.gate.requests, 1);
+      expect(find.text(_failed), findsNothing);
+      expect(valueOf(tester, NoticeSettingKind.likes), isNull);
+
+      await tap(tester, 'message-settings-likes');
+      await tester.pumpAndSettle();
+      expect(world.gate.requests, 2);
+      expect(find.byType(NoticePickerPage), findsNothing);
+
+      world.gate
+        ..answer = true
+        ..onLogin = api.failures.clear;
+      await tap(tester, 'message-settings-likes');
+      await tester.pumpAndSettle();
+      expect(world.gate.requests, 3);
+      expect(valueOf(tester, NoticeSettingKind.likes), '不接收任何消息提醒');
+      expect(find.byType(NoticePickerPage), findsNothing, reason: 'the login replays nothing');
+    });
+
+    testWidgets('a picker that met -101 has asked already: its read back asks nothing, the next row does', (
+      tester,
+    ) async {
+      final api = FakeMessageApi();
+      final world = await show(tester, api: api);
+      expect(valueOf(tester, NoticeSettingKind.replies), '所有人');
+
+      api.failures['noticeSettings'] = loginGone;
+      await tap(tester, 'message-settings-replies');
+      await tester.pumpAndSettle();
+      expect(find.byType(NoticePickerPage), findsOneWidget);
+      expect(world.gate.requests, 1);
+      await tester.tap(byKey('message-settings-back'));
+      await tester.pumpAndSettle();
+      expect(callCount(api, 'noticeSettings'), 3);
+      expect(world.gate.requests, 1);
+
+      await tap(tester, 'message-settings-fans');
+      await tester.pumpAndSettle();
+      expect(world.gate.requests, 2);
+      expect(find.byType(NoticePickerPage), findsNothing);
     });
   });
 

@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:bili_core/api.dart';
+import 'package:bilifast/account/login_gate.dart';
 import 'package:bilifast/app/app_environment.dart';
 import 'package:bilifast/app/app_scope.dart';
 import 'package:bilifast/home/recent_store.dart';
@@ -62,12 +63,44 @@ final greenSkin = Skin(
   ),
 );
 
-/// 消息设置's world: a logged-in account, 消息's calls answered by [api], 消息提醒 by [messages], the [skin] worn.
-class MessageSettingsWorld {
-  MessageSettingsWorld._(this.services, this.api, this.messages);
+const testAccount = LoggedIn(name: '测试账号', vip: false);
 
-  static Future<MessageSettingsWorld> create({FakeMessageApi? api, bool badgeOn = true, Skin? skin}) async {
-    final environment = FakeEnvironment(const LoggedIn(name: '测试账号', vip: false));
+const loginGone = BiliError.api(code: -101, message: '账号未登录');
+
+/// The login page without one: each [request] counted, answering [answer]; a yes runs [onLogin] and leaves the
+/// account logged in, as the page does.
+final class AnsweringLoginGate implements LoginGate {
+  AnsweringLoginGate(this.environment);
+
+  final FakeEnvironment environment;
+  int requests = 0;
+  bool answer = false;
+  void Function()? onLogin;
+
+  @override
+  Future<bool> request(BuildContext context) async {
+    requests++;
+    if (answer) {
+      onLogin?.call();
+      environment.account = testAccount;
+    }
+    return answer;
+  }
+}
+
+/// 消息设置's world: the [account] (logged in by default), 消息's calls answered by [api], 消息提醒 by [messages],
+/// the login by [gate], the [skin] worn.
+class MessageSettingsWorld {
+  MessageSettingsWorld._(this.services, this.environment, this.gate, this.api, this.messages);
+
+  static Future<MessageSettingsWorld> create({
+    FakeMessageApi? api,
+    bool badgeOn = true,
+    Skin? skin,
+    Account account = testAccount,
+  }) async {
+    final environment = FakeEnvironment(account);
+    final gate = AnsweringLoginGate(environment);
     final messageApi = api ?? FakeMessageApi();
     final messages = BadgeModel(api: messageApi, environment: environment, on: badgeOn);
     final skins = FixedSkins(skin, environment: environment);
@@ -76,6 +109,7 @@ class MessageSettingsWorld {
       playback: AppPlayback(() => Completer<PlaybackController>().future),
       recents: await RecentStore.load(null),
       pageApi: FakePageApi(),
+      loginGate: gate,
       messageApi: messageApi,
       messages: messages,
       skin: skins,
@@ -85,10 +119,12 @@ class MessageSettingsWorld {
       messages.dispose();
       skins.dispose();
     });
-    return MessageSettingsWorld._(services, messageApi, messages);
+    return MessageSettingsWorld._(services, environment, gate, messageApi, messages);
   }
 
   final AppServices services;
+  final FakeEnvironment environment;
+  final AnsweringLoginGate gate;
   final FakeMessageApi api;
   final BadgeModel messages;
 

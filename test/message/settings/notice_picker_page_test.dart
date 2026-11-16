@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:bili_core/api.dart';
+import 'package:bilifast/app/app_environment.dart';
 import 'package:bilifast/message/fake_message_api.dart';
 import 'package:bilifast/message/message_routes.dart';
 import 'package:bilifast/message/settings/notice_picker_page.dart';
@@ -24,9 +25,16 @@ const _titles = {
 };
 
 void main() {
-  Future<MessageSettingsWorld> show(WidgetTester tester, NoticeSettingKind kind, {FakeMessageApi? api}) async {
+  Future<MessageSettingsWorld> show(
+    WidgetTester tester,
+    NoticeSettingKind kind, {
+    FakeMessageApi? api,
+    Account account = testAccount,
+    bool login = false,
+  }) async {
     phone(tester);
-    final world = await MessageSettingsWorld.create(api: api);
+    final world = await MessageSettingsWorld.create(api: api, account: account);
+    world.gate.answer = login;
     await world.pump(tester, NoticePickerPage(kind: kind));
     return world;
   }
@@ -142,9 +150,9 @@ void main() {
     expect(writes(api), ['setNoticeSetting likes following', 'setNoticeSetting likes following']);
   });
 
-  testWidgets('a write with no call behind it puts the ✓ back and toasts 暂未开放', (tester) async {
+  testWidgets('a write the API refuses as unsupported puts the ✓ back and toasts 暂未开放', (tester) async {
     final api = FakeMessageApi();
-    api.failures['setNoticeSetting'] = UnsupportedError('no call');
+    api.failures['setNoticeSetting'] = UnsupportedError('unsupported');
     await show(tester, NoticeSettingKind.fans, api: api);
     await tester.tap(byKey('notice-picker-off'));
     await tester.pumpAndSettle();
@@ -183,13 +191,82 @@ void main() {
       expect(writes(api), ['setNoticeSetting replies everyone']);
     });
 
-    testWidgets('with no call behind it toasts 暂未开放', (tester) async {
+    testWidgets('as unsupported toasts 暂未开放', (tester) async {
       final api = FakeMessageApi();
-      api.failures['noticeSettings'] = UnsupportedError('no call');
+      api.failures['noticeSettings'] = UnsupportedError('unsupported');
       await show(tester, NoticeSettingKind.likes, api: api);
       expect(chosen(tester), isNull);
       expect(find.text('暂未开放'), findsOneWidget);
       await runOutToast(tester);
+    });
+  });
+
+  group('logged out, or a login Bilibili no longer takes', () {
+    testWidgets('opened logged out, asks for the login before reading; cancelled, no ✓ and a tap asks again', (
+      tester,
+    ) async {
+      final api = FakeMessageApi();
+      final world = await show(tester, NoticeSettingKind.replies, api: api, account: const LoggedOut());
+      expect(world.gate.requests, 1);
+      expect(callCount(api, 'noticeSettings'), 0);
+      expect(chosen(tester), isNull);
+      expect(find.text('加载失败，请稍后重试'), findsNothing);
+
+      await tester.tap(byKey('notice-picker-off'));
+      await tester.pumpAndSettle();
+      expect(world.gate.requests, 2);
+      expect(chosen(tester), isNull);
+      expect(api.calls, isEmpty);
+    });
+
+    testWidgets('opened logged out, a login reads the account\'s choice', (tester) async {
+      final api = FakeMessageApi(settings: const {NoticeSettingKind.likes: NoticeAudience.following});
+      final world = await show(tester, NoticeSettingKind.likes, api: api, account: const LoginExpired(), login: true);
+      expect(world.gate.requests, 1);
+      expect(callCount(api, 'noticeSettings'), 1);
+      expect(chosen(tester), 'following');
+    });
+
+    testWidgets('a read answering -101 asks for the login instead of toasting; the tap after it isn\'t sent', (
+      tester,
+    ) async {
+      final api = FakeMessageApi(settings: const {NoticeSettingKind.replies: NoticeAudience.following});
+      api.failures['noticeSettings'] = loginGone;
+      final world = await show(tester, NoticeSettingKind.replies, api: api);
+      expect(world.gate.requests, 1);
+      expect(find.text('加载失败，请稍后重试'), findsNothing);
+      expect(chosen(tester), isNull);
+
+      await tester.tap(byKey('notice-picker-off'));
+      await tester.pumpAndSettle();
+      expect(world.gate.requests, 2, reason: 'still the login Bilibili refused');
+      expect(writes(api), isEmpty);
+
+      world.gate
+        ..answer = true
+        ..onLogin = api.failures.clear;
+      await tester.tap(byKey('notice-picker-off'));
+      await tester.pumpAndSettle();
+      expect(world.gate.requests, 3);
+      expect(chosen(tester), 'following', reason: 'read again after the login');
+      expect(writes(api), isEmpty, reason: 'the login replays nothing');
+    });
+
+    testWidgets('a write answering -101 puts the ✓ back and asks for the login instead of toasting', (tester) async {
+      final api = FakeMessageApi();
+      api.failures['setNoticeSetting'] = loginGone;
+      final world = await show(tester, NoticeSettingKind.fans, api: api);
+      expect(world.gate.requests, 0);
+      await tester.tap(byKey('notice-picker-off'));
+      await tester.pumpAndSettle();
+      expect(chosen(tester), 'everyone');
+      expect(world.gate.requests, 1);
+      expect(find.text('设置失败，请稍后重试'), findsNothing);
+
+      await tester.tap(byKey('notice-picker-off'));
+      await tester.pumpAndSettle();
+      expect(world.gate.requests, 2);
+      expect(writes(api), ['setNoticeSetting fans off']);
     });
   });
 
