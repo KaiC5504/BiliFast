@@ -21,6 +21,7 @@ import 'package:bilifast/video/fake_page_api.dart';
 import 'package:bilifast/video/page_details.dart';
 import 'package:bilifast/video/page_session.dart';
 import 'package:bilifast/video/page_tabs.dart';
+import 'package:bilifast/video/player_prefs.dart';
 import 'package:bilifast/video/player_session.dart';
 import 'package:bilifast/video/video_page.dart';
 import 'package:bilifast/video/video_route.dart';
@@ -47,9 +48,15 @@ void main() {
   late GlobalKey<NavigatorState> nav;
   late List<FakePlayerSession> sessions;
   late FakePageApi api;
+  late CannedHttp http;
+  late OrientationController orientation;
+  late PlayerPrefs prefs;
 
   setUp(() {
     sessions = [];
+    final savedPrefs = PlayerPrefs.shared;
+    PlayerPrefs.shared = prefs = PlayerPrefs.memory();
+    addTearDown(() => PlayerPrefs.shared = savedPrefs);
     final replies = [for (var n = 1; n <= 20; n++) comment(200 + n, root: 100, parent: 100)];
     api = FakePageApi()
       ..commentList = [
@@ -93,7 +100,7 @@ void main() {
       showAsPad(tester, landscape: padSize == wide);
     }
     final logger = Logger(session: 'test');
-    final http = Canned.http()..routes['/x/click-interface/web/heartbeat'] = (200, '{"code":0,"message":"0"}');
+    http = Canned.http()..routes['/x/click-interface/web/heartbeat'] = (200, '{"code":0,"message":"0"}');
     final environment = await AppEnvironment.load(
       keychain: FakeKeychain(const StoredCookies(Canned.cookies)),
       http: http,
@@ -119,7 +126,7 @@ void main() {
       environment: environment,
       playback: playback,
       recents: await RecentStore.load(null, logger: logger),
-      device: PlayerDevice(orientation: OrientationController(), controls: NoDeviceControls()),
+      device: PlayerDevice(orientation: orientation = OrientationController(), controls: NoDeviceControls()),
       pageApi: api,
     );
     nav = services.navigator;
@@ -161,6 +168,38 @@ void main() {
     unawaited(nav.currentState!.maybePop());
     await frames(tester, 20);
   }
+
+  /// The video's shape in, which 详情页直接全屏播放 waits for.
+  Future<void> shaped(WidgetTester tester) async {
+    sessions.last
+      ..videoShape = (width: 1920, height: 1080)
+      ..changed();
+    await frames(tester);
+  }
+
+  /// The page pushed with [comment] for a video Bilibili answers -404 for: the view fails, so no aid comes.
+  Future<void> openGone(WidgetTester tester, {CommentFocus? comment}) async {
+    const gone = '{"code":-404,"message":"啥都木有","ttl":1}';
+    http.routes
+      ..[Canned.viewPath] = (200, gone)
+      ..[Canned.signedViewPath] = (200, gone);
+    final route = VideoRoute(bvid: bv, cid: p1, start: 0, comment: comment);
+    unawaited(
+      nav.currentState!.push(
+        SwipeBackPageRoute<void>(
+          builder: (_) => VideoPage(route: route, createSession: fakeSession, createDetails: fakeDetails),
+        ),
+      ),
+    );
+    await frames(tester, 20);
+    expect(controller.phase, PlaybackPhase.failed);
+  }
+
+  Finder inSlot(Finder finder) => find.descendant(of: find.byType(CommentsSlot), matching: finder);
+  List<String> commentCalls() => [
+    for (final call in api.calls)
+      if (call.startsWith('comments ') || call.startsWith('thread ')) call,
+  ];
 
   double tab(WidgetTester tester) =>
       tester.widget<PageView>(find.byKey(const ValueKey('page-tabs')).last).controller!.page!;
@@ -257,6 +296,61 @@ void main() {
       await back(tester);
     });
 
+    testWidgets('详情页直接全屏播放 on: the page stays on the small player with the thread up', (tester) async {
+      prefs.detailFullScreen = true;
+      await host(tester);
+      await open(tester);
+      await shaped(tester);
+      expect(orientation.presentation, Presentation.landscape, reason: 'a page opened without one goes full screen');
+      orientation.exitToInline();
+      await frames(tester, 4);
+      await back(tester);
+
+      await open(tester, comment: const CommentFocus(root: 100, reply: 216));
+      await shaped(tester);
+      expect(orientation.presentation, Presentation.inline);
+      expect(find.byType(ThreadView), findsOneWidget);
+      expect(inThread(find.byKey(const ValueKey(216))), findsOneWidget);
+      await back(tester);
+      await back(tester);
+    });
+
+    testWidgets('a video that fails to load: 评论 shows the list\'s failure, not the loading TV; 点击重试 retries it', (
+      tester,
+    ) async {
+      await host(tester);
+      await openGone(tester);
+      await tester.tap(find.byKey(const ValueKey('tab-comments')));
+      await frames(tester, 20);
+      expect(find.byKey(const ValueKey('comments-slot-loading')), findsNothing);
+      expect(inSlot(find.byKey(const ValueKey('comments-retry'))), findsOneWidget);
+      expect(inSlot(find.text('视频不存在或已被删除')), findsOneWidget);
+      expect(commentCalls(), isEmpty);
+
+      http.routes
+        ..[Canned.viewPath] = (200, Canned.view)
+        ..[Canned.signedViewPath] = (200, Canned.view);
+      await tester.tap(find.byKey(const ValueKey('comments-retry')));
+      await frames(tester, 20);
+      expect(find.byType(CommentsSlot), findsNothing);
+      expect(find.byKey(const ValueKey(100)), findsOneWidget, reason: 'the video in, its list loads');
+      await back(tester);
+    });
+
+    testWidgets('a video that fails to load with a thread to open: 评论 shows the failure, no thread, no call', (
+      tester,
+    ) async {
+      await host(tester);
+      await openGone(tester, comment: const CommentFocus(root: 100, reply: 216));
+      expect(tab(tester), 1);
+      expect(inSlot(find.byKey(const ValueKey('comments-retry'))), findsOneWidget);
+      expect(find.byKey(const ValueKey('comments-slot-loading')), findsNothing);
+      expect(find.byType(ThreadView), findsNothing);
+      expect(commentCalls(), isEmpty);
+      await back(tester);
+      expect(find.byType(VideoPage), findsNothing, reason: 'nothing open, back leaves');
+    });
+
     testWidgets('another video opened on the page later opens no thread of its own', (tester) async {
       await host(tester);
       await open(tester, comment: const CommentFocus(root: 100));
@@ -284,6 +378,43 @@ void main() {
       expect(find.byType(VideoPage), findsOneWidget);
       await back(tester);
       expect(find.byType(VideoPage), findsNothing);
+    });
+
+    testWidgets('详情页直接全屏播放 on: the page stays as it is with the thread up', (tester) async {
+      prefs.detailFullScreen = true;
+      await host(tester, padSize: tall);
+      await open(tester);
+      await shaped(tester);
+      expect(orientation.presentation, Presentation.landscape, reason: 'a page opened without one goes full screen');
+      orientation.exitToInline();
+      await frames(tester, 4);
+      await back(tester);
+
+      await open(tester, comment: const CommentFocus(root: 100, reply: 216));
+      await shaped(tester);
+      expect(orientation.presentation, Presentation.inline);
+      expect(find.byType(ThreadView), findsOneWidget);
+      await back(tester);
+      await back(tester);
+    });
+
+    testWidgets('upright, a video that fails to load: 评论 shows the failure, with a thread to open or without', (
+      tester,
+    ) async {
+      await host(tester, padSize: tall);
+      await openGone(tester, comment: const CommentFocus(root: 100));
+      expect(tab(tester), 1);
+      expect(inSlot(find.byKey(const ValueKey('comments-retry'))), findsOneWidget);
+      expect(find.byType(ThreadView), findsNothing);
+      await back(tester);
+
+      await openGone(tester);
+      await tester.tap(find.byKey(const ValueKey('tab-comments')).last);
+      await frames(tester, 20);
+      expect(inSlot(find.byKey(const ValueKey('comments-retry'))), findsOneWidget);
+      expect(find.byKey(const ValueKey('comments-slot-loading')), findsNothing);
+      expect(commentCalls(), isEmpty);
+      await back(tester);
     });
 
     testWidgets('sideways: no tabs, the thread up over the left column', (tester) async {
