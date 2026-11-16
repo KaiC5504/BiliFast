@@ -1946,14 +1946,17 @@ void main() {
       expect(find.byType(VideoPage, skipOffstage: false), findsOneWidget);
       final top = tester.widget<VideoPage>(find.byType(VideoPage)).route;
       expect((top.bvid, top.title, top.cover), ('BV1xx411c7mD', '相关视频', cover));
+      expect((top.cid, top.cidHint), (null, 3), reason: "the row's part is a hint, which chooses nothing");
       expect(ModalRoute.of(tester.element(find.byType(VideoPage))), isA<SwipeBackPageRoute<void>>());
 
-      for (final next in ['BV1aa411c7mD', 'BV1bb411c7mD']) {
+      for (final (next, cid) in [('BV1aa411c7mD', 3), ('BV1bb411c7mD', 0)]) {
         await opened(tester, page: sessions.length - 1);
-        intro(tester).onOpenRelated(card(next));
+        intro(tester).onOpenRelated(card(next, cid: cid));
         await frames(tester, 20);
         expect(find.byType(VideoPage, skipOffstage: false), findsOneWidget);
-        expect(tester.widget<VideoPage>(find.byType(VideoPage)).route.bvid, next);
+        final route = tester.widget<VideoPage>(find.byType(VideoPage)).route;
+        expect(route.bvid, next);
+        expect(route.cidHint, cid > 0 ? cid : null, reason: 'a row naming no part gives no hint');
       }
       expect(tester.takeException(), isNull);
 
@@ -4572,10 +4575,10 @@ VideoDetail detail(String bvid, {int aid = 1, int reply = 0, int ownerMid = 0}) 
   redirectURL: null,
 );
 
-VideoCard card(String bvid) => VideoCard(
+VideoCard card(String bvid, {int cid = 3}) => VideoCard(
   aid: 2,
   bvid: bvid,
-  cid: 3,
+  cid: cid,
   title: '相关视频',
   cover: cover,
   duration: 60,

@@ -148,6 +148,27 @@ void main() {
     expect(parallelField(), 'dropped part');
   });
 
+  test('a miss after its answer lets its source go at once, not after the open\'s own prepare', () async {
+    http.routes[Canned.signedViewPath] = (200, onePartView);
+    final view = holdView();
+    final controller = make();
+    final opening = controller.openVideo(bv, cidHint: p1);
+    await settle();
+    expect(engine.prepared, hasLength(1));
+    // Another controller's probe restarted the server: the warm's source is suspect.
+    engine.serverGeneration++;
+    final gate = engine.prepareGate = Completer<void>();
+    view.complete();
+    await settle();
+    expect(engine.prepared, hasLength(2), reason: 'the open prepares its own');
+    expect(engine.released, ['tok1'], reason: 'released while the open\'s prepare is still out');
+    gate.complete();
+    await opening;
+    expect(player.loaded?.master, FakeEngine.masterOf('tok2'));
+    expect(engine.released, ['tok1']);
+    expect(parallelField(), 'dropped restarted');
+  });
+
   test('dropped on a failed view: the view\'s failure is shown, and nothing is loaded', () async {
     const gone = '{"code":-404,"message":"啥都木有"}';
     http.routes[Canned.signedViewPath] = (200, gone);

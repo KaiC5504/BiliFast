@@ -237,6 +237,7 @@ class PagePlayerSession extends ChangeNotifier with WidgetsBindingObserver imple
   /// The part [chapters] belong to, and the video [related] belongs to.
   logic.PlayItem? _chaptersFor;
   String? _relatedFor;
+  String? _relatedWaiting;
   logic.PlayItem? _current;
   PlaybackPhase? _phaseSeen;
   bool _disposed = false;
@@ -528,12 +529,19 @@ class PagePlayerSession extends ChangeNotifier with WidgetsBindingObserver imple
       notifyListeners();
       return;
     }
-    // Asked as the open starts: the list needs only the video's id, not its view.
-    final relatedBvid = video?.bvid ?? _controller.requestedBvid;
-    if (relatedBvid != null && relatedBvid != _relatedFor) {
-      _relatedFor = relatedBvid;
-      _related = const [];
-      unawaited(_loadRelated(relatedBvid));
+    if (video != null) {
+      _askRelated(video.bvid);
+    } else if (_controller.requestedBvid case final requested?
+        when requested != _relatedFor && requested != _relatedWaiting) {
+      // A page asks as the open starts: the list needs only the video's id. A card's session is made active and set
+      // inactive at once, so the ask waits a microtask: a card asks only once a page takes it over, and one released
+      // first costs no call.
+      _relatedWaiting = requested;
+      scheduleMicrotask(() {
+        if (_relatedWaiting != requested) return;
+        _relatedWaiting = null;
+        if (!_disposed && _active && _controller.requestedBvid == requested) _askRelated(requested);
+      });
     }
     final item = video == null || page == null ? null : logic.PlayItem(bvid: video.bvid, cid: page.cid);
     if (item != null && item != _current) {
@@ -555,6 +563,13 @@ class PagePlayerSession extends ChangeNotifier with WidgetsBindingObserver imple
     notifyListeners();
   }
 
+  void _askRelated(String bvid) {
+    if (bvid == _relatedFor) return;
+    _relatedFor = bvid;
+    _related = const [];
+    unawaited(_loadRelated(bvid));
+  }
+
   Future<void> _loadRelated(String bvid) async {
     try {
       final cards = await _client.related(bvid: bvid);
@@ -563,7 +578,13 @@ class PagePlayerSession extends ChangeNotifier with WidgetsBindingObserver imple
       _updateNowPlaying();
       notifyListeners();
     } catch (error) {
-      _logger.warn(LogCategory.api, 'related failed', {'bvid': bvid, 'error': '$error'});
+      // A transport error's text carries the URL.
+      final code = switch (error) {
+        BiliAPIError(:final code) => code,
+        BiliHTTPError(:final status) => status,
+        _ => null,
+      };
+      _logger.warn(LogCategory.api, 'related failed', {'bvid': bvid, 'error': '${error.runtimeType}', 'code': ?code});
     }
   }
 

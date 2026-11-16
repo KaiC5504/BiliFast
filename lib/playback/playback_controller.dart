@@ -527,9 +527,9 @@ class PlaybackController extends ChangeNotifier {
   /// the playurl answer. A [view] already resolved (a pasted link, another part) saves asking for it again, and the
   /// signed [detail] that came with it keeps the 合集; a [detail] alone gives the view as well. A [view] without its
   /// detail plays at once and the detail is asked for alongside. Without [autoplay] it loads paused. The video
-  /// [warm]ed plays from what its warm holds, its detail included. [cidHint] is the part a card names, which chooses
-  /// nothing: like [cid], it only lets the playurl call and the prepare run beside the view call, kept once the view
-  /// makes that part the one played.
+  /// [warm]ed plays from what its warm holds, its detail included. [cidHint] is the part a card names. Unlike [cid] it
+  /// chooses nothing; it only lets the playurl call and the prepare run beside the view call, kept once the view makes
+  /// that part the one played.
   Future<void> openVideo(
     String bvid, {
     int? cid,
@@ -976,8 +976,8 @@ class PlaybackController extends ChangeNotifier {
     if (token != null) _engine.dropPrefetch(token);
   }
 
-  /// A card paused or a page covered ([PlaybackEngine.setIdle]): its engine session keeps little and prefetches
-  /// nothing until played or shown again.
+  /// A card paused or a page covered ([PlaybackEngine.setIdle]): its engine session keeps little and prefetches no
+  /// more than a few seconds ahead until played or shown again.
   bool get idle => _idle;
   bool _idle = false;
 
@@ -1213,7 +1213,8 @@ class PlaybackController extends ChangeNotifier {
   }
 
   /// Whether [warm]'s source holds the streams the open chose from its answer: after a codec refused since, or another
-  /// choice, the open prepares as any does. The open's own warm is never promoted, so it must also start at [at].
+  /// choice, the open prepares as any does. The open's own warm is never handed to `_engine.promote`, which would move
+  /// its start, so it must already start at [at].
   bool _warmFits(_Warm warm, TrackChoice choice, double at) {
     final warmed = warm.choice;
     String? why() {
@@ -1234,6 +1235,8 @@ class PlaybackController extends ChangeNotifier {
   void _missed(_Warm warm, String why) {
     if (warm.parallel) {
       _parallelOutcome = 'dropped $why';
+      // Its prepare is an ordinary one: held until the open ends, it would download beside the open's own.
+      _letGo(warm);
     } else {
       _warmOutcome = 'miss $why';
     }
@@ -1593,7 +1596,7 @@ class PlaybackController extends ChangeNotifier {
         _engine.promote(source.token, startSeconds: time);
       }
     }
-    // The engine meets every token busy: a card or page still idle says so again for a reload's new one.
+    // A new token starts in use on the engine, so a card or page still idle marks the reload's token idle again.
     if (_idle && source.mode == PlaybackMode.btr) _engine.setIdle(source.token, true);
     if (previous != null && previous != source.token) _release(previous);
     await _load(source, time, current);
