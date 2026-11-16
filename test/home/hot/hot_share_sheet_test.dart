@@ -1,5 +1,6 @@
 import 'package:bili_core/api.dart';
 import 'package:bilifast/home/hot/hot_share_sheet.dart';
+import 'package:bilifast/shared/theme.dart';
 import 'package:bilifast/video/fake_page_api.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/semantics.dart' show SemanticsAction;
@@ -43,6 +44,26 @@ void main() {
       ['Facebook', 'X', 'WhatsApp', '微信', '朋友圈', '下载分享', 'QQ'],
     );
     expect(find.text('稍后再看'), findsOneWidget);
+  });
+
+  testWidgets("分享's line centred 23.67 down; each name's 17 pt line centred 37 under its circle's middle", (
+    tester,
+  ) async {
+    await open(tester);
+    final top = tester.getRect(sheet).top;
+    final title = tester.getRect(find.text('分享'));
+    expect(title.height, moreOrLessEquals(HotListTheme.sheetTitleLine));
+    expect(title.center.dy - top, moreOrLessEquals(HotListTheme.sheetTitleCentre));
+    for (final (key, label) in [('hot-share-facebook', 'Facebook'), ('hot-share-watch-later', '稍后再看')]) {
+      final slot = tester.getRect(find.byKey(ValueKey(key)));
+      final name = tester.getRect(find.text(label));
+      expect(name.height, moreOrLessEquals(HotListTheme.targetLine), reason: label);
+      expect(
+        name.center.dy - slot.top,
+        moreOrLessEquals(HotListTheme.targetIcon / 2 + HotListTheme.targetLabelBelow),
+        reason: label,
+      );
+    }
   });
 
   testWidgets("a share target closes the sheet and hands the video's link to the share sheet", (tester) async {

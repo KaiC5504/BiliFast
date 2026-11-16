@@ -108,7 +108,7 @@ class HotRow extends StatelessWidget {
           Positioned(
             left: HotListTheme.metaLeft,
             right: _metaRight,
-            top: _upTop - _slopAbove,
+            top: _upTop - HotListTheme.uploaderSlopAbove,
             child: Align(
               alignment: Alignment.topLeft,
               child: uploader
@@ -116,7 +116,7 @@ class HotRow extends StatelessWidget {
                   : IgnorePointer(
                       child: ExcludeSemantics(
                         child: Padding(
-                          padding: const EdgeInsets.only(top: _slopAbove),
+                          padding: const EdgeInsets.only(top: HotListTheme.uploaderSlopAbove),
                           child: _MetaLine(icon: _upIcon, text: card.ownerName),
                         ),
                       ),
@@ -167,8 +167,6 @@ class HotRow extends StatelessWidget {
 const _upIcon = 'assets/images/card/up_badge.png';
 const _playIcon = 'assets/images/home/hot_play_counts.png';
 
-const _slopAbove = 6.0;
-
 // Half the gap down to the ▷ line, so that line stays the row's.
 const _slopBelow = (HotListTheme.upCentreAbove - HotListTheme.playsCentreAbove - HotListTheme.metaLine) / 2;
 
@@ -194,7 +192,7 @@ class _Uploader extends StatelessWidget {
         behavior: HitTestBehavior.opaque,
         onTap: open,
         child: Padding(
-          padding: const EdgeInsets.only(top: _slopAbove, bottom: _slopBelow),
+          padding: const EdgeInsets.only(top: HotListTheme.uploaderSlopAbove, bottom: _slopBelow),
           child: _MetaLine(icon: _upIcon, text: card.ownerName),
         ),
       ),

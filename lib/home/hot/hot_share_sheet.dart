@@ -134,7 +134,6 @@ class _ShareSheetRoute extends PopupRoute<_Choice> {
   Widget buildPage(BuildContext context, Animation<double> animation, Animation<double> secondaryAnimation) {
     final bottom = MediaQuery.paddingOf(context).bottom;
     void pick(_Choice choice) => Navigator.of(context).pop(choice);
-    const titleLine = HotListTheme.sheetTitleText * 1.4;
     return Align(
       alignment: Alignment.bottomCenter,
       child: SlideTransition(
@@ -153,8 +152,8 @@ class _ShareSheetRoute extends PopupRoute<_Choice> {
               children: [
                 Positioned(
                   left: HotListTheme.sheetTitleLeft,
-                  top: HotListTheme.sheetTitleCentre - titleLine / 2,
-                  height: titleLine,
+                  top: HotListTheme.sheetTitleCentre - HotListTheme.sheetTitleLine / 2,
+                  height: HotListTheme.sheetTitleLine,
                   child: Semantics(
                     header: true,
                     child: Text(
@@ -163,7 +162,7 @@ class _ShareSheetRoute extends PopupRoute<_Choice> {
                       style: searchStyle(
                         HotListTheme.sheetTitleText,
                         HotListTheme.sheetInk,
-                        line: titleLine,
+                        line: HotListTheme.sheetTitleLine,
                         weight: HotListTheme.sheetTitleWeight,
                       ),
                     ),
@@ -276,7 +275,7 @@ class _Target extends StatelessWidget {
   final Widget icon;
   final VoidCallback onTap;
 
-  static const _line = 17.0;
+  static const _line = HotListTheme.targetLine;
   static const height = HotListTheme.targetIcon / 2 + HotListTheme.targetLabelBelow + _line / 2;
 
   @override

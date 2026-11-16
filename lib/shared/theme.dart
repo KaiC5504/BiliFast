@@ -8205,6 +8205,9 @@ abstract final class HotListTheme {
   static const upCentreAbove = 26.17;
   static const playsCentreAbove = 8.17;
 
+  /// The UP line's name takes taps from this far above its words, down to half the gap to the ▷ line.
+  static const uploaderSlopAbove = 6.0;
+
   /// ⋮ centred 20.17 from the right edge on the ▷ line (History's dots: 2 wide, 4.33 apart, #C9CCCF).
   static const moreCentreRight = 20.17;
   static const moreTarget = 32.0;
@@ -8255,6 +8258,7 @@ abstract final class HotListTheme {
   /// 分享, 19 pt and heavy, 16 in, its ink centred 23.67 down; × (12 square, 1.33 strokes) centred 26.17 from the
   /// right edge on the same line.
   static const sheetTitleText = 19.0;
+  static const sheetTitleLine = 26.6;
   static const sheetTitleWeight = FontWeight.w600;
   static const sheetTitleLeft = 16.0;
   static const sheetTitleCentre = 23.67;
@@ -8271,6 +8275,7 @@ abstract final class HotListTheme {
   static const targetIconTop = 47.33;
   static const targetLabelBelow = 37.0;
   static const targetText = 12.0;
+  static const targetLine = 17.0;
 
   /// A 1 pt #E3E5E7 rule across the sheet 141.33 down, then 稍后再看's 44 box 154 down under the first target.
   static const ruleTop = 141.33;

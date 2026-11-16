@@ -39,14 +39,11 @@ class HotModel extends ChangeNotifier {
   String? get error => _error;
   String? _error;
 
-  /// The list's end was reached.
   bool get exhausted => _started && !_hasMore && _out == null && _error == null;
 
   bool get canLoadMore => _videos.isNotEmpty && _hasMore && _error == null && _out == null && _refreshing == null;
 
   Future<String?>? _refreshing;
-
-  /// A refresh is running.
   bool get refreshing => _refreshing != null;
 
   /// Bumped by a refresh, so an answer to a page asked before it is dropped.
