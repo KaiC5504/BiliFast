@@ -7,11 +7,13 @@ import 'package:bili_core/shared.dart';
 import 'package:bilifast/account/keychain_store.dart';
 import 'package:bilifast/app/app_environment.dart';
 import 'package:bilifast/app/app_scope.dart';
+import 'package:bilifast/device/memory_warnings.dart';
 import 'package:bilifast/device/network_monitor.dart';
 import 'package:bilifast/main.dart';
 import 'package:bilifast/playback/codec_memory.dart';
 import 'package:bilifast/playback/playback_controller.dart';
 import 'package:bilifast/playback/shared_engine.dart';
+import 'package:bilifast/player/bili_player.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -28,6 +30,13 @@ final class FakeNetworkMonitor implements NetworkMonitor {
   Stream<bool> get changes => controller.stream;
 }
 
+final class FakeMemoryWarnings implements MemoryWarnings {
+  final controller = StreamController<int>.broadcast(sync: true);
+
+  @override
+  Stream<int> get warnings => controller.stream;
+}
+
 /// The app's players: a controller and player per page, one engine and one codec memory for all of them.
 void main() {
   late CannedHttp http;
@@ -38,6 +47,7 @@ void main() {
   late SharedEngine shared;
   late CodecMemory memory;
   late FakeNetworkMonitor network;
+  late FakeMemoryWarnings warnings;
   late MemorySink logs;
   late Logger logger;
   Completer<void>? engineGate;
@@ -50,6 +60,7 @@ void main() {
     made = [];
     memory = CodecMemory();
     network = FakeNetworkMonitor();
+    warnings = FakeMemoryWarnings();
     logs = MemorySink();
     logger = Logger(session: 'test')..add(logs);
     engineGate = null;
@@ -94,6 +105,7 @@ void main() {
       engine: shared,
       codecMemory: memory,
       network: network,
+      memoryWarnings: warnings,
       muted: muted,
       onResumed: onResumed,
       logger: logger,
@@ -168,7 +180,8 @@ void main() {
     expect([for (final event in logged('player released')) event.f['live']], [const LogInt(1), const LogInt(0)]);
   });
 
-  testWidgets('a memory warning drops the engine\'s cache once, and every page marks it', (tester) async {
+  testWidgets("iOS's memory warning drops the engine's cache once, every page marks it, and the footprint is logged",
+      (tester) async {
     await loadEnvironment();
     final playback = appPlayback();
     final a = await playback.create();
@@ -176,11 +189,97 @@ void main() {
     final marks = <PlaybackMark>[];
     a.marks.listen(marks.add);
     b.marks.listen(marks.add);
-    tester.binding.handleMemoryPressure();
+    warnings.controller.add(812);
     await tester.pump();
     expect(engines.single.cacheDrops, 1);
     expect(marks.whereType<MemoryWarning>(), hasLength(2));
     expect(logged('memory warning, prefetch cache dropped'), hasLength(2));
+    final warning = logged('memory warning').single;
+    expect(warning.f['footprintMB'], const LogInt(812));
+    expect(warning.f['live'], const LogInt(2));
+  });
+
+  testWidgets("Flutter's notice in the foreground is left to iOS's own warning, which brings it too", (tester) async {
+    await loadEnvironment();
+    final playback = appPlayback();
+    final a = await playback.create();
+    await a.open(bv);
+    resume(tester);
+    await tester.pump();
+    tester.binding.handleMemoryPressure();
+    await tester.pump();
+    expect(engines.single.cacheDrops, 0);
+    expect(engines.single.prefetchDrops, isEmpty);
+    expect(logged('memory warning, prefetch cache dropped'), isEmpty);
+    expect(logged('low-memory notice while away'), isEmpty);
+  });
+
+  testWidgets("leaving the app: Flutter's notice, which comes between inactive and hidden, keeps the prefetch of the "
+      "video playing and of one paused on its page, and drops a covered page's; nothing counts as a memory warning",
+      (tester) async {
+    await loadEnvironment();
+    final playback = appPlayback();
+    final playing = await playback.create();
+    final covered = await playback.create();
+    final paused = await playback.create();
+    final empty = await playback.create();
+    final loading = await playback.create();
+    await playing.open(bv);
+    await covered.open(bv);
+    await paused.openVideo(bv, autoplay: false);
+    await loading.open(bv);
+    players[0].emit(const StatusChanged(PlayerStatus.playing));
+    players[1].emit(const StatusChanged(PlayerStatus.playing));
+    covered.holdAutoplay(true);
+    await tester.pump();
+    expect(playing.phase, PlaybackPhase.playing);
+    expect(paused.phase, PlaybackPhase.playing);
+    expect(loading.loadWillPlay, isTrue);
+    final marks = <PlaybackMark>[];
+    for (final controller in [playing, covered, paused, empty, loading]) {
+      controller.marks.listen(marks.add);
+    }
+
+    // ignore: invalid_use_of_protected_member
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+    tester.binding.handleMemoryPressure();
+    await tester.pump();
+    final engine = engines.single;
+    expect(engine.cacheDrops, 0);
+    expect(engine.prefetchDrops, ['tok2'], reason: 'the covered page; the one with no video has nothing to drop');
+    expect(marks.whereType<MemoryWarning>(), isEmpty);
+    expect(logged('memory warning, prefetch cache dropped'), isEmpty);
+    final notice = logged('low-memory notice while away').single;
+    expect(notice.f['state'], const LogString('inactive'));
+    expect(notice.f['kept'], const LogInt(3));
+    expect(notice.f['live'], const LogInt(5));
+    resume(tester);
+  });
+
+  testWidgets("iOS's warning while away still runs the whole drop, the video playing included", (tester) async {
+    await loadEnvironment();
+    final playback = appPlayback();
+    final a = await playback.create();
+    await a.open(bv);
+    players.single.emit(const StatusChanged(PlayerStatus.playing));
+    await tester.pump();
+    // ignore: invalid_use_of_protected_member
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+    tester.binding.handleMemoryPressure();
+    warnings.controller.add(-1);
+    await tester.pump();
+    expect(engines.single.cacheDrops, 1);
+    expect(logged('memory warning, prefetch cache dropped'), hasLength(1));
+    expect(logged('memory warning').single.f['footprintMB'], const LogInt(-1));
+    resume(tester);
+  });
+
+  testWidgets('a disposed AppPlayback hears no more warnings', (tester) async {
+    await loadEnvironment();
+    final playback = AppPlayback(startController, engine: shared, network: network, memoryWarnings: warnings);
+    playback.dispose();
+    await tester.pump();
+    expect(warnings.controller.hasListener, isFalse);
   });
 
   testWidgets('coming back probes the server once; after a restart every page with a source prepares again',
