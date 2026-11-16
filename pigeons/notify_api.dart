@@ -96,7 +96,7 @@ abstract class NotifyHostApi {
   @async
   NativeNotifyPermission permission();
 
-  /// Asks iOS for alert, sound and badge permission; true when given.
+  /// Asks iOS for alert and sound permission, as the sideload reminder does; true when given.
   @async
   bool requestPermission();
 

@@ -455,7 +455,7 @@ protocol NotifyHostApi {
   /// Saves the switches; with any on, a refresh is scheduled, with all off it is cancelled.
   func setKinds(kinds: NativeNotifyKinds) throws
   func permission() async throws -> NativeNotifyPermission
-  /// Asks iOS for alert, sound and badge permission; true when given.
+  /// Asks iOS for alert and sound permission, as the sideload reminder does; true when given.
   func requestPermission() async throws -> Bool
   /// The notification whose tap launched the app, once; null if none.
   func takeLaunchRoute() throws -> NativeNotifyRoute?
@@ -513,7 +513,7 @@ class NotifyHostApiSetup {
     } else {
       permissionChannel.setMessageHandler(nil)
     }
-    /// Asks iOS for alert, sound and badge permission; true when given.
+    /// Asks iOS for alert and sound permission, as the sideload reminder does; true when given.
     let requestPermissionChannel = FlutterBasicMessageChannel(name: "dev.flutter.pigeon.bilifast.NotifyHostApi.requestPermission\(channelSuffix)", binaryMessenger: binaryMessenger, codec: codec)
     if let api = api {
       requestPermissionChannel.setMessageHandler { _, reply in

@@ -452,7 +452,7 @@ class NotifyHostApi {
     return pigeonVar_replyValue! as NativeNotifyPermission;
   }
 
-  /// Asks iOS for alert, sound and badge permission; true when given.
+  /// Asks iOS for alert and sound permission, as the sideload reminder does; true when given.
   Future<bool> requestPermission() async {
     final pigeonVar_channelName = 'dev.flutter.pigeon.bilifast.NotifyHostApi.requestPermission$pigeonVar_messageChannelSuffix';
     final pigeonVar_channel = BasicMessageChannel<Object?>(
