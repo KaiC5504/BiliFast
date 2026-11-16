@@ -8648,6 +8648,172 @@ abstract final class MessageFeedTheme {
 /// A chat and the notice boxes (200-203, 218, 219). Filled by the chats' builder.
 abstract final class MessageChatTheme {
   static const page = BiliColors.pageGrey;
+
+  /// 200-203 behind the bar and the list read #F6F7F8, a shade lighter than [page].
+  static const screen = BiliColors.softGrey;
+  static const text = BiliColors.text;
+  static const grey = BiliColors.secondaryText;
+
+  /// A card's body and values, and the bar's glyphs.
+  static const dim = Color(0xFF61666D);
+  static const link = BiliColors.link;
+  static const card = BiliColors.card;
+  static const hairline = BiliColors.divider;
+
+  /// The title row under the status bar: ‹ with 1.5 pt round strokes, its ink 19.33-28.67 × 18 pt (as 离线缓存's);
+  /// the name 17 pt semibold, centred; the gear's ink 19.33 × 21.33 pt centred 24 pt from the right.
+  static const barRow = 44.0;
+  static const titleText = 17.0;
+  static const titleWeight = FontWeight.w600;
+  static const titleSide = 64.0;
+  static const backTarget = 44.0;
+  static const backTipX = 20.08;
+  static const backEndX = 27.92;
+  static const backHalfHeight = 8.25;
+  static const backStroke = 1.5;
+  static const gearWidth = 58 / 3;
+  static const gearHeight = 64 / 3;
+  static const gearCentreRight = 24.0;
+
+  /// 202's bar: a white 46 pt card 12 pt in, 5 pt under the title row, split by a 1 × 24 pt rule. Each half centres
+  /// its glyph and words: 不接受推送 14 pt over 通知正常接收 12 pt grey, 11 pt after the bell; 加关注 14 pt, 9 pt after
+  /// its head.
+  static const settingsMargin = 12.0;
+  static const settingsTop = 5.0;
+  static const settingsBottom = 5.0;
+  static const settingsHeight = 46.0;
+  static const settingsRadius = 10.0;
+  static const settingsRule = 1.0;
+  static const settingsRuleHeight = 24.0;
+
+  /// Each half's glyph and words sit this much right of the half's middle.
+  static const settingsNudge = 5 / 3;
+
+  static const pushGlyphWidth = 46 / 3;
+  static const pushGlyphHeight = 51 / 3;
+  static const pushGap = 11.0;
+  static const pushTitle = 14.0;
+  static const pushSubtitle = 12.0;
+  static const pushLine = 52 / 3;
+  static const followGlyphWidth = 46 / 3;
+  static const followGlyphHeight = 49 / 3;
+  static const followGap = 9.0;
+  static const followText = 14.0;
+
+  /// The list: 14.67 pt from the bar to the first time line's box, rows 15 apart, cards 16, a time line's 17 pt box 22
+  /// under the row before and 15 over the row after, and 9 pt under the last row. A tip's lines are 13.5 pt, which sets
+  /// 202's tip 30.25 under its time line.
+  static const listTop = 14.67;
+  static const listBottom = 9.0;
+  static const rowGap = 15.0;
+  static const cardGap = 16.0;
+  static const timeGap = 22.0;
+  static const timeText = 12.0;
+  static const timeLine = 17.0;
+  static const tipText = 12.0;
+  static const tipLine = 13.5;
+
+  /// Older messages are asked for this far before the list's top shows, and load under a small spinner there.
+  static const olderAhead = 200.0;
+  static const olderRow = 44.0;
+
+  /// A message: the face 40 pt, 12 pt from the screen's edge and 11 pt from the bubble. The bubble's 16 pt lines are
+  /// 19 apart, 12 pt in, and wrap before 276; its corners are 10 pt but for the one by the face, 2.
+  static const face = 40.0;
+  static const side = 12.0;
+  static const faceGap = 11.0;
+  static const bubbleText = 16.0;
+  static const bubbleLine = 19.0;
+  static const bubblePadding = 12.0;
+  static const bubbleTop = 8.5;
+  static const bubbleBottom = 23 / 3;
+  static const bubbleMaxText = 276.0;
+  static const bubbleRadius = 10.0;
+  static const bubbleNear = 2.0;
+  static const theirs = BiliColors.card;
+  static const yours = Color(0xFFBFEDFA);
+
+  /// 202's replies draw their bubble this much shorter than yours and a notice box's, though their rows keep the same
+  /// pitch.
+  static const theirShortfall = 11 / 3;
+
+  /// Emotes 4/3 of the text's size, as in comments; 200's 网页链接 after the link's 12.67 pt chain, 1.6 pt either side
+  /// and its top level with the words' ink.
+  static const emote = bubbleText * 4 / 3;
+  static const linkGlyph = 38 / 3;
+  static const linkGlyphGap = 1.6;
+  static const linkGlyphDrop = 17 / 6;
+
+  /// 203's 此条消息为自动回复: 11 pt grey, under a 0.5 pt rule 10 pt below the text's ink.
+  static const autoReplyGap = 7.5;
+  static const autoReplyRule = 0.5;
+  static const autoReplyRuleInk = Color(0xFFE7E8E8);
+  static const autoReplyText = 11.0;
+  static const autoReplyLine = 15.0;
+
+  /// The account's face as 202 draws it: under a pendant the face is 32 pt in its 56 pt frame, and 大会员's 12 pt
+  /// disc in a white ring 5/3 pt in from the face's right and 2 up from its bottom.
+  static const pendantFace = 32.0;
+  static const pendantFrame = 56.0;
+  static const vipDisc = 12.0;
+  static const vipRing = 2 / 3;
+  static const vipRight = 5 / 3;
+  static const vipBottom = 2.0;
+  static const vipRingInk = Color(0xFFFFFFFF);
+
+  /// A picture message, fitted into 200 × 200 pt with the bubble's corners.
+  static const pictureSide = 200.0;
+  static const pictureFill = BiliColors.pageGrey;
+
+  /// 200 and 201's cards, 16 pt apart: 20 pt in, 10 pt corners, 12 pt inside. The 16 pt semibold title's ink 14.33 pt
+  /// under the top; the body 13 pt dim, its ink 28.33 under the title's and its lines 19 apart; the fields 13 pt, 17
+  /// under the body's ink and 27.67 apart, the value 12 pt after the label or 68.33 in; a 0.5 pt rule 16 under them,
+  /// then each link row 40.67 pt with its 14 pt words and a 6 × 12 pt › 5 pt in from the right.
+  static const cardMargin = 20.0;
+  static const cardRadius = 10.0;
+  static const cardInset = 12.0;
+  static const cardTitle = 16.0;
+  static const cardTitleWeight = FontWeight.w600;
+  static const cardTitleLine = 22.0;
+  static const cardTop = 32 / 3;
+  static const cardBody = 13.0;
+  static const cardBodyLine = 19.0;
+  static const cardBodyGap = 20 / 3;
+  static const cardFieldGap = 31 / 3;
+  static const fieldPitch = 83 / 3;
+  static const fieldLine = 19.0;
+  static const fieldLabelWidth = 56.33;
+  static const fieldValueGap = 12.0;
+  static const cardRuleGap = 37 / 3;
+  static const cardBottom = 13.0;
+  static const cardRule = 0.5;
+  static const linkRow = 122 / 3;
+  static const linkText = 14.0;
+  static const chevronWidth = 6.0;
+  static const chevronHeight = 12.0;
+  static const chevronRight = 5.0;
+  static const chevronStroke = 1.1;
+
+  /// The composer (202, 218): 52 pt over the home indicator or the keyboard, the field #F1F2F3 from 46 to 394, 36 pt
+  /// tall in its middle, 14 pt words 12 pt in; the picture's and the face's 20 pt glyphs 14 pt from the edges.
+  static const composerHeight = 52.0;
+  static const fieldInset = 46.0;
+  static const fieldHeight = 36.0;
+  static const fieldFill = BiliColors.pageGrey;
+  static const fieldPadding = 12.0;
+  static const fieldTextTop = 7.5;
+  static const fieldText = 14.0;
+  static const fieldMaxLines = 4;
+  static const toolInset = 14.0;
+  static const toolWidth = 20.0;
+  static const pictureGlyphHeight = 17.0;
+  static const emoteGlyphHeight = 20.0;
+  static const keyboardGlyphHeight = 17.0;
+  static const keyboardInk = BiliColors.pink;
+  static const cursor = BiliColors.pink;
+
+  /// 219's emote panel under the composer, the home indicator's strip included.
+  static const emotePanel = 1114 / 3;
 }
 
 /// 消息设置 and its pickers (188, 195, 215, 216). Filled by 消息设置's builder.
