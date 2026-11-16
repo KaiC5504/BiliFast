@@ -97,6 +97,9 @@ void main() {
       tester.getCenter(_key('message-session-text-7')).dy,
       moreOrLessEquals(MessageTabTheme.lastCentre, epsilon: 0.01),
     );
+    // 196's ink middles (登录操作通知's for the last message), a third of a point under the lines' boxes.
+    expect(MessageTabTheme.nameCentre + 1 / 3, moreOrLessEquals(25.17, epsilon: 0.01));
+    expect(MessageTabTheme.lastCentre + 1 / 3, moreOrLessEquals(48.17, epsilon: 0.01));
     final hairline = tester.getRect(
       find.descendant(
         of: _key('message-session-7'),
@@ -133,7 +136,9 @@ void main() {
     const ring = MessageTabTheme.badgeRing;
     expect(badge.size, const Size.square(MessageTabTheme.badge + ring * 2));
     _near(badge.bottomRight - const Offset(ring, ring), face.bottomRight);
-    expect(find.descendant(of: _key('message-session-vip-7'), matching: find.text('大')), findsOneWidget);
+    final big = find.descendant(of: _key('message-session-vip-7'), matching: find.text('大'));
+    expect(big, findsOneWidget);
+    expect(tester.widget<Text>(big).style?.fontWeight, MessageTabTheme.vipWeight);
     expect(_key('message-session-verified-7'), findsNothing);
   });
 
@@ -173,7 +178,7 @@ void main() {
     _near(badge.bottomRight - const Offset(MessageTabTheme.badgeRing, MessageTabTheme.badgeRing), face.bottomRight);
   });
 
-  testWidgets('each notice box draws its pink face in place of a picture', (tester) async {
+  testWidgets('each notice box draws its own face in place of a picture', (tester) async {
     await show(tester, [for (final box in NoticeBox.values) _box(box)]);
     for (final box in NoticeBox.values) {
       final icon = find.descendant(of: _key('message-session-${box.name}'), matching: find.byType(NoticeBoxIcon));
@@ -183,13 +188,26 @@ void main() {
       expect(find.text(box.label), findsOneWidget);
     }
     expect(find.byType(SessionFace), findsNothing);
-    Iterable<String> assets(NoticeBox box) => tester
-        .widgetList<Image>(find.descendant(of: _key('message-session-${box.name}'), matching: find.byType(Image)))
-        .map((image) => (image.image as AssetImage).assetName);
+    Iterable<Image> images(NoticeBox box) => tester.widgetList<Image>(
+      find.descendant(of: _key('message-session-${box.name}'), matching: find.byType(Image)),
+    );
+    Iterable<String> assets(NoticeBox box) => images(box).map((image) => (image.image as AssetImage).assetName);
     expect(assets(NoticeBox.system), ['assets/images/message/tab_box_system.png']);
     expect(assets(NoticeBox.creator), ['assets/images/message/tab_box_creator.png']);
     expect(assets(NoticeBox.service), isEmpty, reason: 'drawn');
     expect(assets(NoticeBox.community), isEmpty, reason: 'drawn');
+
+    // No screenshot shows 系统通知's or 创作助手's face: the APK's own blue ones are drawn as they are.
+    Iterable<Color?> discs(NoticeBox box) => tester
+        .widgetList<DecoratedBox>(
+          find.descendant(of: _key('message-session-${box.name}'), matching: find.byType(DecoratedBox)),
+        )
+        .map((box) => (box.decoration as BoxDecoration).color);
+    for (final box in [NoticeBox.system, NoticeBox.creator]) {
+      expect(images(box).single.color, isNull, reason: box.label);
+      expect(discs(box), isNot(contains(MessageTabTheme.boxFill)), reason: box.label);
+    }
+    expect(discs(NoticeBox.service), contains(MessageTabTheme.boxFill));
   });
 
   testWidgets('an unread count on the face\'s top right, 99+ past 99; none at 0 or with 消息提醒 off', (tester) async {

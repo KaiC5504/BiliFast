@@ -29,6 +29,6 @@ Future<void> openNewFans(BuildContext context) =>
 Future<void> openMessageSettings(BuildContext context) =>
     Navigator.of(context).push(SwipeBackPageRoute<void>(builder: (_) => const MessageSettingsPage()));
 
-/// A 消息提醒 picker (215, 216, 195), from 消息设置 and the gear on 回复与@ and 收到喜欢.
+/// A 消息提醒 picker (215, 216, 195), from 消息设置 and the gear on 回复与@, 收到喜欢 and 新增粉丝.
 Future<void> openNoticePicker(BuildContext context, NoticeSettingKind kind) =>
     Navigator.of(context).push(SwipeBackPageRoute<void>(builder: (_) => NoticePickerPage(kind: kind)));

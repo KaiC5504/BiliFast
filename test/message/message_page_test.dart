@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:bili_core/api.dart';
 import 'package:bili_core/devlog.dart';
 import 'package:bilifast/account/keychain_store.dart';
+import 'package:bilifast/account/login_gate.dart';
 import 'package:bilifast/app/app_environment.dart';
 import 'package:bilifast/app/app_scope.dart';
 import 'package:bilifast/home/home_tab_bar.dart';
@@ -43,6 +44,7 @@ class _Messages extends MessageModel {
   final calls = <String>[];
   Completer<void>? hold;
   Completer<void>? moreHold;
+  Completer<void>? readAllHold;
   List<ChatSession>? next;
   Object? nextFailure;
   Object? readAllFailure;
@@ -72,7 +74,7 @@ class _Messages extends MessageModel {
   Future<void> refreshUnread({bool force = false}) async => calls.add('unread force=$force');
 
   @override
-  Future<void> refresh() async {
+  Future<bool> refresh() async {
     calls.add('refresh');
     if (list.isEmpty) {
       firstLoading = true;
@@ -87,6 +89,7 @@ class _Messages extends MessageModel {
         ..addAll(sessions);
     }
     notifyListeners();
+    return true;
   }
 
   @override
@@ -103,9 +106,39 @@ class _Messages extends MessageModel {
   @override
   Future<void> readAll() async {
     calls.add('readAll');
+    await readAllHold?.future;
     if (readAllFailure case final failure?) throw failure;
   }
 }
+
+/// Logs in as the login page would: Bilibili's nav answers logged in from now on, and the environment takes the new
+/// cookies through didLogin's account check.
+final class _LoggingIn implements LoginGate {
+  _LoggingIn(this.environment, this.http);
+
+  final AppEnvironment environment;
+  final CannedHttp http;
+  int requests = 0;
+
+  @override
+  Future<bool> request(BuildContext context) async {
+    requests++;
+    http.routes[Canned.navPath] = (200, Canned.navLoggedIn);
+    return environment.didLogin(const {'SESSDATA': 's2'});
+  }
+}
+
+/// [count] people, newest first, a minute apart.
+List<ChatSession> _people(int count) => [
+  for (var id = 1; id <= count; id++)
+    ChatSession(
+      talkerId: id,
+      name: '演示用户$id',
+      face: '',
+      lastText: '演示消息$id',
+      time: DateTime(2026, 11, 10, 8).subtract(Duration(minutes: id)),
+    ),
+];
 
 ChatSession _session(int id, {int unread = 0, NoticeBox? box}) => ChatSession(
   talkerId: id,
@@ -134,13 +167,16 @@ void main() {
     gate = FakeLoginGate();
   });
 
-  /// 消息 on a 440×956 screen under a 62 pt status bar, its model built over the environment by [model]; [active]
-  /// toggles the page's place being shown.
-  Future<(_Messages, ValueNotifier<bool>, ChangeNotifier)> show(
+  /// 消息 on a 440×956 screen under a 62 pt status bar, its model built over the environment by [model] (a [_Messages]
+  /// unless given); [active] toggles the page's place being shown. [checked] false leaves the launch's account check
+  /// to the test; [loginGate] stands for the login page in place of [gate].
+  Future<(M, ValueNotifier<bool>, ChangeNotifier)> show<M extends MessageModel>(
     WidgetTester tester, {
     bool loggedIn = true,
     bool active = true,
-    _Messages Function(AppEnvironment environment)? model,
+    bool checked = true,
+    M Function(AppEnvironment environment)? model,
+    LoginGate Function(AppEnvironment environment, CannedHttp http)? loginGate,
   }) async {
     tester.view
       ..physicalSize = const Size(440, 956)
@@ -149,20 +185,21 @@ void main() {
       ..viewPadding = const FakeViewPadding(top: 62, bottom: 34);
     addTearDown(tester.view.reset);
     final logger = Logger(session: 'test');
+    final http = Canned.http(loggedIn: loggedIn);
     final environment = await AppEnvironment.load(
       keychain: FakeKeychain(const StoredCookies(Canned.cookies)),
-      http: Canned.http(loggedIn: loggedIn),
+      http: http,
       logger: logger,
     );
-    await environment.refreshAccount();
+    if (checked) await environment.refreshAccount();
     final playback = AppPlayback(() async => throw UnimplementedError());
     addTearDown(playback.dispose);
-    final messages = model?.call(environment) ?? _Messages(environment: environment);
+    final messages = model?.call(environment) ?? _Messages(environment: environment) as M;
     final services = AppServices(
       environment: environment,
       playback: playback,
       recents: await RecentStore.load(null, logger: logger),
-      loginGate: gate,
+      loginGate: loginGate?.call(environment, http) ?? gate,
       messageApi: FakeMessageApi(),
       messages: messages,
     );
@@ -182,6 +219,26 @@ void main() {
     );
     await settle(tester);
     return (messages, shown, reloads);
+  }
+
+  /// The app's own model over [api], for what a stand-in would hide.
+  MessageModel real(FakeMessageApi api, AppEnvironment environment) {
+    final model = MessageModel(api: api, environment: environment);
+    addTearDown(model.dispose);
+    return model;
+  }
+
+  void backToApp(WidgetTester tester) {
+    for (final state in [
+      AppLifecycleState.inactive,
+      AppLifecycleState.hidden,
+      AppLifecycleState.paused,
+      AppLifecycleState.hidden,
+      AppLifecycleState.inactive,
+      AppLifecycleState.resumed,
+    ]) {
+      tester.binding.handleAppLifecycleStateChanged(state);
+    }
   }
 
   testWidgets('the header: white under the status bar, 消息 centred on its 44 pt row, the broom and ⋮ at the right', (
@@ -247,6 +304,13 @@ void main() {
     expect(find.text('回复与@'), findsOneWidget);
     expect(find.text('收到喜欢'), findsOneWidget);
     expect(find.text('新增粉丝'), findsOneWidget);
+    const squareBottom = top + MessageTabTheme.entryTop + MessageTabTheme.entrySquare;
+    expect(
+      tester.getCenter(find.text('收到喜欢')).dy,
+      moreOrLessEquals(squareBottom + MessageTabTheme.entryLabelCentre, epsilon: 0.01),
+    );
+    // 196's label ink is centred 13.83 under the squares, a third of a point under its line box.
+    expect(MessageTabTheme.entryLabelCentre + 1 / 3, moreOrLessEquals(13.83, epsilon: 0.01));
     expect(tester.getTopLeft(_key('message-session-1')).dy, moreOrLessEquals(top + MessageTabTheme.entries));
   });
 
@@ -271,7 +335,7 @@ void main() {
   });
 
   testWidgets('the entries clear their counts and open 回复与@, 收到喜欢 and 新增粉丝', (tester) async {
-    final (model, _, _) = await show(tester);
+    final (model, _, _) = await show<_Messages>(tester);
     await tester.tap(_key('message-entry-replies'));
     await settle(tester);
     expect(find.byType(RepliesPage), findsOneWidget);
@@ -366,7 +430,7 @@ void main() {
     expect(_key('message-more'), findsNothing, reason: 'no spinner past the end');
   });
 
-  testWidgets('while more are left the footer spins; a failed page says why and 点击重试 asks again', (tester) async {
+  testWidgets('while more are left the footer spins; a failed page says why', (tester) async {
     final (model, _, _) = await show(
       tester,
       model: (e) => _Messages(environment: e, sessions: _sessions(2))
@@ -383,10 +447,44 @@ void main() {
       ..notifyListeners();
     await settle(tester);
     expect(find.byType(CupertinoActivityIndicator), findsNothing);
-    final asked = model.calls.length;
+    expect(find.text('B 站返回错误 -500：服务器错误，点击重试'), findsOneWidget);
+  });
+
+  testWidgets('点击重试 under the rows asks the failed next page again, or the first page when that failed', (
+    tester,
+  ) async {
+    final api = FakeMessageApi(sessionList: _people(60), pageSize: 40);
+    final (model, _, _) = await show(tester, model: (e) => real(api, e));
+    expect(find.byType(SessionRow), findsWidgets);
+    api.failures['sessions'] = const BiliError.api(code: -500, message: '服务器错误');
+    await tester.drag(find.byType(CustomScrollView), const Offset(0, -2400));
+    await settle(tester);
+    expect(api.calls.last, startsWith('sessions '), reason: 'the next page');
+    expect(api.calls.last, isNot('sessions 0'));
+    expect(model.nextPageFailed, isTrue);
+    expect(_key('message-footer-retry'), findsOneWidget);
+
+    api.failures.remove('sessions');
+    final asked = api.calls.length;
     await tester.tap(_key('message-footer-retry'));
     await settle(tester);
-    expect(model.calls.sublist(asked), ['more']);
+    expect(api.calls.sublist(asked), [isNot('sessions 0')]);
+    expect(model.sessions, hasLength(60));
+    expect(model.error, isNull);
+
+    // A pull that failed over the rows: the footer's retry asks the first page.
+    api.failures['sessions'] = const BiliError.api(code: -500, message: '服务器错误');
+    await model.refresh();
+    await settle(tester);
+    expect(model.nextPageFailed, isFalse);
+    await tester.drag(find.byType(CustomScrollView), const Offset(0, -6000));
+    await settle(tester);
+    api.failures.remove('sessions');
+    final again = api.calls.length;
+    await tester.tap(_key('message-footer-retry'));
+    await settle(tester);
+    expect(api.calls.sublist(again), containsAll(['unread', 'sessions 0']));
+    expect(model.error, isNull);
   });
 
   testWidgets('消息 tapped again goes back to the top and refreshes with the TV held there', (tester) async {
@@ -414,7 +512,7 @@ void main() {
   testWidgets('logged out: the login message under the header, 登录 through the login gate; nothing asked', (
     tester,
   ) async {
-    final (model, _, _) = await show(tester, loggedIn: false);
+    final (model, _, _) = await show<_Messages>(tester, loggedIn: false);
     expect(_key('message-logged-out'), findsOneWidget);
     expect(find.text('登录后查看消息'), findsOneWidget);
     expect(_key('message-entry-replies'), findsNothing);
@@ -445,10 +543,10 @@ void main() {
     );
     await tester.tap(_key('message-read-all-button'));
     await settle(tester);
-    expect(find.text('是否清除全部新消息提醒?'), findsOneWidget);
+    expect(find.text('是否清除全部新消息提醒？'), findsOneWidget);
     await tester.tap(_key('message-read-all-取消'));
     await settle(tester);
-    expect(find.text('是否清除全部新消息提醒?'), findsNothing);
+    expect(find.text('是否清除全部新消息提醒？'), findsNothing);
     expect(model.calls, isNot(contains('readAll')));
 
     await tester.tap(_key('message-read-all-button'));
@@ -474,6 +572,177 @@ void main() {
     expect(model.calls.last, 'readAll');
     expect(find.text('B 站返回错误 -500：服务器错误'), findsOneWidget);
     await settle(tester, 60);
+  });
+
+  testWidgets('一键已读\'s failure is the model\'s to log: the page logs nothing of its own', (tester) async {
+    final sink = MemorySink();
+    Logger.shared.add(sink);
+    addTearDown(() => Logger.shared.remove(sink));
+    await show(
+      tester,
+      model: (e) =>
+          _Messages(environment: e, sessions: _sessions(2))
+            ..readAllFailure = const BiliError.api(code: -500, message: '服务器错误'),
+    );
+    await tester.tap(_key('message-read-all-button'));
+    await settle(tester);
+    await tester.tap(_key('message-read-all-清除'));
+    await settle(tester, 60);
+    expect(sink.events.where((event) => '${event.toJson()}'.contains('read all failed')), isEmpty);
+  });
+
+  testWidgets('while 一键已读 is out the broom does nothing; once answered it asks again', (tester) async {
+    final hold = Completer<void>();
+    final (model, _, _) = await show(
+      tester,
+      model: (e) => _Messages(environment: e, sessions: _sessions(2))..readAllHold = hold,
+    );
+    await tester.tap(_key('message-read-all-button'));
+    await settle(tester);
+    await tester.tap(_key('message-read-all-清除'));
+    await settle(tester);
+    await tester.tap(_key('message-read-all-button'));
+    await settle(tester);
+    expect(find.text('是否清除全部新消息提醒？'), findsNothing);
+    expect(model.calls.where((call) => call == 'readAll'), hasLength(1));
+
+    hold.complete();
+    await settle(tester);
+    await tester.tap(_key('message-read-all-button'));
+    await settle(tester);
+    expect(find.text('是否清除全部新消息提醒？'), findsOneWidget);
+  });
+
+  testWidgets('一键已读 refused with -101 asks for the login, no toast', (tester) async {
+    await show(
+      tester,
+      model: (e) =>
+          _Messages(environment: e, sessions: _sessions(2))
+            ..readAllFailure = const BiliError.api(code: -101, message: '账号未登录'),
+    );
+    await tester.tap(_key('message-read-all-button'));
+    await settle(tester);
+    await tester.tap(_key('message-read-all-清除'));
+    await settle(tester);
+    expect(gate.requests, 1);
+    expect(find.text('需要登录'), findsNothing);
+  });
+
+  testWidgets('a pull refused with -101 over rows already shown asks for the login, no toast', (tester) async {
+    final (model, _, _) = await show(
+      tester,
+      model: (e) => _Messages(environment: e, sessions: _sessions(3)),
+    );
+    model.nextFailure = const BiliError.api(code: -101, message: '账号未登录');
+    final gesture = await tester.startGesture(tester.getCenter(_key('message-session-1')));
+    for (var i = 0; i < 10; i++) {
+      await gesture.moveBy(const Offset(0, 30));
+      await tester.pump(const Duration(milliseconds: 16));
+    }
+    await gesture.up();
+    await settle(tester, 30);
+    expect(model.calls.where((call) => call == 'refresh'), hasLength(2));
+    expect(gate.requests, 1);
+    expect(find.text('需要登录'), findsNothing);
+  });
+
+  testWidgets('⋮ while logged out asks for the login instead of opening its sheet', (tester) async {
+    await show(tester, loggedIn: false);
+    await tester.tap(_key('message-more-button'));
+    await settle(tester);
+    expect(gate.requests, 1);
+    expect(_key('message-sheet'), findsNothing);
+  });
+
+  testWidgets('logging in from 消息\'s 登录 loads the list once the account reads logged in', (tester) async {
+    final api = FakeMessageApi(sessionList: _people(3));
+    late _LoggingIn login;
+    await show(
+      tester,
+      loggedIn: false,
+      model: (e) => real(api, e),
+      loginGate: (environment, http) => login = _LoggingIn(environment, http),
+    );
+    expect(_key('message-logged-out'), findsOneWidget);
+    expect(api.calls, isEmpty);
+
+    await tester.tap(_key('message-login'));
+    await settle(tester);
+    expect(login.requests, 1);
+    expect(api.calls, containsAll(['unread', 'sessions 0']));
+    expect(find.byType(SessionRow), findsNWidgets(3));
+    expect(_key('message-empty'), findsNothing);
+  });
+
+  testWidgets('opened while the launch\'s account check is out, 消息 shows the TV and loads once it reads logged in', (
+    tester,
+  ) async {
+    final api = FakeMessageApi(sessionList: _people(3));
+    late AppEnvironment environment;
+    await show(tester, checked: false, model: (e) => real(api, environment = e));
+    expect(environment.account, isA<AccountUnknown>());
+    expect(find.byType(LoadingTvState), findsOneWidget);
+    expect(api.calls, isEmpty);
+
+    await environment.refreshAccount();
+    await settle(tester);
+    expect(api.calls, containsAll(['unread', 'sessions 0']));
+    expect(find.byType(SessionRow), findsNWidgets(3));
+  });
+
+  testWidgets('a show request while 消息 is shown checks again, the list whatever its age; one while hidden asks the '
+      'list as it shows', (tester) async {
+    final (model, shown, _) = await show(
+      tester,
+      model: (e) => _Messages(environment: e, sessions: _sessions(2)),
+    );
+    expect(model.calls, ['unread force=true', 'refresh']);
+    model.requestShow();
+    await settle(tester);
+    expect(model.calls, ['unread force=true', 'refresh', 'unread force=true', 'refresh']);
+
+    model.calls.clear();
+    shown.value = false;
+    await settle(tester);
+    model.requestShow();
+    clock.now = clock.now.add(const Duration(seconds: 20));
+    shown.value = true;
+    await settle(tester);
+    expect(model.calls, ['unread force=true', 'refresh']);
+  });
+
+  testWidgets('a return to the app with 消息 on screen asks the counts, and the list once it is over a minute old; '
+      'hidden or covered, nothing', (tester) async {
+    final (model, shown, _) = await show(
+      tester,
+      model: (e) => _Messages(environment: e, sessions: _sessions(2)),
+    );
+    model.calls.clear();
+    backToApp(tester);
+    await settle(tester);
+    expect(model.calls, ['unread force=true']);
+
+    clock.now = clock.now.add(const Duration(minutes: 2));
+    backToApp(tester);
+    await settle(tester);
+    expect(model.calls, ['unread force=true', 'unread force=true', 'refresh']);
+
+    model.calls.clear();
+    final navigator = Navigator.of(tester.element(find.byType(MessagePage)));
+    unawaited(navigator.push(MaterialPageRoute<void>(builder: (_) => const SizedBox())));
+    await settle(tester);
+    clock.now = clock.now.add(const Duration(minutes: 2));
+    backToApp(tester);
+    await settle(tester);
+    expect(model.calls, isEmpty, reason: 'covered');
+
+    navigator.pop();
+    await settle(tester);
+    shown.value = false;
+    await settle(tester);
+    backToApp(tester);
+    await settle(tester);
+    expect(model.calls, isEmpty, reason: 'hidden');
   });
 }
 

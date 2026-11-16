@@ -41,15 +41,16 @@ abstract interface class MessageApi {
   /// The bar over a chat (202).
   Future<ChatSettings> chatSettings(int talkerId);
 
-  /// 不接受推送; throws [UnsupportedError] when no call for it is known.
+  /// 不接受推送 (`link_setting/set_push_ss`).
   Future<void> setChatPush(int talkerId, {required bool on});
 
   /// 加关注 from a chat's bar, through `/x/relation/modify`.
   Future<void> follow(int mid, {required bool on});
 
-  /// 消息设置's three pickers; throws [UnsupportedError] when no call for them is known.
+  /// 消息设置's three pickers (`link_setting/get`).
   Future<Map<NoticeSettingKind, NoticeAudience>> noticeSettings();
 
+  /// One of them (`link_setting/set`).
   Future<void> setNoticeSetting(NoticeSettingKind kind, NoticeAudience audience);
 }
 

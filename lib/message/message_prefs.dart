@@ -45,14 +45,17 @@ class MessagePrefs {
   /// 消息提醒: the red badges show at all.
   bool get badgeOn => _badgeOn;
 
-  set badgeOn(bool value) {
-    if (value == _badgeOn) return;
+  /// Sets 消息提醒 and saves it; throws when the write fails (logged), the value kept in memory all the same.
+  Future<void> setBadgeOn(bool value) {
+    if (value == _badgeOn) return Future.value();
     _badgeOn = value;
     final path = _path;
-    if (path == null) return;
+    if (path == null) return Future.value();
     final text = jsonEncode({'badgeOn': value});
-    // One write after another, so an older state never lands last.
-    _writing = _writing.then((_) => _write(path, text));
+    // One write after another, so an older state never lands last; a failed one doesn't stop the next.
+    final write = _writing.then((_) => _write(path, text));
+    _writing = write.then((_) {}, onError: (Object _) {});
+    return write;
   }
 
   Future<void> _write(String path, String text) async {
@@ -63,6 +66,7 @@ class MessagePrefs {
       await temporary.rename(path);
     } catch (error) {
       _logger.warn(LogCategory.app, 'message prefs not saved', {'error': _reason(error)});
+      rethrow;
     }
   }
 

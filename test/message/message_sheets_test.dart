@@ -159,11 +159,20 @@ void main() {
         of: _key('message-sheet-${choice.name}'),
         matching: find.byWidgetPredicate((widget) => widget is Image || widget is CustomPaint),
       );
+      // 212 has these two off the column's middle: 防骚扰和互动人群设置's ink spans 35–51.67, 应援团消息助手's middle
+      // is 611.17 down where the row's is 612.17.
+      final (dx, dy) = switch (choice) {
+        MessageSheetChoice.harassment => (1.5, 0.0),
+        MessageSheetChoice.fanClub => (0.0, -1.0),
+        _ => (0.0, 0.0),
+      };
+      final centre = tester.getCenter(glyph.first);
       expect(
-        tester.getCenter(glyph.first).dx,
-        moreOrLessEquals(row.left + MessageTabTheme.sheetGlyphCentre, epsilon: 0.01),
+        centre.dx,
+        moreOrLessEquals(row.left + MessageTabTheme.sheetGlyphCentre + dx, epsilon: 0.01),
         reason: choice.label,
       );
+      expect(centre.dy, moreOrLessEquals(row.center.dy + dy, epsilon: 0.01), reason: choice.label);
     }
   });
 
@@ -212,11 +221,11 @@ void main() {
     }
   });
 
-  testWidgets('a box the list doesn\'t hold says 暂未开放', (tester) async {
+  testWidgets('a box the list doesn\'t hold says 暂无消息', (tester) async {
     await show(tester, sessions: [_box(NoticeBox.service)]);
     for (final choice in [MessageSheetChoice.community, MessageSheetChoice.creator]) {
       await pick(tester, choice);
-      expect(find.text('暂未开放'), findsOneWidget, reason: choice.label);
+      expect(find.text('暂无消息'), findsOneWidget, reason: choice.label);
       expect(find.byType(ChatPage), findsNothing);
       await _settle(tester, 60);
     }
@@ -237,7 +246,7 @@ void main() {
       moreOrLessEquals(MessageTabTheme.alertBody + MessageTabTheme.alertRule + MessageTabTheme.alertButton),
     );
     expect(find.text('一键已读'), findsOneWidget);
-    expect(find.text('是否清除全部新消息提醒?'), findsOneWidget);
+    expect(find.text('是否清除全部新消息提醒？'), findsOneWidget);
     Color? colour(String label) => tester
         .widget<Text>(find.descendant(of: _key('message-read-all-$label'), matching: find.text(label)))
         .style

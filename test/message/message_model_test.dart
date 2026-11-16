@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:bili_core/api.dart';
 import 'package:bili_core/devlog.dart';
@@ -173,6 +174,20 @@ void main() {
       expect(model.badge, 7);
     });
 
+    test('a count refused with -101 clears the counts and says so: the badge keeps no old numbers', () async {
+      final model = make();
+      model.start();
+      await idle();
+      expect(model.badge, 7);
+      var notified = 0;
+      model.addListener(() => notified++);
+      api.failures['unread'] = const BiliAPIError(code: -101, message: '账号未登录');
+      await model.refreshUnread(force: true);
+      expect(model.unread, const MessageUnread());
+      expect(model.badge, 0);
+      expect(notified, 1);
+    });
+
     test('a failed count is logged by kind and code, the counts kept', () async {
       final model = make();
       model.start();
@@ -242,6 +257,21 @@ void main() {
       expect(api.calls, unorderedEquals(['unread', 'sessions 0']));
     });
 
+    test(
+      'a refresh while the account is unknown asks nothing and says so; the list is asked once it reads logged in',
+      () async {
+        final model = make(account: const AccountUnknown());
+        expect(await model.refresh(), isFalse);
+        await idle();
+        expect(api.calls, isEmpty);
+        environment.logIn();
+        await idle();
+        expect(api.calls, contains('sessions 0'));
+        expect(model.sessions, hasLength(4));
+        expect(await model.refresh(), isTrue);
+      },
+    );
+
     test('the badge hides while the account is unknown', () async {
       final model = make();
       model.start();
@@ -266,11 +296,11 @@ void main() {
       await model.loadMore();
       expect(model.sessions, hasLength(8));
       await model.loadMore();
-      expect(model.sessions, hasLength(10));
+      expect(model.sessions, hasLength(11));
       expect(model.hasMore, isFalse);
       await model.loadMore();
       expect(api.calls.where((call) => call.startsWith('sessions')), hasLength(3));
-      expect(model.sessions.map((session) => session.talkerId).toSet(), hasLength(10));
+      expect(model.sessions.map((session) => session.talkerId).toSet(), hasLength(11));
     });
 
     test('loading is the first page being out', () async {
@@ -326,6 +356,31 @@ void main() {
       expect(model.error, isNull);
       await model.loadMore();
       expect(model.sessions, hasLength(8));
+    });
+
+    test('retryMore asks the failed next page again; a failed first page is left to refresh', () async {
+      final model = make();
+      await model.refresh();
+      api.failures['sessions'] = const BiliHTTPError(503);
+      await model.loadMore();
+      expect(model.nextPageFailed, isTrue);
+      api.failures.remove('sessions');
+      var notified = 0;
+      model.addListener(() => notified++);
+      final retried = model.retryMore();
+      expect(model.error, isNull, reason: 'the footer spins again at once');
+      expect(notified, greaterThan(0));
+      await retried;
+      expect(model.sessions, hasLength(8));
+      expect(api.calls.where((call) => call.startsWith('sessions')).last, isNot('sessions 0'));
+
+      api.failures['sessions'] = const BiliHTTPError(503);
+      await model.refresh();
+      expect(model.error, isNotNull);
+      expect(model.nextPageFailed, isFalse);
+      final asked = api.calls.length;
+      await model.retryMore();
+      expect(api.calls, hasLength(asked));
     });
   });
 
@@ -387,6 +442,27 @@ void main() {
       expect(api.calls.where((call) => call.startsWith('read')), isEmpty);
     });
 
+    test('a 私信 newer than the list is acked too, and the 私信 count asked again after the ack', () async {
+      final model = make();
+      model.start();
+      await model.refresh();
+      final listed = model.sessions.firstWhere((session) => session.talkerId == 503);
+      expect((listed.unread, listed.ackSeqno, listed.maxSeqno), (0, 2, 2));
+      // It came after the list loaded: the counts know it, the list's copy doesn't.
+      final index = api.sessionList.indexWhere((session) => session.talkerId == 503);
+      api.sessionList[index] = _withMax(api.sessionList[index], 3, unread: 1);
+      api.counts = api.counts.copyWith(chat: 4);
+      await model.refreshUnread(force: true);
+      expect(model.unread.chat, 4);
+      api.calls.clear();
+
+      await model.chatOpened(_withMax(listed, 3));
+      expect(api.reads, [(talkerId: 503, seqno: 3)]);
+      expect(model.sessions.firstWhere((session) => session.talkerId == 503).ackSeqno, 3);
+      expect(api.calls, ['read 503 3', 'unread']);
+      expect(model.unread.chat, 3);
+    });
+
     test('a failed ack is logged and the count stays down', () async {
       final model = make();
       model.start();
@@ -433,6 +509,38 @@ void main() {
       expect(model.badge, 0);
     });
 
+    test('一键已读 then asks the counts again: Bilibili\'s say what is left past the first page of sessions', () async {
+      final model = make();
+      model.start();
+      await model.refresh();
+      final hold = api.holds['readAll'] = Completer<void>();
+      final reading = model.readAll();
+      await idle();
+      final counting = api.holds['unread'] = Completer<void>();
+      hold.complete();
+      await idle();
+      expect(model.badge, 0, reason: 'at once');
+      api.counts = const MessageUnread(chat: 2);
+      counting.complete();
+      await reading;
+      expect(api.calls.sublist(api.calls.indexOf('readAll')), ['readAll', 'unread']);
+      expect(model.unread, const MessageUnread(chat: 2));
+    });
+
+    test('a second 一键已读 while one is out sends nothing', () async {
+      final model = make();
+      model.start();
+      await idle();
+      final hold = api.holds['readAll'] = Completer<void>();
+      final first = model.readAll();
+      final second = model.readAll();
+      hold.complete();
+      await Future.wait([first, second]);
+      expect(countOf('readAll'), 1);
+      await model.readAll();
+      expect(countOf('readAll'), 2, reason: 'once the first is done, another goes');
+    });
+
     test('一键已读 refused throws, the counts as they were', () async {
       final model = make();
       model.start();
@@ -464,6 +572,19 @@ void main() {
       expect(notified, 1);
       await model.setBadgeOn(true);
       expect(model.badge, 7);
+    });
+
+    test('a save that fails throws to the caller; the badge follows it for this run', () async {
+      final folder = Directory.systemTemp.createTempSync('message_model');
+      addTearDown(() => folder.deleteSync(recursive: true));
+      final blocker = File('${folder.path}${Platform.pathSeparator}blocker')..writeAsStringSync('');
+      final path = '${blocker.path}${Platform.pathSeparator}message_prefs.json';
+      final model = make(prefs: await MessagePrefs.load(path, logger: logger));
+      model.start();
+      await idle();
+      await expectLater(model.setBadgeOn(false), throwsA(isA<FileSystemException>()));
+      expect(model.badgeOn, isFalse);
+      expect(model.badge, 0);
     });
 
     test('a launch with it off starts off', () async {
@@ -506,6 +627,35 @@ void main() {
       expect(sessions.fold<int>(0, (sum, session) => sum + session.unread), 3);
     });
 
+    test(
+      'reading a list clears its count as the website does: 回复, @ and 赞 by their first page, a chat by its ack',
+      () async {
+        final demo = FakeMessageApi.demo(now: demoTime, pageSize: 4);
+        await demo.replies(cursor: const NoticeCursor(id: 6008, time: 0));
+        expect(await demo.unread(), const MessageUnread(reply: 2, at: 1, like: 1, chat: 3), reason: 'a later page');
+        await demo.replies();
+        await demo.mentions();
+        expect(await demo.unread(), const MessageUnread(like: 1, chat: 3));
+        await demo.likes();
+        expect(await demo.unread(), const MessageUnread(chat: 3));
+        final sheep = (await demo.sessions()).sessions.firstWhere((session) => session.talkerId == 501);
+        await demo.read(sheep, seqno: sheep.maxSeqno);
+        expect(await demo.unread(), const MessageUnread(chat: 1));
+
+        demo.counts = const MessageUnread(system: 2);
+        final system = ChatSession(
+          talkerId: 0,
+          name: '',
+          face: '',
+          lastText: '',
+          time: demoTime,
+          box: NoticeBox.system,
+        );
+        await demo.read(system, seqno: 2);
+        expect(await demo.unread(), const MessageUnread());
+      },
+    );
+
     test('回复与@ has each kind of row, newest first, and pages', () async {
       final demo = FakeMessageApi.demo(now: demoTime, pageSize: 5);
       final first = await demo.replies();
@@ -538,7 +688,7 @@ void main() {
       expect(fans.users.where((fan) => fan.mutual), hasLength(1));
     });
 
-    test('the sessions: two boxes and eight people, every one with a chat, paging to the end', () async {
+    test('the sessions: three boxes and eight people, every one with a chat, paging to the end', () async {
       final demo = FakeMessageApi.demo(now: demoTime, pageSize: 4);
       final sessions = <ChatSession>[];
       int? next;
@@ -550,10 +700,11 @@ void main() {
         pages++;
       } while (next != null);
       expect(pages, 3);
-      expect(sessions, hasLength(10));
+      expect(sessions, hasLength(11));
       expect(sessions.map((session) => session.time), _newestFirst);
       expect(sessions.where((session) => session.box == NoticeBox.service), hasLength(1));
       expect(sessions.where((session) => session.box == NoticeBox.community), hasLength(1));
+      expect(sessions.where((session) => session.box == NoticeBox.creator), hasLength(1));
       final people = sessions.where((session) => session.box == null).toList();
       expect(people, hasLength(8));
       expect(people.every((session) => session.name.startsWith('演示') && session.face.isEmpty), isTrue);
@@ -600,6 +751,20 @@ void main() {
     });
   });
 }
+
+/// [session] as Bilibili lists it once a message numbered [maxSeqno] has come in.
+ChatSession _withMax(ChatSession session, int maxSeqno, {int? unread}) => ChatSession(
+  talkerId: session.talkerId,
+  sessionType: session.sessionType,
+  name: session.name,
+  face: session.face,
+  lastText: session.lastText,
+  time: session.time,
+  unread: unread ?? session.unread,
+  ackSeqno: session.ackSeqno,
+  maxSeqno: maxSeqno,
+  box: session.box,
+);
 
 final _newestFirst = predicate<Iterable<DateTime>>((times) {
   final list = times.toList();

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../app/app_scope.dart';
+import '../app/form_factor.dart';
 import '../dynamic/follow_tab/face_sheet.dart';
 import '../dynamic/follow_tab/follow_tab_page.dart';
 import '../me/me_page.dart';
@@ -18,7 +19,8 @@ import 'home_tab_bar.dart';
 /// The bottom bar's places: 首页, 关注, 消息 and 我的 kept alive side by side, the bar under them (01, 02, 127). A bar dressed
 /// by the equipped 装扮 lies over the pages' bottom instead, so they show behind its picture (109, 110). 关注's face
 /// sheet lies over everything, the bar included (139), and a sideloaded install's launch alert over that. 消息's
-/// counts start with the shell; their total is the bar's badge (211), and a tapped 私信 notification shows 消息.
+/// counts start with the shell; their total is the bar's badge (211), and a tapped 私信 notification shows 消息. The
+/// iPad has no 消息.
 class MainShell extends StatefulWidget {
   const MainShell({super.key, this.developerPage, this.initialLink, @visibleForTesting this.skin});
 
@@ -46,7 +48,10 @@ class _MainShellState extends State<MainShell> {
   void didChangeDependencies() {
     super.didChangeDependencies();
     if (_messages != null) return;
-    _messages = AppScope.of(context).messages
+    final messages = _messages = AppScope.of(context).messages;
+    // The iPad's bar has no 消息: nothing asks its counts, and a tapped 私信 notification only opens the app.
+    if (FormFactor.of(context).isPad) return;
+    messages
       ..start()
       ..showRequests.addListener(_showMessages);
   }
@@ -61,6 +66,7 @@ class _MainShellState extends State<MainShell> {
     super.dispose();
   }
 
+  /// Already on 消息, the page checks again by itself.
   void _showMessages() {
     if (!mounted) return;
     _faceSheet.close();

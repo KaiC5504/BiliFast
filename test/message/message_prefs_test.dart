@@ -31,23 +31,38 @@ void main() {
 
   test('turned off, it is off on the next launch; on again, on', () async {
     final prefs = await MessagePrefs.load(path, logger: logger);
-    prefs.badgeOn = false;
-    await prefs.settle();
+    await prefs.setBadgeOn(false);
     expect(jsonDecode(File(path).readAsStringSync()), {'badgeOn': false});
     expect(File('$path.tmp').existsSync(), isFalse, reason: 'written beside it, then renamed over it');
     expect((await MessagePrefs.load(path, logger: logger)).badgeOn, isFalse);
 
-    prefs.badgeOn = true;
-    await prefs.settle();
+    await prefs.setBadgeOn(true);
     expect((await MessagePrefs.load(path, logger: logger)).badgeOn, isTrue);
   });
 
   test('the same value again writes nothing', () async {
     final prefs = await MessagePrefs.load(path, logger: logger);
-    prefs.badgeOn = true;
-    await prefs.settle();
+    await prefs.setBadgeOn(true);
     expect(File(path).existsSync(), isFalse);
   });
+
+  test(
+    'a write that fails reaches the caller, logged without its path; the value holds and the next write goes on',
+    () async {
+      final blocker = File('${folder.path}${Platform.pathSeparator}blocker')..writeAsStringSync('');
+      final blocked = '${blocker.path}${Platform.pathSeparator}message_prefs.json';
+      final prefs = await MessagePrefs.load(blocked, logger: logger);
+      await expectLater(prefs.setBadgeOn(false), throwsA(isA<FileSystemException>()));
+      expect(prefs.badgeOn, isFalse, reason: 'for this run');
+      expect(logged(), contains('message prefs not saved'));
+      expect(logged(), isNot(contains('blocker')));
+      await prefs.settle();
+
+      blocker.deleteSync();
+      await prefs.setBadgeOn(true);
+      expect(jsonDecode(File(blocked).readAsStringSync()), {'badgeOn': true});
+    },
+  );
 
   test('an unreadable file is set aside as .bad and 消息提醒 is on, its text never logged', () async {
     File(path).writeAsStringSync('{"badgeOn": fals');
@@ -71,8 +86,7 @@ void main() {
   test('in memory it changes and writes nothing', () async {
     final prefs = MessagePrefs.memory(badgeOn: false);
     expect(prefs.badgeOn, isFalse);
-    prefs.badgeOn = true;
-    await prefs.settle();
+    await prefs.setBadgeOn(true);
     expect(prefs.badgeOn, isTrue);
     expect(folder.listSync(), isEmpty);
   });

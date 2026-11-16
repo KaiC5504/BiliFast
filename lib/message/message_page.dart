@@ -2,7 +2,6 @@ import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:bili_core/api.dart';
-import 'package:bili_core/devlog.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -43,7 +42,7 @@ class MessagePage extends StatefulWidget {
   State<MessagePage> createState() => _MessagePageState();
 }
 
-class _MessagePageState extends State<MessagePage> with SkinRefreshRoom {
+class _MessagePageState extends State<MessagePage> with SkinRefreshRoom, WidgetsBindingObserver {
   /// A list older than this is asked again when 消息 shows.
   static const _stale = Duration(minutes: 1);
 
@@ -52,8 +51,18 @@ class _MessagePageState extends State<MessagePage> with SkinRefreshRoom {
   MessageModel? _model;
   bool _signedOut = false;
 
-  /// 消息 has shown logged in; until then the list draws nothing, so no TV is built out of sight.
+  /// 消息 has shown, not logged out; until then the list draws nothing, so no TV is built out of sight.
   bool _started = false;
+
+  /// 消息 showed while the launch's or a login's account check was still out: it starts once the account reads
+  /// logged in.
+  bool _waiting = false;
+
+  /// The next start asks the list whatever its age: a tapped 私信 notification while 消息 was hidden.
+  bool _listWanted = false;
+
+  /// 一键已读 is out, from its alert to Bilibili's answer; the broom does nothing meanwhile.
+  bool _readingAll = false;
 
   /// When the list last loaded without a failure, as [MessagePage.clock] tells it.
   DateTime? _loadedAt;
@@ -81,6 +90,7 @@ class _MessagePageState extends State<MessagePage> with SkinRefreshRoom {
   void initState() {
     super.initState();
     widget.reloads?.addListener(_reload);
+    WidgetsBinding.instance.addObserver(this);
   }
 
   @override
@@ -90,7 +100,9 @@ class _MessagePageState extends State<MessagePage> with SkinRefreshRoom {
     _services = AppScope.of(context);
     _environment = _services.environment..addListener(_accountChanged);
     _signedOut = _loggedOut;
-    _model = _services.messages..addListener(_modelChanged);
+    _model = _services.messages
+      ..addListener(_modelChanged)
+      ..showRequests.addListener(_showRequested);
     if (widget.active) _activateAfterBuild();
   }
 
@@ -111,12 +123,33 @@ class _MessagePageState extends State<MessagePage> with SkinRefreshRoom {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     widget.reloads?.removeListener(_reload);
     _environment.removeListener(_accountChanged);
-    _model?.removeListener(_modelChanged);
+    _model
+      ?..removeListener(_modelChanged)
+      ..showRequests.removeListener(_showRequested);
     _paging.dispose();
     _scroll.dispose();
     super.dispose();
+  }
+
+  /// A return to the app with 消息 on screen checks again as its showing does.
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state != AppLifecycleState.resumed || !mounted || !widget.active) return;
+    if (ModalRoute.isCurrentOf(context) ?? true) _activate();
+  }
+
+  /// A tapped 私信 notification: 消息 checks again with the list asked whatever its age, now if it is shown, else as
+  /// the shell shows it.
+  void _showRequested() {
+    if (!mounted) return;
+    if (widget.active) {
+      _activate(list: true);
+    } else {
+      _listWanted = true;
+    }
   }
 
   bool get _loggedOut => switch (_environment.account) {
@@ -131,21 +164,35 @@ class _MessagePageState extends State<MessagePage> with SkinRefreshRoom {
     return _loggedOut || (error is BiliError && error.needsLogin && model.sessions.isEmpty);
   }
 
-  /// 消息 shown: the counts asked at once, the list when it was never loaded or is over a minute old.
-  void _activate() {
+  /// 消息 shown: the counts asked at once, the list when it was never loaded, is over a minute old or [list] asks
+  /// for it. While the account is still being checked the TV shows and this waits for it to read logged in.
+  void _activate({bool list = false}) {
     if (_loggedOut) return;
-    _started = true;
+    if (!_started) setState(() => _started = true);
+    _listWanted |= list;
+    if (_environment.account is! LoggedIn) {
+      _waiting = true;
+      return;
+    }
+    _waiting = false;
     unawaited(_model!.refreshUnread(force: true));
     final loaded = _loadedAt;
-    if (loaded == null || _now.difference(loaded) > _stale) unawaited(_refresh());
+    if (_listWanted || loaded == null || _now.difference(loaded) > _stale) {
+      _listWanted = false;
+      unawaited(_refresh());
+    }
   }
 
   void _accountChanged() {
     final out = _loggedOut;
-    if (out == _signedOut) return;
+    if (out == _signedOut) {
+      if (_waiting && widget.active && _environment.account is LoggedIn) _activate();
+      return;
+    }
     _signedOut = out;
     _loadedAt = null;
     _started = false;
+    _waiting = false;
     if (!out && widget.active) _activate();
     setState(() {});
   }
@@ -165,22 +212,27 @@ class _MessagePageState extends State<MessagePage> with SkinRefreshRoom {
 
   Future<void> _load() async {
     final model = _model!;
-    await model.refresh();
-    if (model.error == null) _loadedAt = _now;
+    if (await model.refresh() && model.error == null) _loadedAt = _now;
   }
 
-  /// A pull that failed over rows already shown says why; with none, the page's own state does.
-  Future<void> _pull() async {
+  /// A pull, or 点击重试 under the rows when the first page failed. Failed over rows already shown, a -101 asks for
+  /// the login and anything else says why ([toast]; the footer says it already); with none, the page's own state does.
+  Future<void> _pull({bool toast = true}) async {
     await _refresh();
     final model = _model!;
     final error = model.error;
-    if (error != null && model.sessions.isNotEmpty && mounted) showToast(context, requestFailureMessage(error));
+    if (error == null || model.sessions.isEmpty || !mounted) return;
+    if (error is BiliError && error.needsLogin) {
+      unawaited(_login());
+    } else if (toast) {
+      showToast(context, requestFailureMessage(error));
+    }
   }
 
   /// 消息 tapped while shown, as 关注's: back to the top, then the TV held open there until the refresh is done.
   /// With no session shown the list's own state stands for it.
   Future<void> _reload() async {
-    if (_refreshing != null || _loggedOut) return;
+    if (_refreshing != null || _environment.account is! LoggedIn) return;
     if (_model!.sessions.isEmpty) {
       unawaited(_refresh());
       return;
@@ -200,6 +252,7 @@ class _MessagePageState extends State<MessagePage> with SkinRefreshRoom {
     setState(() => _reloadHeader = false);
   }
 
+  /// The login page; it replays nothing.
   Future<void> _login() async {
     final loggedIn = await _services.loginGate.request(context);
     // A login that changed the account has started the page already (_accountChanged); one after a -101 under an
@@ -211,20 +264,35 @@ class _MessagePageState extends State<MessagePage> with SkinRefreshRoom {
   }
 
   Future<void> _readAll() async {
+    if (_readingAll) return;
     if (_loggedOut) {
       unawaited(_login());
       return;
     }
-    if (!await confirmReadAll(context) || !mounted) return;
+    _readingAll = true;
     try {
+      if (!await confirmReadAll(context) || !mounted) return;
       await _model!.readAll();
     } on Exception catch (error) {
-      Logger.shared.warn(LogCategory.api, 'message read all failed', {'error': '${error.runtimeType}'});
-      if (mounted) showToast(context, requestFailureMessage(error));
+      // The model has logged it.
+      if (!mounted) return;
+      if (error is BiliError && error.needsLogin) {
+        unawaited(_login());
+      } else {
+        showToast(context, requestFailureMessage(error));
+      }
+    } finally {
+      _readingAll = false;
     }
   }
 
-  void _more() => unawaited(showMessageMoreSheet(context, sessions: _model!.sessions, now: _now));
+  void _more() {
+    if (_loggedOut) {
+      unawaited(_login());
+      return;
+    }
+    unawaited(showMessageMoreSheet(context, sessions: _model!.sessions, now: _now));
+  }
 
   /// The pages clear their own counts as they open (a notification opens them too).
   void _openFeed(NoticeFeed feed) {
@@ -375,7 +443,7 @@ class _MessagePageState extends State<MessagePage> with SkinRefreshRoom {
                 loading: model.hasMore && model.error == null,
                 error: model.error == null ? null : requestFailureMessage(model.error!),
                 isEnd: false,
-                onRetry: () => unawaited(model.loadMore()),
+                onRetry: () => unawaited(model.nextPageFailed ? model.retryMore() : _pull(toast: false)),
               ),
             ),
             SliverToBoxAdapter(child: SizedBox(height: bottom)),
