@@ -128,6 +128,10 @@ void main() {
   }
 
   Finder card(String bvid) => find.byKey(ValueKey('feed-card-$bvid'));
+
+  /// 推荐's list, inside the PageView it shares with 热门.
+  Finder feedScrollable() =>
+      find.descendant(of: find.byKey(const ValueKey('feed')), matching: find.byType(Scrollable)).first;
   Finder inCard(String bvid, Key key) => find.descendant(of: card(bvid), matching: find.byKey(key));
   FakePlayer player([int index = 0]) => players[index];
 
@@ -198,11 +202,11 @@ void main() {
     expect(fresh.left, FeedBigCardTheme.spacing);
     expect(fresh.width, 440 - FeedBigCardTheme.spacing * 2);
     expect(tester.getRect(card('BV1n0')).top, closeTo(fresh.bottom + FeedBigCardTheme.spacing, 0.01));
-    final position = tester.state<ScrollableState>(find.byType(Scrollable).first).position;
-    await tester.scrollUntilVisible(find.byKey(const ValueKey('feed-divider')), 200);
+    final position = tester.state<ScrollableState>(feedScrollable()).position;
+    await tester.scrollUntilVisible(find.byKey(const ValueKey('feed-divider')), 200, scrollable: feedScrollable());
     await frames(tester, 10);
     final divider = tester.getRect(find.byKey(const ValueKey('feed-divider'))).bottom + position.pixels;
-    await tester.scrollUntilVisible(card(_bv), 200);
+    await tester.scrollUntilVisible(card(_bv), 200, scrollable: feedScrollable());
     await frames(tester, 10);
     expect(
       tester.getRect(card(_bv)).top + position.pixels,
@@ -298,7 +302,7 @@ void main() {
     await show(tester);
     await started(tester);
     final video = tester.getRect(inCard(_bv, const ValueKey('big-card-open')));
-    final position = tester.state<ScrollableState>(find.byType(Scrollable).first).position;
+    final position = tester.state<ScrollableState>(feedScrollable()).position;
     final half = FeedBigCardTheme.spacing + video.height / 2;
     position.jumpTo(half - 0.5);
     await frames(tester, 10);

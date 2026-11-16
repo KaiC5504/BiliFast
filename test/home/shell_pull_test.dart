@@ -256,16 +256,14 @@ void main() {
     testWidgets('the hidden page is out of flights both ways', (tester) async {
       await show(tester);
       await settle(tester, 40);
-      bool flying(String list) => tester
-          .widget<HeroMode>(
-            find
-                .ancestor(
-                  of: find.byKey(ValueKey(list), skipOffstage: false),
-                  matching: find.byType(HeroMode, skipOffstage: false),
-                )
-                .first,
+      // Out of flights when any HeroMode above it is off: 首页's pages have their own under MainShell's.
+      bool flying(String list) => find
+          .ancestor(
+            of: find.byKey(ValueKey(list), skipOffstage: false),
+            matching: find.byType(HeroMode, skipOffstage: false),
           )
-          .enabled;
+          .evaluate()
+          .every((element) => (element.widget as HeroMode).enabled);
       await tapTab(tester, HomeTab.mine);
       await settle(tester, 20);
       expect((flying('feed'), flying('me-list')), (false, true), reason: '我的 shown');
