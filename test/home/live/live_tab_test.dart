@@ -76,7 +76,7 @@ void main() {
       await settle(tester);
       harness.active.value = true;
       await settle(tester);
-      expect(api.calls, ['feed page=1'], reason: 'loaded once');
+      expect(api.tabCalls, ['feed page=1'], reason: 'loaded once');
     });
 
     testWidgets('the layout as 205 measures it: the carousel, the strip, the area row and the two columns', (
@@ -130,7 +130,7 @@ void main() {
         expect(find.text('暂未开放'), findsOneWidget, reason: key);
         await toastGone(tester);
       }
-      expect(harness.api.calls, ['feed page=1']);
+      expect(harness.api.tabCalls, ['feed page=1']);
     });
 
     testWidgets('the strip is hidden when nobody followed is live', (tester) async {
@@ -141,7 +141,7 @@ void main() {
 
     testWidgets('logged out the page still loads, with no strip', (tester) async {
       final harness = await show(tester, loggedIn: false);
-      expect(harness.api.calls, ['feed page=1']);
+      expect(harness.api.tabCalls, ['feed page=1']);
       expect(find.byKey(const ValueKey('live-carousel')), findsOneWidget);
       expect(find.byKey(const ValueKey('live-following')), findsNothing);
       expect(find.byKey(const ValueKey('live-grid-9000')), findsOneWidget);
@@ -164,7 +164,7 @@ void main() {
 
       await tester.tap(area(chat));
       await settle(tester);
-      expect(api.calls, ['feed page=1', 'area 11 page=1']);
+      expect(api.tabCalls, ['feed page=1', 'area 11 page=1']);
       expect(label('聊天室').style!.fontWeight, FontWeight.w600);
       expect(label('推荐').style!.color, BiliColors.secondaryText);
       expect(find.byKey(const ValueKey('live-grid-9050')), findsOneWidget);
@@ -176,7 +176,7 @@ void main() {
       expect(find.byKey(const ValueKey('live-grid-9000')), findsOneWidget);
       await tester.tap(area(chat));
       await settle(tester);
-      expect(api.calls, ['feed page=1', 'area 11 page=1'], reason: 'kept');
+      expect(api.tabCalls, ['feed page=1', 'area 11 page=1'], reason: 'kept');
     });
 
     testWidgets('an area that fails says why with 重试 in place of its rooms; 重试 asks it again', (tester) async {
@@ -197,7 +197,7 @@ void main() {
       api.failures.clear();
       await tester.tap(find.byKey(const ValueKey('live-retry')));
       await settle(tester);
-      expect(api.calls, ['feed page=1', 'area 11 page=1', 'area 11 page=1']);
+      expect(api.tabCalls, ['feed page=1', 'area 11 page=1', 'area 11 page=1']);
       expect(find.byKey(const ValueKey('live-grid-9050')), findsOneWidget);
     });
 
@@ -216,14 +216,14 @@ void main() {
       await settle(tester);
       await tester.tap(area(liveAreas[0]));
       await settle(tester);
-      expect(api.calls, ['feed page=1', 'area 12 page=1', 'area 11 page=1']);
+      expect(api.tabCalls, ['feed page=1', 'area 12 page=1', 'area 11 page=1']);
 
       await pull(tester);
       await settle(tester, 20);
-      expect(api.calls.skip(3), ['feed page=1', 'area 11 page=1'], reason: 'one pull, the top and the area shown');
+      expect(api.tabCalls.skip(3), ['feed page=1', 'area 11 page=1'], reason: 'one pull, the top and the area shown');
       await tester.tap(area(liveAreas[1]));
       await settle(tester);
-      expect(api.calls.last, 'area 12 page=1', reason: 'dropped by the refresh');
+      expect(api.tabCalls.last, 'area 12 page=1', reason: 'dropped by the refresh');
     });
 
     testWidgets('a pull that fails with rooms on screen keeps them and says why in a toast', (tester) async {
@@ -249,21 +249,21 @@ void main() {
       final hold = api.holds['feed page=2'] = Completer<void>();
       await tester.drag(list, const Offset(0, -2400));
       await settle(tester);
-      expect(api.calls, ['feed page=1', 'feed page=2']);
+      expect(api.tabCalls, ['feed page=1', 'feed page=2']);
       expect(find.byKey(const ValueKey('live-more-spinner')), findsOneWidget);
       await tester.drag(list, const Offset(0, -50));
       await settle(tester);
-      expect(api.calls, ['feed page=1', 'feed page=2'], reason: 'one call out at a time');
+      expect(api.tabCalls, ['feed page=1', 'feed page=2'], reason: 'one call out at a time');
 
       hold.complete();
       await settle(tester);
       await tester.drag(list, const Offset(0, -6000));
       await settle(tester);
-      expect(api.calls, ['feed page=1', 'feed page=2', 'feed page=3']);
+      expect(api.tabCalls, ['feed page=1', 'feed page=2', 'feed page=3']);
       expect(find.byKey(const ValueKey('live-end')), findsOneWidget, reason: 'page 3 added nothing');
       await tester.drag(list, const Offset(0, -500));
       await settle(tester);
-      expect(api.calls.length, 3, reason: 'nothing loops');
+      expect(api.tabCalls.length, 3, reason: 'nothing loops');
     });
 
     testWidgets('a first load that fails says why with 重试, which asks again', (tester) async {
@@ -274,7 +274,7 @@ void main() {
       api.failures.clear();
       await tester.tap(find.byKey(const ValueKey('live-retry')));
       await settle(tester);
-      expect(api.calls, ['feed page=1', 'feed page=1']);
+      expect(api.tabCalls, ['feed page=1', 'feed page=1']);
       expect(find.byKey(const ValueKey('live-carousel')), findsOneWidget);
     });
 
@@ -293,11 +293,11 @@ void main() {
       harness.tapHome();
       await settle(tester, 20);
       expect(harness.offset.value, 0);
-      expect(harness.api.calls, ['feed page=1', 'feed page=1']);
+      expect(harness.api.tabCalls, ['feed page=1', 'feed page=1']);
       harness.tapHome();
       harness.tapHome();
       await settle(tester, 20);
-      expect(harness.api.calls.length, 3, reason: 'a tap while one runs asks nothing more');
+      expect(harness.api.tabCalls.length, 3, reason: 'a tap while one runs asks nothing more');
     });
 
     testWidgets('a tap on a room opens it, zooming from its card; 查看全部 opens 206', (tester) async {
@@ -358,6 +358,11 @@ void main() {
       expect(players.made, hasLength(1), reason: 'the middle card only');
       expect(players.last.calls, contains('muted true'));
       expect(find.byKey(const ValueKey('live-big-loading')), findsOneWidget);
+      expect(
+        harness.api.calls.where((call) => call.contains('9100')),
+        ['playInfo 9100 qn=-', 'channel 9100'],
+        reason: "the stream and its danmaku only: nothing of the room page's, no 历史记录 entry",
+      );
 
       await playing(tester);
       expect(find.byKey(const ValueKey('live-big-loading')), findsNothing);

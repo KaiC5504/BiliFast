@@ -41,7 +41,7 @@ class LiveRoomModel extends ChangeNotifier {
     required this.loggedIn,
     DateTime Function()? now,
     this.viewer,
-    this.reportsEntry = true,
+    this.inline = false,
     Logger? logger,
   }) : now = now ?? DateTime.now,
        _logger = logger ?? Logger.shared;
@@ -70,8 +70,9 @@ class LiveRoomModel extends ChangeNotifier {
   /// by its text alone.
   final LiveUser Function()? viewer;
 
-  /// Whether opening it puts the room in 历史记录 (`roomEntryAction`): a room page does, 首页's carousel doesn't.
-  final bool reportsEntry;
+  /// 首页's carousel card: it shows only the stream and its flying danmaku, so it asks the play info alone (no info,
+  /// history or 醒目留言) and doesn't put the room in 历史记录 (`roomEntryAction`).
+  final bool inline;
   final Logger _logger;
 
   LiveRoomState _state = LiveRoomState.loading;
@@ -173,8 +174,19 @@ class LiveRoomModel extends ChangeNotifier {
   Future<void> start() => _starting ??= _start();
 
   Future<void> _start() async {
-    _tipTimer = Timer(_tipAfter, _addTip);
     final id = entry.roomId;
+    if (inline) {
+      final play = await _try('play info', () => api.playInfo(id));
+      if (_disposed) return;
+      if (play != null) {
+        _takePlay(play);
+      } else {
+        _state = LiveRoomState.failed;
+      }
+      _notify();
+      return;
+    }
+    _tipTimer = Timer(_tipAfter, _addTip);
     final (info, play, history, superChats) = await (
       _try('room info', () => api.roomInfo(id)),
       _try('play info', () => api.playInfo(id)),
@@ -208,7 +220,7 @@ class LiveRoomModel extends ChangeNotifier {
     _notify();
     final known = _info;
     final (info, play) = await (
-      known == null ? _try('room info', () => api.roomInfo(entry.roomId)) : Future.value(known),
+      known == null && !inline ? _try('room info', () => api.roomInfo(entry.roomId)) : Future.value(known),
       _try('play info', () => api.playInfo(entry.roomId)),
     ).wait;
     if (_disposed) return;
@@ -328,7 +340,7 @@ class LiveRoomModel extends ChangeNotifier {
       _cardAdded = true;
       _append([LiveChatRoomCard(title: title, description: _info?.description ?? '', liveTime: play.liveTime)]);
     }
-    if (reportsEntry && !_entered && loggedIn()) {
+    if (!inline && !_entered && loggedIn()) {
       _entered = true;
       unawaited(_try('enter', () => api.enter(roomId)));
     }

@@ -5,6 +5,7 @@ import 'package:bilifast/live/player/live_player_view.dart';
 import 'package:bilifast/live/rank/live_rank_sheet.dart';
 import 'package:bilifast/live/room/live_overlays.dart';
 import 'package:bilifast/live/room/live_room_page.dart';
+import 'package:bilifast/live/room/room_header.dart';
 import 'package:bilifast/live/room/room_more_sheet.dart';
 import 'package:bilifast/shared/theme.dart';
 import 'package:flutter/material.dart';
@@ -289,7 +290,7 @@ void main() {
     testWidgets('lays the room out as the full-screen player with the landscape overlays', (tester) async {
       await pumpRoom(tester, await roomServices(gate: gate), landscape: true);
       expect(key('live-room-full-screen'), findsOneWidget);
-      expect(key('live-anchor'), findsNothing);
+      expect(find.byType(RoomHeader), findsNothing, reason: 'the full-screen player draws its own anchor');
       final view = tester.widget<LivePlayerView>(find.byType(LivePlayerView));
       expect(view.fullScreen, isTrue);
       expect(tester.getRect(find.byType(LivePlayerView)), const Rect.fromLTWH(0, 0, 956, 440));

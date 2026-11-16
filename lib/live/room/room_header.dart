@@ -25,6 +25,9 @@ class RoomHeader extends StatelessWidget {
     builder: (context, _) {
       final info = room.info;
       final entry = room.entry;
+      // An answer without the anchor (or a failed one) keeps the card's.
+      final face = info?.anchorFace ?? '';
+      final name = info?.anchorName ?? '';
       return Stack(
         children: [
           Positioned(
@@ -50,10 +53,10 @@ class RoomHeader extends StatelessWidget {
             top: 0,
             height: LiveRoomTheme.capsuleHeight,
             child: _AnchorCapsule(
-              face: info?.anchorFace ?? entry.anchorFace,
+              face: face.isEmpty ? entry.anchorFace : face,
               frame: info?.anchorFrame ?? '',
               verify: info?.verify ?? LiveVerify.none,
-              name: info?.anchorName ?? entry.anchorName,
+              name: name.isEmpty ? entry.anchorName : name,
               likes: room.likeCount,
               following: room.following,
               onFollow: () => roomWrite(context, () => room.setFollowing(true)),
