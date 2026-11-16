@@ -4,6 +4,7 @@ import 'package:flutter/widgets.dart';
 import '../../app/app_environment.dart';
 import '../../app/app_scope.dart';
 import '../../shared/toast.dart';
+import '../live_login.dart';
 import 'live_room_model.dart';
 import '../../video/actions/actions_model.dart' show ActionsModel;
 
@@ -24,9 +25,8 @@ bool liveNeedsLogin(Object error) =>
 /// Runs [action] for a logged-in viewer: logged out it opens the login page instead, as does a refusal that needs a
 /// login; any other failure toasts.
 Future<void> roomWrite(BuildContext context, Future<void> Function() action) async {
-  final services = AppScope.of(context);
-  if (roomLoggedOut(services)) {
-    await services.loginGate.request(context);
+  if (roomLoggedOut(AppScope.of(context))) {
+    await requestLiveLogin(context);
     return;
   }
   try {
@@ -34,7 +34,7 @@ Future<void> roomWrite(BuildContext context, Future<void> Function() action) asy
   } catch (error) {
     if (!context.mounted) return;
     if (liveNeedsLogin(error)) {
-      await services.loginGate.request(context);
+      await requestLiveLogin(context);
     } else {
       showToast(context, ActionsModel.failureMessage(error));
     }

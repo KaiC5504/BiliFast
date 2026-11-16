@@ -330,6 +330,16 @@ class LivePlayerController extends ChangeNotifier with WidgetsBindingObserver {
     return true;
   }
 
+  /// While the login page is up over the room, turning the phone doesn't take the room to full screen behind it.
+  void holdTurns(bool held) {
+    if (_disposed) return;
+    if (held) {
+      _releaseOrientation();
+    } else if (!_covered) {
+      _claimOrientation();
+    }
+  }
+
   void setLocked(bool on) {
     if (!_owning || _orientation.locked == on) return;
     _orientation.toggleLock();

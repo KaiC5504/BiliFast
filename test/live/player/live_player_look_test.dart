@@ -84,8 +84,8 @@ void main() {
                 Positioned(
                   left: 0,
                   right: 0,
-                  top: LivePlayerTheme.boxTop,
-                  height: LivePlayerTheme.boxBottom - LivePlayerTheme.boxTop,
+                  top: liveBoxTop,
+                  height: liveBoxBottom - liveBoxTop,
                   child: view,
                 ),
               if (overlay == LiveOverlay.more)

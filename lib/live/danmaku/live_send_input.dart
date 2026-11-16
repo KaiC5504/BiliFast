@@ -8,10 +8,10 @@ import 'package:flutter/material.dart'
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 
-import '../../app/app_scope.dart';
 import '../../comments/field_strut.dart';
 import '../../shared/theme.dart';
 import '../../shared/toast.dart';
+import '../live_login.dart';
 import '../room/live_overlays.dart';
 import '../room/live_room_model.dart';
 import 'live_emote_panel.dart';
@@ -181,7 +181,7 @@ class _LiveSendInputState extends State<LiveSendInput> {
 
   Future<bool> _loginFirst() async {
     if (widget.room.loggedIn()) return false;
-    await AppScope.of(context).loginGate.request(context);
+    await requestLiveLogin(context);
     return true;
   }
 
@@ -220,7 +220,7 @@ class _LiveSendInputState extends State<LiveSendInput> {
 
   Future<void> _failed(Object error) async {
     if (error is BiliError && error.needsLogin) {
-      await AppScope.of(context).loginGate.request(context);
+      await requestLiveLogin(context);
       return;
     }
     showToast(context, failureMessage(error));

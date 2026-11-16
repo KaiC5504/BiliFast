@@ -11,6 +11,7 @@ import '../../app/route_observer.dart';
 import '../../shared/theme.dart';
 import '../danmaku/live_send_input.dart';
 import '../live_entry.dart';
+import '../live_login.dart';
 import '../player/live_player_controller.dart';
 import '../player/live_player_panels.dart';
 import '../player/live_player_view.dart';
@@ -142,6 +143,7 @@ class _LiveRoomPageState extends State<LiveRoomPage> with RouteAware {
     _controller.setCovered(false);
   }
 
+  /// The header's and full screen's ‹: through [_popInvoked], so an overlay closes first and full screen turns upright.
   void _back() => unawaited(Navigator.of(context).maybePop());
 
   bool _wide(BuildContext context) {
@@ -155,30 +157,76 @@ class _LiveRoomPageState extends State<LiveRoomPage> with RouteAware {
       _superChatMenu.value = false;
     } else if (_overlays.close()) {
       return;
-    } else if (_controller.fullScreen || _wide(context)) {
+    } else if (!_controller.back() && _wide(context)) {
+      // Sideways with the turn not the room's (another page had it): still upright, never out of the room.
       unawaited(_controller.setFullScreen(false));
     }
   }
 
+  static const _turnLimit = Duration(seconds: 3);
+  static const _turnPoll = Duration(milliseconds: 20);
+
+  /// The rotation's animation, which runs on after the screen has its upright size.
+  static const _turnSettle = Duration(milliseconds: 400);
+  bool _askingLogin = false;
+
+  /// Every logged-out action in the room (关注, sending, 点赞) and every answer that wants a login, as the video page's:
+  /// the overlays go, full screen turns upright, and the login page goes up once the turn is over, with the phone's
+  /// turning off until it closes.
+  Future<bool> _requestLogin() async {
+    final services = _services;
+    if (_askingLogin || services == null || _covered || !mounted) return false;
+    _askingLogin = true;
+    try {
+      _superChatMenu.value = false;
+      _overlays.close();
+      var turning = _controller.back();
+      if (!turning && _wide(context)) {
+        turning = true;
+        unawaited(_controller.setFullScreen(false));
+      }
+      if (turning) {
+        var waited = Duration.zero;
+        while (mounted && _wide(context) && waited < _turnLimit) {
+          await Future<void>.delayed(_turnPoll);
+          waited += _turnPoll;
+        }
+        if (mounted) await Future<void>.delayed(_turnSettle);
+      }
+      if (!mounted || _covered) return false;
+      _controller.holdTurns(true);
+      try {
+        return await services.loginGate.request(context);
+      } finally {
+        if (mounted) _controller.holdTurns(false);
+      }
+    } finally {
+      _askingLogin = false;
+    }
+  }
+
   @override
-  Widget build(BuildContext context) => ListenableBuilder(
-    listenable: Listenable.merge([_overlays, _controller, _superChatMenu]),
-    builder: (context, _) {
-      final wide = _wide(context);
-      return PopScope<Object?>(
-        canPop: _overlays.value == LiveOverlay.none && !_superChatMenu.value && !_controller.fullScreen && !wide,
-        onPopInvokedWithResult: _popInvoked,
-        child: AnnotatedRegion<SystemUiOverlayStyle>(
-          value: SystemUiOverlayStyle.light,
-          // The other builders' inputs and panels need a Material above them; the room draws its own fills.
-          child: Material(
-            key: const ValueKey('live-room-page'),
-            type: MaterialType.transparency,
-            child: wide ? _fullScreen() : _portrait(context),
+  Widget build(BuildContext context) => LiveLoginScope(
+    request: _requestLogin,
+    child: ListenableBuilder(
+      listenable: Listenable.merge([_overlays, _controller, _superChatMenu]),
+      builder: (context, _) {
+        final wide = _wide(context);
+        return PopScope<Object?>(
+          canPop: _overlays.value == LiveOverlay.none && !_superChatMenu.value && !_controller.fullScreen && !wide,
+          onPopInvokedWithResult: _popInvoked,
+          child: AnnotatedRegion<SystemUiOverlayStyle>(
+            value: SystemUiOverlayStyle.light,
+            // The other builders' inputs and panels need a Material above them; the room draws its own fills.
+            child: Material(
+              key: const ValueKey('live-room-page'),
+              type: MaterialType.transparency,
+              child: wide ? _fullScreen() : _portrait(context),
+            ),
           ),
-        ),
-      );
-    },
+        );
+      },
+    ),
   );
 
   Widget _fullScreen() {

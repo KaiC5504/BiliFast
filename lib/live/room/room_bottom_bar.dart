@@ -3,6 +3,7 @@ import 'package:flutter/widgets.dart';
 import '../../app/app_scope.dart';
 import '../../shared/theme.dart';
 import '../live_badges.dart';
+import '../live_login.dart';
 import 'live_overlays.dart';
 import 'room_actions.dart';
 import 'room_glyphs.dart';
@@ -18,9 +19,8 @@ class RoomBottomBar extends StatelessWidget {
   final String ownFace;
 
   Future<void> _openSend(BuildContext context) async {
-    final services = AppScope.of(context);
-    if (roomLoggedOut(services)) {
-      await services.loginGate.request(context);
+    if (roomLoggedOut(AppScope.of(context))) {
+      await requestLiveLogin(context);
       return;
     }
     overlays.open(LiveOverlay.send);

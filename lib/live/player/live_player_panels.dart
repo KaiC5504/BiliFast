@@ -16,6 +16,7 @@ import '../../player_ui/player_ui.dart';
 import '../../shared/theme.dart';
 import '../../shared/toast.dart';
 import '../../video/player_session.dart';
+import '../live_login.dart';
 import '../room/live_overlays.dart';
 import '../room/live_room_model.dart';
 import 'live_player_controller.dart';
@@ -527,7 +528,7 @@ class _LiveDanmakuSettingsPanelState extends State<LiveDanmakuSettingsPanel> {
       isVip: () => false,
       accountMid: () => environment.mid ?? 0,
       requestLogin: () {
-        if (mounted) unawaited(services.loginGate.request(context));
+        if (mounted) unawaited(requestLiveLogin(context));
       },
     );
     _ui = PlayerUi(

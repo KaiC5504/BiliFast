@@ -239,8 +239,10 @@ class LiveRoomModel extends ChangeNotifier {
     _syncSocket();
   }
 
-  /// Asks the play info again at [qn]; [play] follows. One call at a time; a failure throws (the caller toasts it).
+  /// Asks the play info again at [qn], or with none for 0 (210's 自动: the room's own default); [play] follows. One
+  /// call at a time; a failure throws (the caller toasts it).
   Future<void> setQuality(int qn) {
+    if (qn == 0) return _askStream(null);
     if (_streamAsk == null && qn == _play?.currentQn) return Future.value();
     return _askStream(qn);
   }

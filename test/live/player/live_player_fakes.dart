@@ -12,6 +12,7 @@ import 'package:bilifast/live/player/live_player_controller.dart';
 import 'package:bilifast/live/player/live_player_prefs.dart';
 import 'package:bilifast/live/room/live_room_model.dart';
 import 'package:bilifast/playback/playback_controller.dart';
+import 'package:bilifast/shared/theme.dart';
 import 'package:bilifast/video/player_prefs.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -19,6 +20,10 @@ import '../../app/fake_keychain.dart';
 import '../../home/fake_login_gate.dart';
 import '../../playback/fakes.dart';
 import '../../support/fake_player.dart';
+
+/// 207's box on KaiC's 440 pt screen, under its 62 pt safe area, as the room page places it.
+const liveBoxTop = 62 + LiveRoomTheme.boxTop;
+const liveBoxBottom = liveBoxTop + 440 * 9 / 16;
 
 const qualities = [
   LiveQuality(qn: 10000, name: '1080P 原画 (高帧率)'),

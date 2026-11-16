@@ -77,8 +77,8 @@ void main() {
               Positioned(
                 left: 0,
                 right: 0,
-                top: LivePlayerTheme.boxTop,
-                height: LivePlayerTheme.boxBottom - LivePlayerTheme.boxTop,
+                top: liveBoxTop,
+                height: liveBoxBottom - liveBoxTop,
                 child: view,
               ),
             Positioned.fill(
@@ -121,7 +121,7 @@ void main() {
       await show(tester, rig, landscape: false);
       final full = tester.getRect(_key('live-box-full-screen'));
       expect(full.right, closeTo(440 - LivePlayerTheme.boxButtonRight, 0.01));
-      expect(full.bottom, closeTo(LivePlayerTheme.boxBottom - LivePlayerTheme.boxButtonBottom, 0.01));
+      expect(full.bottom, closeTo(liveBoxBottom - LivePlayerTheme.boxButtonBottom, 0.01));
       expect(full.width, LivePlayerTheme.boxButton);
       final danmaku = tester.getRect(_key('live-box-danmaku'));
       expect(full.left - danmaku.right, closeTo(LivePlayerTheme.boxButtonGap, 0.01));
@@ -130,7 +130,7 @@ void main() {
       await tester.pump();
       expect(rig.controller.danmakuOn, isFalse);
       final note = tester.getRect(_key('live-box-note'));
-      expect(note.top, closeTo(LivePlayerTheme.boxBottom + LivePlayerTheme.boxToastTop, 0.01));
+      expect(note.top, closeTo(liveBoxBottom + LivePlayerTheme.boxToastTop, 0.01));
       expect(note.center.dx, closeTo(220, 0.01));
       expect(note.height, closeTo(LivePlayerTheme.boxToastHeight, 0.01));
       expect(find.text('已关闭弹幕'), findsOneWidget);

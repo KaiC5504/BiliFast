@@ -4,7 +4,6 @@ import 'package:bili_core/logic.dart' show CountFormat;
 import 'package:flutter/rendering.dart' show OverflowBoxFit;
 import 'package:flutter/widgets.dart';
 
-import '../../app/app_scope.dart';
 import '../../player_ui/chrome_state.dart';
 import '../../player_ui/landscape_chrome.dart' show LockPainter, fullScreenStrut, fullScreenText;
 import '../../player_ui/portrait_controls.dart' show BackGlyph, ChromeTap, MoreDots;
@@ -12,8 +11,10 @@ import '../../shared/theme.dart';
 import '../../shared/toast.dart';
 import '../danmaku/live_danmaku_layer.dart';
 import '../live_badges.dart';
+import '../live_login.dart';
 import '../room/live_overlays.dart';
 import '../room/live_room_model.dart';
+import '../room/room_actions.dart' show liveNeedsLogin;
 import 'live_player_controller.dart';
 import 'live_player_view.dart';
 
@@ -400,15 +401,19 @@ Widget _line(String text, double size, double centre, String key) => Padding(
 
 /// 关注 in the header, through the login page when logged out.
 Future<void> followRoom(BuildContext context, LiveRoomModel room) async {
-  final services = AppScope.of(context);
   if (!room.loggedIn()) {
-    unawaited(services.loginGate.request(context));
+    unawaited(requestLiveLogin(context));
     return;
   }
   try {
     await room.setFollowing(true);
-  } catch (_) {
-    if (context.mounted) showToast(context, '关注失败，请稍后重试');
+  } catch (error) {
+    if (!context.mounted) return;
+    if (liveNeedsLogin(error)) {
+      unawaited(requestLiveLogin(context));
+    } else {
+      showToast(context, '关注失败，请稍后重试');
+    }
   }
 }
 

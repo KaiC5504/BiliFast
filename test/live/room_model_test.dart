@@ -579,6 +579,17 @@ void main() {
     });
   });
 
+  test("210's 自动 (qn 0) asks with no qn, even when the room is on its default", () {
+    fakeAsync((async) {
+      final room = _Room(async);
+      room.start();
+      unawaited(room.model.setQuality(0));
+      async.flushMicrotasks();
+      expect(room.callsNamed('playInfo'), ['playInfo 7 qn=-', 'playInfo 7007 qn=-']);
+      room.model.dispose();
+    });
+  });
+
   test('a second quality waits for the first', () {
     fakeAsync((async) {
       final room = _Room(async);

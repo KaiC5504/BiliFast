@@ -3,13 +3,13 @@ import 'dart:async';
 import 'package:bili_core/devlog.dart';
 import 'package:flutter/widgets.dart';
 
-import '../../app/app_scope.dart';
 import '../../player_ui/landscape_chrome.dart' show fullScreenText, fullScreenStrut;
 import '../../player_ui/player_loading.dart';
 import '../../player_ui/portrait_controls.dart' show ChromeTap;
 import '../../shared/remote_image.dart';
 import '../../shared/theme.dart';
 import '../danmaku/live_danmaku_layer.dart';
+import '../live_login.dart';
 import '../room/live_overlays.dart';
 import '../room/live_room_model.dart';
 import 'live_full_screen.dart';
@@ -19,7 +19,7 @@ import 'live_player_controller.dart';
 /// screen with 209's controls when [fullScreen]. The danmaku over the video sit inside it. Opens [overlays]' layers
 /// (⋮, 画质, 高能榜, the 弹幕 input); [onBack] is 209's ‹.
 ///
-/// In portrait it fills the box the page gives it ([LivePlayerTheme.boxTop] to [LivePlayerTheme.boxBottom]); 208's
+/// In portrait it fills the box the page gives it ([LiveRoomTheme.boxTop] under the safe area, 16:9); 208's
 /// note hangs under the box in the app's overlay. In full screen it fills the screen, and the picture shrinks left of
 /// a side panel ([LiveOverlay.more], [LiveOverlay.quality], [LiveOverlay.rank]) as 210, 222 and 232 show.
 class LivePlayerView extends StatelessWidget {
@@ -161,7 +161,7 @@ class LivePhaseLayer extends StatelessWidget {
 /// A double tap's 点赞, through the login page when logged out.
 void likeRoom(BuildContext context, LiveRoomModel room) {
   if (!room.loggedIn()) {
-    unawaited(AppScope.of(context).loginGate.request(context));
+    unawaited(requestLiveLogin(context));
     return;
   }
   try {
@@ -169,7 +169,7 @@ void likeRoom(BuildContext context, LiveRoomModel room) {
   } catch (error) {
     // The model refuses a logged-out 点赞; the account may have gone between the check and the call.
     Logger.shared.info(LogCategory.ui, 'live like refused', {'error': '${error.runtimeType}'});
-    if (!room.loggedIn()) unawaited(AppScope.of(context).loginGate.request(context));
+    if (!room.loggedIn()) unawaited(requestLiveLogin(context));
   }
 }
 
