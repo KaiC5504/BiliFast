@@ -6,9 +6,10 @@ import '../settings_page.dart';
 import 'autoplay_settings_page.dart';
 import 'playback_settings_page.dart';
 
-/// 设置 → 首页推荐设置 (170). 首页自动播放 and 大卡默认声音 change; the rest show what 首页 does: it picks a video's
-/// player by the video (自动模式), and 推荐 refreshes only when asked (a pull, 首页 or the account changing), never by
-/// itself on a return to the app.
+/// 设置 → 首页推荐设置 (170). 首页自动播放, 大卡默认声音 and 每次刷新数量 (ours, not the official app's: how many of the
+/// official feed's pages one refresh of 推荐 shows) change; the rest show what 首页 does: it picks a video's player by
+/// the video (自动模式), and 推荐 refreshes only when asked (a pull, 首页 or the account changing), never by itself on a
+/// return to the app.
 class HomeFeedSettingsPage extends StatefulWidget {
   const HomeFeedSettingsPage({super.key, this.prefs});
 
@@ -34,6 +35,12 @@ class _HomeFeedSettingsPageState extends State<HomeFeedSettingsPage> {
     if (on == _prefs.bigCardSound) return;
     setState(() => _prefs.bigCardSound = on);
     logPlaybackSetting('bigCardSound', on);
+  }
+
+  void _setRefreshSize(FeedRefreshSize size) {
+    if (size == _prefs.feedRefreshSize) return;
+    setState(() => _prefs.feedRefreshSize = size);
+    logPlaybackSetting('feedRefreshSize', size.name);
   }
 
   @override
@@ -89,6 +96,19 @@ class _HomeFeedSettingsPageState extends State<HomeFeedSettingsPage> {
             chosen: !_prefs.bigCardSound,
             onTap: () => _setSound(false),
           ),
+        ],
+      ),
+      SettingsSection(
+        look: SettingsSectionLook.feed,
+        label: '每次刷新数量',
+        children: [
+          for (final size in FeedRefreshSize.values)
+            SettingsPickRow(
+              key: ValueKey('home-feed-refresh-size-${size.name}'),
+              title: size.label,
+              chosen: size == _prefs.feedRefreshSize,
+              onTap: () => _setRefreshSize(size),
+            ),
         ],
       ),
       SettingsSection(
