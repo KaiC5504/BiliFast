@@ -9103,10 +9103,11 @@ abstract final class LiveTabTheme {
   static const areaIconPitch = 31.0;
   static const areaIconTarget = 30.0;
 
-  /// The two-column cards: 5 from the left, 5 apart and 6 from the right (212 wide on the phone), 4 corners; a 4:3 cover over a 50 band. On the cover a tag at the top left,
-  /// the corner picture 20 tall at the top right, and 13.33 over its bottom the 10 pt 👁 (14 wide) and 👍 (13.33) counts
-  /// 9 in, 5.67 after each icon, 10.67 between, the area 9 from the right. In the band a 32 face 8 in and centred, the
-  /// 14 pt title and the 12 pt name 44 in, ⋮ (#C4C4C4, 2.67 dots 3.33 apart) 10 from the right on the name's line.
+  /// The two-column cards: 5 from the left, 5 apart and 6 from the right (212 wide on the phone), 4 corners; a 4:3
+  /// cover over a 50 band. On the cover a tag at the top left, the corner picture 20 tall at the top right, and 13.33
+  /// over its bottom the 10 pt 👁 (14 wide) and 👍 (13.33) counts 9 in, 5.67 after each icon, 10.67 between, the area 9
+  /// from the right. In the band a 32 face 8 in and centred, the 14 pt title and the 12 pt name 44 in, ⋮ (#C4C4C4,
+  /// 2.67 dots 3.33 apart) 10 from the right on the name's line.
   static const gridSide = 5.0;
   static const gridSideRight = 6.0;
   static const gridGap = 5.0;
@@ -9515,8 +9516,8 @@ abstract final class LivePlayerTheme {
   static const backHeight = 44 / 3;
 
   /// The anchor's capsule: 36 tall from 38 inside the safe area, the face 30 inset 3, the name 11.67 and 点赞 9.33
-  /// after a 6.33 gap, their middles 11.67 and 26.33 down the capsule, the pink 关注 40 × 26 6 after the longer of
-  /// them and 5 from the capsule's end.
+  /// after a 6.33 gap, their middles 13 and 27.67 down the capsule, the pink 关注 40 × 26 6 after the longer of
+  /// them and 5 from the capsule's end, its words 12 pt and 1.83 below the pill's middle.
   static const anchorLeft = 38.0;
   static const anchorHeight = 36.0;
   static const anchorFace = 30.0;
@@ -9524,12 +9525,13 @@ abstract final class LivePlayerTheme {
   static const anchorTextGap = 19 / 3;
   static const anchorName = 35 / 3;
   static const anchorLikes = 28 / 3;
-  static const anchorNameCentre = 35 / 3;
-  static const anchorLikesCentre = 79 / 3;
+  static const anchorNameCentre = 13.0;
+  static const anchorLikesCentre = 83 / 3;
   static const followGap = 6.0;
   static const followWidth = 40.0;
   static const followHeight = 26.0;
-  static const followText = 13.0;
+  static const followText = 12.0;
+  static const followTextDrop = 11 / 6;
   static const followEnd = 5.0;
 
   /// The capsules and chips over the picture: white at 8.5%, which reads as grey over the video and the black.
@@ -9549,12 +9551,13 @@ abstract final class LivePlayerTheme {
   /// The count's capsule ends 95.67 inside the safe area's right edge.
   static const countRight = 287 / 3;
 
-  /// The right end of the top row: ↗ centred 66 and ⋮ 23.67 inside the safe area, both on 44 targets.
+  /// The right end of the top row: ↗ centred 66 and ⋮ 24 inside the safe area, both on 44 targets; ⋮'s dots 3.17
+  /// across, 6.5 apart.
   static const shareCentre = 66.0;
   static const shareIcon = 24.0;
-  static const moreCentre = 23.67;
-  static const moreDot = 4.0;
-  static const moreDotGap = 11 / 3;
+  static const moreCentre = 24.0;
+  static const moreDot = 19 / 6;
+  static const moreDotGap = 10 / 3;
 
   /// The rank chips under the anchor and 更多直播 › on the right: 24 tall about 76 down, 12 pt words padded 8.33,
   /// the chips 4.67 apart from 12.33 inside the safe area.
@@ -9589,18 +9592,26 @@ abstract final class LivePlayerTheme {
   static const qualityText = 41 / 3;
   static const watchCentre = 233.5;
 
-  /// The gift and the anchor's pink + at the bottom right: the gift's 35 pt disc centred 75 inside the safe area's
-  /// right edge, the + capsule 47.33 × 33 ending at it, its face 26.
-  static const giftDisc = 35.0;
-  static const giftIcon = 24.0;
-  static const giftCentre = 75.0;
-  static const giftRowCentre = 160 / 3;
+  /// The gift and the anchor's pink + at the bottom right, their middles 55.33 above the bottom edge: the gift's 35.67
+  /// pt disc centred 74.17 inside the safe area's right edge, its art 22.67 wide (the APK's 108 px picture drawn 36
+  /// across) and portrait's red dot, 6 across, at its top right; the + capsule 48 × 35.67 ending at the edge, the face
+  /// 24 inset 4, the + 9.33 across in 1.33 strokes centred 12 from the end.
+  static const giftDisc = 107 / 3;
+  static const giftIcon = 36.0;
+  static const giftCentre = 445 / 6;
+  static const giftRowCentre = 166 / 3;
   static const giftFill = Color(0x33FFFFFF);
-  static const plusWidth = 142 / 3;
-  static const plusHeight = 33.0;
-  static const plusFace = 26.0;
-  static const plusStroke = 2.0;
-  static const plusArm = 6.0;
+  static const giftDot = 6.0;
+  static const giftDotTop = 5 / 3;
+  static const giftDotInk = LiveRoomTheme.giftDotInk;
+  static const plusWidth = 48.0;
+  static const plusHeight = 107 / 3;
+  static const plusFill = LiveRoomTheme.plusFill;
+  static const plusFace = 24.0;
+  static const plusFaceInset = 4.0;
+  static const plusStroke = 4 / 3;
+  static const plusArm = 4.0;
+  static const plusCentreFromEnd = 12.0;
 
   /// The controls show at first and on a tap, and hide 5 s after the last touch.
   static const chromeHide = Duration(seconds: 5);
@@ -9642,7 +9653,7 @@ abstract final class LivePlayerTheme {
   static const switchRight = 20.0;
   static const switchOn = BiliColors.pink;
 
-  /// Portrait's 画质 sheet: KaiC has no screenshot of it, so it takes 221's sheet (#110F1A, 分享's title 13 in and
+  /// Portrait's 画质 sheet: no screenshot shows it, so it takes 221's sheet (#110F1A, 分享's title 13 in and
   /// 20 down) with 210's rows.
   static const sheetFill = Color(0xF2110F1A);
   static const sheetRadius = 12.0;
@@ -9652,8 +9663,9 @@ abstract final class LivePlayerTheme {
   static const sheetTitle = 15.0;
   static const sheetBottom = 16.0;
 
-  /// 222: #18191C with a grid of 42 pt discs (#2F3032), four to a row 79 apart and 98 down, the first centred 48.5 in
-  /// and 42.83 down; the words 13 pt, their middle 35.17 under the disc's.
+  /// 222: #18191C with a grid of 42 pt discs (#2F3032), four to a row 79 apart and 98 down, the first centred 49.67
+  /// in and 42.83 down; the words 12 pt, their middle 35.17 under the disc's. 助TA必火's red dot, 6 across in a 1 pt
+  /// white ring, sits 19 right of and above its disc's middle.
   static const moreFill = Color(0xFF18191C);
   static const moreDisc = 42.0;
   static const moreDiscFill = Color(0xFF2F3032);
@@ -9662,10 +9674,14 @@ abstract final class LivePlayerTheme {
   static const moreColumns = 4;
   static const moreColumn = 79.0;
   static const moreRow = 98.0;
-  static const moreFirstX = 48.5;
+  static const moreFirstX = 149 / 3;
   static const moreFirstY = 128.5 / 3;
   static const moreLabelDrop = 211 / 6;
-  static const moreLabel = 13.0;
+  static const moreLabel = 12.0;
+  static const moreBadge = 6.0;
+  static const moreBadgeRing = 1.0;
+  static const moreBadgeOffset = 19.0;
+  static const moreBadgeInk = Color(0xFFF85A54);
 
   /// The flame (助TA必火) and the shield (消费管理), drawn: the APK has neither; strokes 1.33 on the disc's 42 grid.
   static const drawnStroke = 4 / 3;

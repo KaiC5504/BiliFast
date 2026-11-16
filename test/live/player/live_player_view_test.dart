@@ -1,5 +1,6 @@
 import 'package:bili_core/api.dart';
 import 'package:bilifast/app/app_scope.dart';
+import 'package:bilifast/live/danmaku/live_danmaku_layer.dart';
 import 'package:bilifast/live/player/live_player_panels.dart';
 import 'package:bilifast/live/player/live_player_view.dart';
 import 'package:bilifast/live/room/live_overlays.dart';
@@ -50,10 +51,10 @@ void main() {
     final overlays = LiveOverlays();
     addTearDown(overlays.dispose);
     rig.room.infoValue = LiveRoomInfo(
-      roomId: 7734200,
-      uid: 50329118,
-      title: '全国大赛 AQ vs LGD',
-      anchorName: '夜莲 Annbbers',
+      roomId: 1000002,
+      uid: 2000002,
+      title: '演示比赛 AA vs BB',
+      anchorName: '演示 Streamer',
       rankChips: chips,
     );
     await rig.controller.start();
@@ -229,7 +230,7 @@ void main() {
 
       await tester.tap(_key('live-share'));
       await tester.pump();
-      expect(rig.shared, [Uri.parse('https://live.bilibili.com/7734200')]);
+      expect(rig.shared, [Uri.parse('https://live.bilibili.com/1000002')]);
 
       await tester.tap(_key('live-more'));
       await tester.pump();
@@ -323,6 +324,59 @@ void main() {
       await finish(tester, rig);
     });
 
+    testWidgets('a failed stream brings the controls back and keeps them; locked, its 重试 goes too', (tester) async {
+      final rig = await liveRig();
+      await show(tester, rig, landscape: true);
+      await rig.controller.setFullScreen(true);
+      await tester.pump(const Duration(seconds: 6));
+      expect(_hidden(tester, 'live-play'), isTrue);
+      rig.room.go(LiveRoomState.failed);
+      await tester.pump(const Duration(milliseconds: 400));
+      expect(_hidden(tester, 'live-play'), isFalse);
+      await tester.pump(const Duration(seconds: 6));
+      expect(_hidden(tester, 'live-play'), isFalse);
+      expect(_key('live-retry'), findsOneWidget);
+      await tester.tap(_key('live-lock'));
+      await tester.pump();
+      expect(rig.controller.locked, isTrue);
+      expect(_key('live-retry'), findsNothing);
+      await tester.tap(_key('live-lock'));
+      await tester.pump();
+      expect(_key('live-retry'), findsOneWidget);
+      await finish(tester, rig);
+    });
+
+    testWidgets('the picture is 视频画面 to VoiceOver, and its tap brings hidden controls back', (tester) async {
+      final semantics = tester.ensureSemantics();
+      final rig = await liveRig();
+      await show(tester, rig, landscape: true);
+      await tester.pump(const Duration(seconds: 6));
+      expect(_hidden(tester, 'live-play'), isTrue);
+      tester.semantics.tap(find.semantics.byLabel('视频画面'));
+      await tester.pump(const Duration(milliseconds: 400));
+      expect(_hidden(tester, 'live-play'), isFalse);
+      await finish(tester, rig);
+      semantics.dispose();
+    });
+
+    testWidgets('the danmaku stand still while the stream is paused', (tester) async {
+      final rig = await liveRig();
+      await show(tester, rig, landscape: true);
+      bool ticking() => tester
+          .widget<TickerMode>(find.ancestor(of: find.byType(LiveDanmakuLayer), matching: find.byType(TickerMode)).first)
+          .enabled;
+      expect(ticking(), isTrue);
+      await tester.tap(_key('live-play'));
+      rig.player.emit(const StatusChanged(PlayerStatus.paused));
+      await tester.pump();
+      expect(ticking(), isFalse);
+      await tester.tap(_key('live-play'));
+      rig.player.emit(const StatusChanged(PlayerStatus.playing));
+      await tester.pump();
+      expect(ticking(), isTrue);
+      await finish(tester, rig);
+    });
+
     testWidgets('a side panel shrinks the picture into the room left of it (222)', (tester) async {
       final rig = await liveRig();
       final overlays = await show(tester, rig, landscape: true);
@@ -352,12 +406,17 @@ void main() {
       final panel = tester.getRect(_key('live-more-panel'));
       expect(panel.left, 956 - LivePlayerTheme.sideWidth);
       final first = tester.getRect(find.descendant(of: _key('live-more-share'), matching: find.byType(Container)));
-      expect(first.center, Offset(panel.left + LivePlayerTheme.moreFirstX, LivePlayerTheme.moreFirstY));
+      expect(first.center.dx, closeTo(panel.left + LivePlayerTheme.moreFirstX, 0.01));
+      expect(first.center.dy, closeTo(LivePlayerTheme.moreFirstY, 0.01));
       final colour = tester.getCenter(find.descendant(of: _key('live-more-colour'), matching: find.byType(Container)));
-      expect(
-        colour,
-        Offset(first.center.dx + 3 * LivePlayerTheme.moreColumn, first.center.dy + 2 * LivePlayerTheme.moreRow),
+      expect(colour.dx, closeTo(first.center.dx + 3 * LivePlayerTheme.moreColumn, 0.01));
+      expect(colour.dy, closeTo(first.center.dy + 2 * LivePlayerTheme.moreRow, 0.01));
+      final dot = tester.getCenter(_key('live-more-boost-dot'));
+      final boost = tester.getCenter(
+        find.descendant(of: _key('live-more-boost'), matching: find.byType(Container)).first,
       );
+      expect(dot.dx - boost.dx, closeTo(LivePlayerTheme.moreBadgeOffset, 0.01));
+      expect(boost.dy - dot.dy, closeTo(LivePlayerTheme.moreBadgeOffset, 0.01));
 
       for (final item in LiveMoreItem.values) {
         if (item == LiveMoreItem.share || item == LiveMoreItem.pictureInPicture) continue;

@@ -7,6 +7,7 @@ import 'package:bilifast/live/player/live_player_view.dart';
 import 'package:bilifast/live/room/live_overlays.dart';
 import 'package:bilifast/live/room/live_room_model.dart';
 import 'package:bilifast/player/bili_player.dart';
+import 'package:bilifast/shared/remote_image.dart' show DefaultAvatar;
 import 'package:bilifast/shared/theme.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -38,6 +39,7 @@ const _assets = [
   LivePlayerAssets.moreAudio,
   LivePlayerAssets.moreColour,
   LivePlayerAssets.moreDesktop,
+  DefaultAvatar.asset,
 ];
 
 void main() {
@@ -51,10 +53,10 @@ void main() {
     showAsPhone(tester, landscape: landscape);
     final rig = await liveRig();
     rig.room.infoValue = const LiveRoomInfo(
-      roomId: 7734200,
-      uid: 50329118,
-      title: '全国大赛 AQ vs LGD',
-      anchorName: '夜莲 Annbbers',
+      roomId: 1000002,
+      uid: 2000002,
+      title: '演示比赛 AA vs BB',
+      anchorName: '演示 Streamer',
       rankChips: ['热门榜', '网游人气第 28'],
     );
     await rig.controller.start();

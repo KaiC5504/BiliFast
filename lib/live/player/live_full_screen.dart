@@ -9,7 +9,6 @@ import '../../player_ui/landscape_chrome.dart' show LockPainter, fullScreenStrut
 import '../../player_ui/portrait_controls.dart' show BackGlyph, ChromeTap, MoreDots;
 import '../../shared/theme.dart';
 import '../../shared/toast.dart';
-import '../danmaku/live_danmaku_layer.dart';
 import '../live_badges.dart';
 import '../live_login.dart';
 import '../room/live_overlays.dart';
@@ -18,23 +17,23 @@ import '../room/room_actions.dart' show liveNeedsLogin;
 import 'live_player_controller.dart';
 import 'live_player_view.dart';
 
-/// Where the picture sits in full screen: the whole [screen], or with a panel on the right ([side]) 16:9 in the room
+/// Where the picture sits in full screen: the whole [screen], or with a panel on the right ([side]) 16:9 in the space
 /// left of it, centred down the screen (210, 222, 232).
 Rect livePictureRect(Size screen, {required bool side}) {
   if (!side) return Offset.zero & screen;
-  final room = Rect.fromLTRB(
+  final space = Rect.fromLTRB(
     LivePlayerTheme.sidePictureLeft,
     0,
     screen.width - LivePlayerTheme.sideWidth - LivePlayerTheme.sidePictureGap,
     screen.height,
   );
-  var width = room.width;
+  var width = space.width;
   var height = width * 9 / 16;
-  if (height > room.height) {
-    height = room.height;
+  if (height > space.height) {
+    height = space.height;
     width = height * 16 / 9;
   }
-  return Rect.fromCenter(center: room.center, width: width, height: height);
+  return Rect.fromCenter(center: space.center, width: width, height: height);
 }
 
 /// 209: the picture over the whole screen, the danmaku over it, and the controls. A tap shows or hides them; they
@@ -70,8 +69,13 @@ class _LiveFullScreenState extends State<LiveFullScreen> {
   @override
   void didUpdateWidget(LiveFullScreen oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (identical(oldWidget.controller, widget.controller) && identical(oldWidget.overlays, widget.overlays)) return;
+    if (identical(oldWidget.controller, widget.controller) &&
+        identical(oldWidget.room, widget.room) &&
+        identical(oldWidget.overlays, widget.overlays)) {
+      return;
+    }
     oldWidget.controller.removeListener(_follow);
+    oldWidget.room.removeListener(_follow);
     oldWidget.overlays.removeListener(_overlayChanged);
     _listen();
     _follow();
@@ -79,20 +83,30 @@ class _LiveFullScreenState extends State<LiveFullScreen> {
 
   void _listen() {
     widget.controller.addListener(_follow);
+    // The room's own state (ended, failed) moves the phase without the controller notifying.
+    widget.room.addListener(_follow);
     widget.overlays.addListener(_overlayChanged);
   }
 
   @override
   void dispose() {
     widget.controller.removeListener(_follow);
+    widget.room.removeListener(_follow);
     widget.overlays.removeListener(_overlayChanged);
     _chrome.dispose();
     super.dispose();
   }
 
-  /// Shown controls hide by themselves only while the stream plays and no layer is up.
+  LivePlayerPhase? _phase;
+
+  /// Shown controls hide by themselves only while the stream plays and no layer is up; an ended or failed stream
+  /// brings them back, so ‹ and the rest stay in reach.
   void _follow() {
-    _chrome.autoHide = widget.controller.playing && widget.overlays.value == LiveOverlay.none;
+    final phase = widget.controller.phase;
+    if (phase != _phase && (phase == LivePlayerPhase.ended || phase == LivePlayerPhase.failed)) _chrome.show();
+    _phase = phase;
+    _chrome.autoHide =
+        widget.controller.playing && phase == LivePlayerPhase.playing && widget.overlays.value == LiveOverlay.none;
   }
 
   /// A layer coming up takes the controls with it; they stay hidden after it, as the picture comes back alone.
@@ -135,15 +149,22 @@ class _LiveFullScreenState extends State<LiveFullScreen> {
                 ListenableBuilder(
                   listenable: controller,
                   builder: (context, _) => IgnorePointer(
-                    child: LiveDanmakuLayer(room: widget.room, on: controller.danmakuOn),
+                    child: LiveDanmaku(controller: controller, room: widget.room),
                   ),
                 ),
                 Positioned.fill(
-                  child: GestureDetector(
-                    key: const ValueKey('live-full-gestures'),
-                    behavior: HitTestBehavior.translucent,
+                  // Named as the video page's, so VoiceOver and the Windows test driver can bring hidden controls back.
+                  child: Semantics(
+                    container: true,
+                    button: true,
+                    label: '视频画面',
                     onTap: _chrome.toggle,
-                    onDoubleTap: () => likeRoom(context, widget.room),
+                    child: GestureDetector(
+                      key: const ValueKey('live-full-gestures'),
+                      behavior: HitTestBehavior.translucent,
+                      onTap: _chrome.toggle,
+                      onDoubleTap: () => likeRoom(context, widget.room),
+                    ),
                   ),
                 ),
                 Positioned.fill(
@@ -294,7 +315,7 @@ class _LiveFullScreenState extends State<LiveFullScreen> {
         ),
         Positioned(
           right: insets.right,
-          bottom: LivePlayerTheme.giftRowCentre - LivePlayerTheme.giftDisc / 2,
+          bottom: LivePlayerTheme.giftRowCentre - LivePlayerTheme.plusHeight / 2,
           child: _GiftAndPlus(room: room, onTap: _touch(toast)),
         ),
       ],
@@ -376,7 +397,10 @@ class _AnchorCapsule extends StatelessWidget {
                   color: BiliColors.pink,
                   borderRadius: BorderRadius.circular(LivePlayerTheme.followHeight / 2),
                 ),
-                child: _label('关注', LivePlayerTheme.followText),
+                child: Transform.translate(
+                  offset: const Offset(0, LivePlayerTheme.followTextDrop),
+                  child: _label('关注', LivePlayerTheme.followText),
+                ),
               ),
             ),
           ],
@@ -386,7 +410,7 @@ class _AnchorCapsule extends StatelessWidget {
   }
 }
 
-/// A line of the capsule, its em box's middle [centre] down it: the room as wide as the line, as tall as the capsule.
+/// A line of the capsule, its em box's middle [centre] down it: the space as wide as the line, as tall as the capsule.
 Widget _line(String text, double size, double centre, String key) => Padding(
   padding: EdgeInsets.only(top: centre - size / 2, bottom: LivePlayerTheme.anchorHeight - centre - size / 2),
   child: SizedBox(
@@ -608,7 +632,7 @@ class _GiftAndPlus extends StatelessWidget {
     final face = (info?.anchorFace ?? '').isEmpty ? room.entry.anchorFace : info!.anchorFace;
     const gap = LivePlayerTheme.giftCentre - LivePlayerTheme.giftDisc / 2 - LivePlayerTheme.plusWidth;
     return SizedBox(
-      height: LivePlayerTheme.giftDisc,
+      height: LivePlayerTheme.plusHeight,
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -620,12 +644,32 @@ class _GiftAndPlus extends StatelessWidget {
             child: Container(
               width: LivePlayerTheme.giftDisc,
               height: LivePlayerTheme.giftDisc,
-              alignment: Alignment.center,
               decoration: const BoxDecoration(color: LivePlayerTheme.giftFill, shape: BoxShape.circle),
-              child: Image.asset(
-                LivePlayerAssets.gift,
-                width: LivePlayerTheme.giftIcon,
-                height: LivePlayerTheme.giftIcon,
+              child: Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  Center(
+                    child: OverflowBox(
+                      maxWidth: LivePlayerTheme.giftIcon,
+                      maxHeight: LivePlayerTheme.giftIcon,
+                      child: Image.asset(
+                        LivePlayerAssets.gift,
+                        width: LivePlayerTheme.giftIcon,
+                        height: LivePlayerTheme.giftIcon,
+                      ),
+                    ),
+                  ),
+                  const Positioned(
+                    right: 0,
+                    top: LivePlayerTheme.giftDotTop,
+                    width: LivePlayerTheme.giftDot,
+                    height: LivePlayerTheme.giftDot,
+                    child: DecoratedBox(
+                      key: ValueKey('live-gift-dot'),
+                      decoration: BoxDecoration(color: LivePlayerTheme.giftDotInk, shape: BoxShape.circle),
+                    ),
+                  ),
+                ],
               ),
             ),
           ),
@@ -638,18 +682,21 @@ class _GiftAndPlus extends StatelessWidget {
             child: Container(
               width: LivePlayerTheme.plusWidth,
               height: LivePlayerTheme.plusHeight,
-              padding: const EdgeInsets.only(left: (LivePlayerTheme.plusHeight - LivePlayerTheme.plusFace) / 2),
               decoration: BoxDecoration(
-                color: BiliColors.pink,
+                color: LivePlayerTheme.plusFill,
                 borderRadius: BorderRadius.circular(LivePlayerTheme.plusHeight / 2),
               ),
-              child: Row(
+              child: Stack(
                 children: [
-                  LiveFace(url: face, size: LivePlayerTheme.plusFace),
-                  const Expanded(
-                    child: Center(
-                      child: CustomPaint(size: Size.square(LivePlayerTheme.plusArm * 2), painter: _PlusPainter()),
-                    ),
+                  Positioned(
+                    left: LivePlayerTheme.plusFaceInset,
+                    top: (LivePlayerTheme.plusHeight - LivePlayerTheme.plusFace) / 2,
+                    child: LiveFace(url: face, size: LivePlayerTheme.plusFace),
+                  ),
+                  const Positioned(
+                    right: LivePlayerTheme.plusCentreFromEnd - LivePlayerTheme.plusArm,
+                    top: LivePlayerTheme.plusHeight / 2 - LivePlayerTheme.plusArm,
+                    child: CustomPaint(size: Size.square(LivePlayerTheme.plusArm * 2), painter: _PlusPainter()),
                   ),
                 ],
               ),

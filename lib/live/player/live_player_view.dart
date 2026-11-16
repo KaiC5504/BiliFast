@@ -70,13 +70,28 @@ class LivePicture extends StatelessWidget {
               _NativeView(key: ObjectKey(player), build: player.buildView),
             if (danmaku)
               IgnorePointer(
-                child: LiveDanmakuLayer(room: room, on: controller.danmakuOn),
+                child: LiveDanmaku(controller: controller, room: room),
               ),
             LivePhaseLayer(controller: controller, room: room),
           ],
         );
       },
     ),
+  );
+}
+
+/// The room's danmaku while 弹 is on, standing still while the stream is paused: the layer's ticker is muted, and
+/// what arrives meanwhile is dropped.
+class LiveDanmaku extends StatelessWidget {
+  const LiveDanmaku({super.key, required this.controller, required this.room});
+
+  final LivePlayerController controller;
+  final LiveRoomModel room;
+
+  @override
+  Widget build(BuildContext context) => TickerMode(
+    enabled: controller.phase != LivePlayerPhase.paused,
+    child: LiveDanmakuLayer(room: room, on: controller.danmakuOn),
   );
 }
 
@@ -128,22 +143,24 @@ class LivePhaseLayer extends StatelessWidget {
             spacing: BiliMetrics.rowGap,
             children: [
               _text('直播加载失败', LivePlayerTheme.endedText),
-              ChromeTap(
-                key: const ValueKey('live-retry'),
-                label: '重试',
-                square: false,
-                onTap: () => unawaited(controller.retry()),
-                child: Container(
-                  width: LivePlayerTheme.retryWidth,
-                  height: LivePlayerTheme.retryHeight,
-                  alignment: Alignment.center,
-                  decoration: BoxDecoration(
-                    border: Border.all(color: BiliColors.pink),
-                    borderRadius: BorderRadius.circular(LivePlayerTheme.retryHeight / 2),
+              // Locked, only the lock answers a touch.
+              if (!controller.locked)
+                ChromeTap(
+                  key: const ValueKey('live-retry'),
+                  label: '重试',
+                  square: false,
+                  onTap: () => unawaited(controller.retry()),
+                  child: Container(
+                    width: LivePlayerTheme.retryWidth,
+                    height: LivePlayerTheme.retryHeight,
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      border: Border.all(color: BiliColors.pink),
+                      borderRadius: BorderRadius.circular(LivePlayerTheme.retryHeight / 2),
+                    ),
+                    child: _text('重试', LivePlayerTheme.retryText, color: BiliColors.pink),
                   ),
-                  child: _text('重试', LivePlayerTheme.retryText, color: BiliColors.pink),
                 ),
-              ),
             ],
           ),
         );
