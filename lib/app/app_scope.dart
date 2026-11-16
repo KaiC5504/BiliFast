@@ -35,6 +35,7 @@ import '../playback/shared_engine.dart';
 import '../search/search_api.dart';
 import '../search/search_history_store.dart';
 import '../settings/app_icon.dart';
+import '../settings/icon_notice.dart';
 import '../sideload/sideload_model.dart';
 import '../shared/image_disk_cache.dart';
 import '../skin/skin_api.dart';
@@ -227,6 +228,7 @@ class AppServices {
     OfflineLibrary? offline,
     SideloadModel? sideload,
     AppIconHost? appIcons,
+    IconNotice? iconNotice,
     NotifyHost? notify,
     HistoryOutbox? historyOutbox,
     NetworkMonitor? network,
@@ -240,6 +242,7 @@ class AppServices {
        offline = offline ?? FakeOfflineLibrary(),
        sideload = sideload ?? SideloadModel.none(),
        appIcons = appIcons ?? MemoryAppIconHost(),
+       iconNotice = iconNotice ?? IconNotice.memory(),
        notify = notify ?? NoNotifyHost(),
        loginGate = loginGate ?? LoginPageGate(environment),
        pageApi = pageApi ?? ClientPageApi(environment.client),
@@ -417,6 +420,9 @@ class AppServices {
 
   /// 设置 → 应用图标: the home screen icon (iOS's alternate icons; held in memory elsewhere).
   final AppIconHost appIcons;
+
+  /// Whether this launch tells an update that the default icon became the cat.
+  final IconNotice iconNotice;
 
   /// 推送设置's notifications (NotifyHost.swift on the phone).
   final NotifyHost notify;

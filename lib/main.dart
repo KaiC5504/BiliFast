@@ -50,6 +50,7 @@ import 'space/fake_space_api.dart';
 import 'shared/image_disk_cache.dart';
 import 'shared/theme.dart';
 import 'sideload/fake_sideload.dart';
+import 'settings/icon_notice.dart';
 import 'settings/ios_app_icon_host.dart';
 import 'sideload/ios_sideload.dart';
 import 'sideload/sideload_model.dart';
@@ -65,6 +66,13 @@ Future<void> main(List<String> args) async {
   FormFactor.device = formFactor.kind;
   if (formFactor.kind.isPad) PhoneFrame.usePad();
   await resolveSupportFolder();
+  // Read before this launch writes anything: an update finds the files earlier launches left.
+  final iconNotice = Platform.isIOS
+      ? await IconNotice.load(
+          supportFilePath('icon_notice.json'),
+          earlierInstall: await supportFolderUsed(supportFilePath('icon_notice.json')),
+        )
+      : IconNotice.memory(due: args.contains('--fake-icon-notice'));
   unawaited(removeOldFontFiles(supportFilePath));
   final logs = devToolsEnabled ? await LogForwarder.load(supportFilePath('log_server.json')) : null;
   final logFiles = LogFiles.platform();
@@ -185,6 +193,7 @@ Future<void> main(List<String> args) async {
     offline: offline,
     sideload: sideload,
     appIcons: Platform.isIOS ? IosAppIconHost() : null,
+    iconNotice: iconNotice,
     notify: Platform.isIOS
         ? IosNotifyHost()
         : fakeAccount && args.contains('--fake-notify-tap')
@@ -249,6 +258,18 @@ Future<void> removeOldFontFiles(String? Function(String name) path, {Logger? log
     if (path(name) case final file?) await remove(File(file));
   }
   if (path('fonts') case final folder?) await remove(Directory(folder));
+}
+
+/// Whether the folder holding [file] already has files in it.
+Future<bool> supportFolderUsed(String? file) async {
+  if (file == null) return false;
+  try {
+    final folder = File(file).parent;
+    return await folder.exists() && await folder.list().any((entity) => entity is File);
+  } catch (error) {
+    Logger.shared.warn(LogCategory.app, 'support folder not listed', {'error': '${error.runtimeType}'});
+    return false;
+  }
 }
 
 /// What the app shows when it could not start.

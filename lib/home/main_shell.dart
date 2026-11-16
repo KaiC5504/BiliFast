@@ -10,6 +10,7 @@ import '../message/message_model.dart';
 import '../message/message_page.dart';
 import '../shared/theme.dart';
 import '../shared/toast.dart';
+import '../settings/icon_notice.dart';
 import '../sideload/sideload_prompts.dart';
 import '../skin/skin.dart';
 import '../skin/skin_model.dart';
@@ -179,6 +180,7 @@ class _MainShellState extends State<MainShell> {
           ),
           Positioned.fill(child: FaceSheetLayer(controller: _faceSheet)),
           Positioned.fill(child: SideloadPrompts(model: AppScope.of(context).sideload)),
+          IconNoticePrompt(notice: AppScope.of(context).iconNotice, host: AppScope.of(context).appIcons),
         ],
       ),
     );

@@ -137,10 +137,19 @@ class FakeAppIconHost implements AppIconHost {
   Completer<void>? chooseGate;
   Object? refusal;
 
+  /// What [iconSet] answers when set, as iOS would name a set no choice offers.
+  String? rawIconSet;
+
   @override
   Future<AppIconChoice> current() async {
     await currentGate?.future;
     return choice;
+  }
+
+  @override
+  Future<String?> iconSet() async {
+    await currentGate?.future;
+    return rawIconSet ?? choice.iconSet;
   }
 
   @override

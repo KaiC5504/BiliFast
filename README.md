@@ -1,8 +1,8 @@
 <div align="center">
-  <img src="docs/icons/default.png" width="120" height="120" alt="BiliFast 默认图标" />&emsp;&emsp;<img src="docs/icons/cat.png" width="120" height="120" alt="BiliFast 猫猫图标" />
+  <img src="docs/icons/cat.png" width="120" height="120" alt="BiliFast 图标：趴在进度条上的猫猫" />&emsp;&emsp;<img src="docs/icons/tv.png" width="120" height="120" alt="BiliFast 小电视图标" />
   <h1>BiliFast</h1>
   <p><b>还是熟悉的味道，就是快了亿点点。</b></p>
-  <sub>两款图标任选：默认的小电视，或者趴在进度条上的猫猫（设置 → 应用图标）</sub>
+  <sub>默认图标是趴在进度条上的猫猫，喜欢小电视可以在「设置 - 应用图标」里换</sub>
   <br/><br/>
 
   [![平台](https://img.shields.io/badge/%E5%B9%B3%E5%8F%B0-iPhone%20%7C%20iPad-black?style=flat-square&logo=apple)](#-安装)
@@ -86,7 +86,7 @@ SideStore、AltStore Classic 和 Feather 可以添加源 `https://github.com/Kai
 - [x] 收藏夹、稍后再看（支持批量管理）、历史记录
 - [x] 离线缓存：视频保存在本地，原视频下架也能看，弹幕一并保存；切到后台继续下载
 - [x] 设置：播放、首页推荐、BTR 加速与 CDN 节点、图片缓存
-- [x] 应用图标：默认或猫猫，随时切换
+- [x] 应用图标：猫猫或小电视，随时切换
 - [x] 自签安装：设置里显示签名到期时间，到期前一天提醒，有新版本会提示
 
 ### 加载优化

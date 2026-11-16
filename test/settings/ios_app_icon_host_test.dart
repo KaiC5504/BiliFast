@@ -43,18 +43,25 @@ void main() {
 
   test('reads the icon set the home screen shows, an unknown one as the primary icon', () async {
     expect(await host.current(), AppIconChoice.standard);
-    iconName = 'AppIconCat';
-    expect(await host.current(), AppIconChoice.cat);
+    iconName = 'AppIconTV';
+    expect(await host.current(), AppIconChoice.tv);
+    expect(await host.iconSet(), 'AppIconTV');
     iconName = 'AppIconRemoved';
     expect(await host.current(), AppIconChoice.standard);
     expect(calls, everyElement(['alternateIconName']));
   });
 
+  test('the cat chosen before it became the primary icon reads as 默认, its set name kept', () async {
+    iconName = 'AppIconCat';
+    expect(await host.current(), AppIconChoice.standard);
+    expect(await host.iconSet(), 'AppIconCat');
+  });
+
   test("sends the choice's icon set, null for the primary icon", () async {
-    await host.choose(AppIconChoice.cat);
+    await host.choose(AppIconChoice.tv);
     await host.choose(AppIconChoice.standard);
     expect(calls, [
-      ['setAlternateIconName', 'AppIconCat'],
+      ['setAlternateIconName', 'AppIconTV'],
       ['setAlternateIconName', null],
     ]);
   });
@@ -62,7 +69,7 @@ void main() {
   test("the host's refusal reaches the caller", () async {
     failure = PlatformException(code: 'alternate-icons', message: 'unsupported');
     await expectLater(
-      host.choose(AppIconChoice.cat),
+      host.choose(AppIconChoice.tv),
       throwsA(
         isA<PlatformException>()
             .having((error) => error.code, 'code', 'alternate-icons')

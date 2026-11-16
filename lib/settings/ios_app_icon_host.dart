@@ -8,7 +8,10 @@ final class IosAppIconHost implements AppIconHost {
   final DeviceHostApi _host;
 
   @override
-  Future<AppIconChoice> current() async => AppIconChoice.of(await _host.alternateIconName());
+  Future<AppIconChoice> current() async => AppIconChoice.of(await iconSet());
+
+  @override
+  Future<String?> iconSet() => _host.alternateIconName();
 
   @override
   Future<void> choose(AppIconChoice choice) => _host.setAlternateIconName(choice.iconSet);

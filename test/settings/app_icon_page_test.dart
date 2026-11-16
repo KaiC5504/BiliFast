@@ -70,10 +70,10 @@ void main() {
     final settingsRow = find.byKey(const ValueKey('settings-app-icon'));
 
     testWidgets('shows the current icon\'s name and opens 应用图标; back, it shows the new one', (tester) async {
-      final host = FakeAppIconHost(AppIconChoice.cat);
+      final host = FakeAppIconHost(AppIconChoice.tv);
       await showSettings(tester, host);
       expect(find.descendant(of: settingsRow, matching: find.text('应用图标')), findsOneWidget);
-      expect(find.descendant(of: settingsRow, matching: find.text('猫猫')), findsOneWidget);
+      expect(find.descendant(of: settingsRow, matching: find.text('小电视')), findsOneWidget);
 
       await tester.tap(settingsRow);
       await tester.pumpAndSettle();
@@ -103,14 +103,14 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.byType(AppIconPage), findsOneWidget);
 
-      tester.semantics.tap(find.semantics.byLabel('猫猫'));
+      tester.semantics.tap(find.semantics.byLabel('小电视'));
       await tester.pumpAndSettle();
-      expect(host.chosen, [AppIconChoice.cat]);
-      expect(tick(AppIconChoice.cat), findsOneWidget);
+      expect(host.chosen, [AppIconChoice.tv]);
+      expect(tick(AppIconChoice.tv), findsOneWidget);
 
       tester.semantics.tap(find.semantics.byLabel('返回'));
       await tester.pumpAndSettle();
-      expect(find.semantics.byLabel(RegExp(r'^应用图标\s+猫猫$')), findsOne);
+      expect(find.semantics.byLabel(RegExp(r'^应用图标\s+小电视$')), findsOne);
       semantics.dispose();
     });
 
@@ -119,19 +119,19 @@ void main() {
       await showSettings(tester, host);
       await tester.tap(settingsRow);
       await tester.pumpAndSettle();
-      await tapRow(tester, AppIconChoice.cat);
+      await tapRow(tester, AppIconChoice.tv);
       await tester.tap(find.byKey(const ValueKey('settings-back')));
       await tester.pumpAndSettle();
       expect(find.descendant(of: settingsRow, matching: find.text('默认')), findsOneWidget);
 
       host.chooseGate!.complete();
       await tester.pumpAndSettle();
-      expect(find.descendant(of: settingsRow, matching: find.text('猫猫')), findsOneWidget);
+      expect(find.descendant(of: settingsRow, matching: find.text('小电视')), findsOneWidget);
     });
   });
 
   testWidgets('a row per icon with its picture and name, the tick only once the current one is known', (tester) async {
-    final host = FakeAppIconHost(AppIconChoice.cat)..currentGate = Completer<void>();
+    final host = FakeAppIconHost(AppIconChoice.tv)..currentGate = Completer<void>();
     await showPage(tester, host);
     for (final choice in AppIconChoice.values) {
       expect(find.descendant(of: row(choice), matching: find.text(choice.label)), findsOneWidget);
@@ -143,7 +143,7 @@ void main() {
 
     host.currentGate!.complete();
     await tester.pumpAndSettle();
-    expect(tick(AppIconChoice.cat), findsOneWidget);
+    expect(tick(AppIconChoice.tv), findsOneWidget);
     expect(anyTick, findsOneWidget);
   });
 
@@ -152,9 +152,9 @@ void main() {
     await showPage(tester, host);
     expect(tick(AppIconChoice.standard), findsOneWidget);
 
-    await tapRow(tester, AppIconChoice.cat);
-    expect(host.chosen, [AppIconChoice.cat]);
-    expect(tick(AppIconChoice.cat), findsOneWidget);
+    await tapRow(tester, AppIconChoice.tv);
+    expect(host.chosen, [AppIconChoice.tv]);
+    expect(tick(AppIconChoice.tv), findsOneWidget);
     expect(tick(AppIconChoice.standard), findsNothing);
   });
 
@@ -165,14 +165,14 @@ void main() {
     final host = FakeAppIconHost()..refusal = _Refused();
     await showPage(tester, host);
 
-    await tapRow(tester, AppIconChoice.cat);
-    expect(host.chosen, [AppIconChoice.cat]);
+    await tapRow(tester, AppIconChoice.tv);
+    expect(host.chosen, [AppIconChoice.tv]);
     expect(tick(AppIconChoice.standard), findsOneWidget);
-    expect(tick(AppIconChoice.cat), findsNothing);
+    expect(tick(AppIconChoice.tv), findsNothing);
     expect(find.text('更换失败'), findsOneWidget);
 
     final warning = logs.events.where((event) => event.msg == 'app icon change failed').single;
-    expect(warning.f['choice']?.toJson(), 'cat');
+    expect(warning.f['choice']?.toJson(), 'tv');
     expect(warning.f['error']?.toJson(), '_Refused');
     expect(warning.f.keys, unorderedEquals(['choice', 'error']));
     await outlastToast(tester);
@@ -182,27 +182,27 @@ void main() {
     final host = FakeAppIconHost()..chooseGate = Completer<void>();
     await showPage(tester, host);
 
-    await tapRow(tester, AppIconChoice.cat);
-    await tapRow(tester, AppIconChoice.cat);
+    await tapRow(tester, AppIconChoice.tv);
+    await tapRow(tester, AppIconChoice.tv);
     await tapRow(tester, AppIconChoice.standard);
-    expect(host.chosen, [AppIconChoice.cat]);
+    expect(host.chosen, [AppIconChoice.tv]);
     expect(tick(AppIconChoice.standard), findsOneWidget);
 
     host.chooseGate!.complete();
     await tester.pumpAndSettle();
-    expect(tick(AppIconChoice.cat), findsOneWidget);
+    expect(tick(AppIconChoice.tv), findsOneWidget);
 
     await tapRow(tester, AppIconChoice.standard);
-    expect(host.chosen, [AppIconChoice.cat, AppIconChoice.standard]);
+    expect(host.chosen, [AppIconChoice.tv, AppIconChoice.standard]);
     expect(tick(AppIconChoice.standard), findsOneWidget);
   });
 
   testWidgets('a tap on the current icon does nothing', (tester) async {
-    final host = FakeAppIconHost(AppIconChoice.cat);
+    final host = FakeAppIconHost(AppIconChoice.tv);
     await showPage(tester, host);
-    await tapRow(tester, AppIconChoice.cat);
+    await tapRow(tester, AppIconChoice.tv);
     expect(host.chosen, isEmpty);
-    expect(tick(AppIconChoice.cat), findsOneWidget);
+    expect(tick(AppIconChoice.tv), findsOneWidget);
     expect(find.text('更换失败'), findsNothing);
   });
 
@@ -211,9 +211,9 @@ void main() {
     await showPage(tester, host);
     expect(anyTick, findsNothing);
 
-    await tapRow(tester, AppIconChoice.cat);
-    expect(host.chosen, [AppIconChoice.cat]);
-    expect(tick(AppIconChoice.cat), findsOneWidget);
+    await tapRow(tester, AppIconChoice.tv);
+    expect(host.chosen, [AppIconChoice.tv]);
+    expect(tick(AppIconChoice.tv), findsOneWidget);
   });
 
   test('every alternate icon has its icon set, named in each of the app build configurations', () {
