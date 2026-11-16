@@ -23,8 +23,14 @@ class FakeHotApi implements HotApi {
   FakeHotApi({this.videos = const [], this.pageSize = 20});
 
   /// The `--fake-account` demo: two pages of 演示 videos, short and long titles, plays from thousands to millions,
-  /// published from minutes to weeks before [now]. Covers are empty so nothing is fetched.
+  /// published from minutes to weeks before [now]. Covers are empty so nothing is fetched. The first rows open
+  /// [demoOpens]; the rest are made up, and their pages fail.
   factory FakeHotApi.demo({DateTime? now}) => FakeHotApi(videos: demoVideos(now ?? DateTime.now()));
+
+  /// Real videos, so their pages open on the PC: the 消息 demo's and `--fake-notify-tap`'s (FakePageApi's demo thread),
+  /// then FakePageApi's first 历史记录 row's. One row each, as the list keeps one row per BV id; their parts are left
+  /// for the page to ask.
+  static const demoOpens = [(bvid: 'BV13as367Ebh', aid: 117614407850785), (bvid: 'BV1GJ411x7h7', aid: 80433022)];
 
   static const _plays = [1831000, 238000, 1519000, 1611000, 1161000, 1380000, 62000, 9876, 405000, 27300000];
   static const _lengths = [358, 4908, 70, 411, 475, 394, 174, 33, 1265, 3601];
@@ -45,9 +51,9 @@ class FakeHotApi implements HotApi {
     for (var i = 0; i < 40; i++)
       PopularVideo(
         card: VideoCard(
-          aid: 9000 + i,
-          bvid: 'BV1hotdemo${i.toString().padLeft(2, '0')}',
-          cid: 19000 + i,
+          aid: i < demoOpens.length ? demoOpens[i].aid : 9000 + i,
+          bvid: i < demoOpens.length ? demoOpens[i].bvid : 'BV1hotdemo${i.toString().padLeft(2, '0')}',
+          cid: i < demoOpens.length ? 0 : 19000 + i,
           title: i % 3 == 1 ? '演示热门视频$i：这一行标题写得长一些，长到第二行也放不下时末尾会变成省略号为止' : '演示热门视频$i',
           cover: '',
           duration: _lengths[i % _lengths.length],

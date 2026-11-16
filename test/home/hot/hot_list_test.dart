@@ -204,6 +204,14 @@ void main() {
     );
   });
 
+  testWidgets("the demo's first row opens the 消息 demo's video, leaving its part to the page", (tester) async {
+    final harness = await show(tester, api: FakeHotApi.demo(now: hotNow));
+    await tester.tap(find.byKey(const ValueKey('hot-row-BV13as367Ebh')));
+    await settle(tester);
+    final route = harness.opened.single;
+    expect((route.bvid, route.cidHint, route.title), ('BV13as367Ebh', null, '演示热门视频0'));
+  });
+
   testWidgets("⋮ opens 217's sheet", (tester) async {
     await show(tester);
     await tester.tap(find.byKey(const ValueKey('hot-more-BV1hot0')));
