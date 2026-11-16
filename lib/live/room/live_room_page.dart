@@ -161,6 +161,7 @@ class _LiveRoomPageState extends State<LiveRoomPage> with RouteAware {
   PageRoute<dynamic>? _route;
   bool _covered = false;
   bool _away = false;
+  StreamSubscription<Object>? _writeFailures;
 
   @override
   void initState() {
@@ -180,6 +181,9 @@ class _LiveRoomPageState extends State<LiveRoomPage> with RouteAware {
       _controller = playback.controller;
       _roomState = _model.state;
       _model.addListener(_roomChanged);
+      _writeFailures = _model.writeFailures.listen((error) {
+        if (mounted) roomWriteFailed(context, error, login: _requestLogin);
+      });
       _model.setShown(true);
       unawaited(_model.start());
       unawaited(_controller.start());
@@ -205,6 +209,7 @@ class _LiveRoomPageState extends State<LiveRoomPage> with RouteAware {
       ..dispose();
     _superChatMenu.dispose();
     _model.removeListener(_roomChanged);
+    unawaited(_writeFailures?.cancel());
     _services?.pipKeeper.pageRemoved(_playback);
     super.dispose();
   }

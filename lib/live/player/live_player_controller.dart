@@ -233,7 +233,7 @@ class LivePlayerController extends ChangeNotifier with WidgetsBindingObserver {
   /// The room offers no stream the player can play.
   bool get unsupportedStream {
     final play = room.play;
-    return room.state == LiveRoomState.live && play != null && play.url == null;
+    return play != null && (play.unsupportedStream || (room.state == LiveRoomState.live && play.url == null));
   }
 
   /// The line over 重试.
