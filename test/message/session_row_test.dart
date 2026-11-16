@@ -178,7 +178,7 @@ void main() {
     _near(badge.bottomRight - const Offset(MessageTabTheme.badgeRing, MessageTabTheme.badgeRing), face.bottomRight);
   });
 
-  testWidgets('each notice box draws its pink face in place of a picture', (tester) async {
+  testWidgets('each notice box draws its own face in place of a picture', (tester) async {
     await show(tester, [for (final box in NoticeBox.values) _box(box)]);
     for (final box in NoticeBox.values) {
       final icon = find.descendant(of: _key('message-session-${box.name}'), matching: find.byType(NoticeBoxIcon));
