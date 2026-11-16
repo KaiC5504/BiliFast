@@ -925,10 +925,134 @@ void main() {
 
     test('nothing is loaded ahead without warmsNext (Windows)', () async {
       host.loaded[entered] = [card('BV1r1')];
-      make(useOfficial: false, ahead: true);
+      final feed = make(useOfficial: false, ahead: true);
       await answerDetail(0, details('BV1r1'));
       plays(entered);
+      feed.settling(feed.next);
       expect(host.warms, isEmpty);
+    });
+
+    group('let go towards a neighbour', () {
+      test('with none loaded ahead, it is loaded at once, before a first frame or enough held, and its open takes it',
+          () async {
+        host.loaded[entered] = [card('BV1r1'), card('BV1r2'), card('BV1r3')];
+        final feed = make(useOfficial: false, ahead: true, warms: true);
+        final first = details('BV1r1');
+        await answerDetail(0, first);
+        expect(host.warms, isEmpty);
+        feed.settling(feed.next);
+        expect(warmed(), ['BV1r1']);
+        expect(identical(host.warms.single.$2, first), isTrue);
+        expect(feed.moveNext(), isTrue);
+        expect(host.warmDrops, 0, reason: 'the open takes it');
+
+        feed.settling(feed.next);
+        expect(warmed(), ['BV1r1'], reason: "the next one's details are not in yet: its open asks for them");
+        feed.settling(null);
+        await answerDetail(1, details('BV1r2'));
+        expect(feed.moveNext(), isTrue);
+        feed.settling(feed.previous);
+        expect(warmed(), ['BV1r1', 'BV1r1'], reason: 'the one before too, its details kept as a neighbour');
+      });
+
+      test('not when that video is loaded ahead already', () async {
+        host.loaded[entered] = [card('BV1r1')];
+        final feed = make(useOfficial: false, ahead: true, warms: true);
+        await answerDetail(0, details('BV1r1'));
+        plays(entered);
+        expect(warmed(), ['BV1r1']);
+        feed.settling(feed.next);
+        expect(warmed(), ['BV1r1']);
+        feed.settling(null);
+        expect(host.warmDrops, 0, reason: "the video settled on's own warm stays");
+      });
+
+      test('one for each release; going back lets it go, and the next video is then loaded ahead as before', () async {
+        host.loaded[entered] = [card('BV1r1')];
+        final feed = make(useOfficial: false, ahead: true, warms: true);
+        await answerDetail(0, details('BV1r1'));
+        feed.settling(feed.next);
+        feed.settling(feed.next);
+        expect(warmed(), ['BV1r1'], reason: 'caught mid-settle and let go the same way');
+        feed.settling(null);
+        expect(host.warmDrops, 1);
+        feed.settling(null);
+        expect(host.warmDrops, 1);
+        plays(entered);
+        expect(warmed(), ['BV1r1', 'BV1r1'], reason: 'once its first frame and enough are in');
+        expect(host.opened, isEmpty);
+      });
+
+      test('going back once the warm is due anyway keeps it as the warm of the video settled on', () async {
+        host.loaded[entered] = [card('BV1r1')];
+        final feed = make(useOfficial: false, ahead: true, warms: true);
+        await answerDetail(0, details('BV1r1'));
+        host
+          ..framed = entered
+          ..comfortable = true;
+        feed.settling(feed.next);
+        feed.settling(null);
+        host.changed();
+        expect(warmed(), ['BV1r1']);
+        expect(host.warmDrops, 0);
+
+        feed.settling(feed.next);
+        feed.settling(null);
+        expect(warmed(), ['BV1r1'], reason: 'already loaded ahead');
+        expect(host.warmDrops, 0);
+      });
+
+      test('none while halted, or when the page cannot start one', () async {
+        host.loaded[entered] = [card('BV1r1')];
+        final feed = make(useOfficial: false, ahead: true, warms: true);
+        await answerDetail(0, details('BV1r1'));
+        host.warmRefused = true;
+        feed.settling(feed.next);
+        expect(host.warms, isEmpty);
+        feed.settling(null);
+        expect(host.warmDrops, 0);
+        host
+          ..warmRefused = false
+          ..halted = true;
+        feed.settling(feed.next);
+        expect(host.warms, isEmpty);
+      });
+
+      test('risk control on its playurl call halts the feed', () async {
+        host
+          ..loaded[entered] = [card('BV1r1')]
+          ..warmError = const BiliAPIError(code: -412, message: '');
+        final feed = make(useOfficial: false, ahead: true, warms: true);
+        await answerDetail(0, details('BV1r1'));
+        feed.settling(feed.next);
+        await pumpEventQueue();
+        expect(host.halted, isTrue);
+      });
+
+      test('the arrival is timed from the release, the settle logged beside it', () async {
+        host.loaded[entered] = [card('BV1r1'), card('BV1r2')];
+        final feed = make(useOfficial: false, ahead: true, warms: true);
+        await answerDetail(0, details('BV1r1'));
+        feed.settling(feed.next);
+        await Future<void>.delayed(const Duration(milliseconds: 30));
+        feed.moveNext();
+        host
+          ..framed = 'BV1r1'
+          ..changed();
+        final line = logs.events.singleWhere((event) => event.msg == 'story arrival').f;
+        final settle = line['settleMs']!.toJson() as int;
+        expect(settle, greaterThanOrEqualTo(30));
+        expect(line['ms']!.toJson() as int, greaterThanOrEqualTo(settle));
+
+        feed.settling(feed.next);
+        feed.settling(null);
+        feed.moveNext();
+        host
+          ..framed = 'BV1r2'
+          ..changed();
+        final last = logs.events.lastWhere((event) => event.msg == 'story arrival').f;
+        expect(last.keys.toSet(), {'ms', 'prefetched'}, reason: 'the release went back: timed from the move');
+      });
     });
   });
 

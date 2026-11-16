@@ -12,6 +12,9 @@ class FakeStoryFeed extends StoryFeed {
 
   /// The index after each move, in order.
   final moves = <int>[];
+
+  /// Each video the page was let go towards, null where it went back.
+  final settlings = <String?>[];
   bool disposed = false;
   int _index = 0;
 
@@ -26,6 +29,9 @@ class FakeStoryFeed extends StoryFeed {
 
   @override
   bool movePrevious() => _moveTo(_index - 1);
+
+  @override
+  void settling(StoryEntry? entry) => settlings.add(entry?.bvid);
 
   bool _moveTo(int index) {
     if (index < 0 || index >= entries.length) return false;
