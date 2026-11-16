@@ -17,6 +17,9 @@ class LoginPageGate implements LoginGate {
 
   final AppEnvironment environment;
 
+  /// Names the login page's route, so a notification's tap can wait for it to leave.
+  static const routeSettings = RouteSettings(name: '/login');
+
   /// The page already up for an environment, so a second request waits on it instead of pushing another.
   static final _showing = Expando<Future<bool>>();
 
@@ -24,7 +27,9 @@ class LoginPageGate implements LoginGate {
   Future<bool> request(BuildContext context) {
     if (_showing[environment] case final showing?) return showing;
     final shown = Navigator.of(context, rootNavigator: true)
-        .push<bool>(MaterialPageRoute(fullscreenDialog: true, builder: (_) => const LoginPage()))
+        .push<bool>(
+          MaterialPageRoute(fullscreenDialog: true, settings: routeSettings, builder: (_) => const LoginPage()),
+        )
         .then((loggedIn) => loggedIn ?? false)
         .whenComplete(() {
       _showing[environment] = null;

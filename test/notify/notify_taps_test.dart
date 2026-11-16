@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:bili_core/devlog.dart';
 import 'package:bilifast/account/keychain_store.dart';
+import 'package:bilifast/account/login_gate.dart';
 import 'package:bilifast/app/app_environment.dart';
 import 'package:bilifast/app/app_scope.dart';
 import 'package:bilifast/app/swipe_back_route.dart';
@@ -283,6 +284,32 @@ void main() {
     navigator.currentState!.pop();
     await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('space')), findsOneWidget);
+  });
+
+  testWidgets('a tap over the login page waits for it to leave, then replaces the video page under it', (tester) async {
+    taps().start();
+    await mount(tester);
+    await tester.pumpAndSettle();
+    host.tap(const NotifyVideo(bvid: 'BV1first'));
+    await tester.pumpAndSettle();
+    final login = MaterialPageRoute<bool>(
+      settings: LoginPageGate.routeSettings,
+      builder: (_) => const SizedBox.expand(key: ValueKey('login')),
+    );
+    bool? answer;
+    unawaited(navigator.currentState!.push(login).then((value) => answer = value));
+    await tester.pumpAndSettle();
+    host.tap(const NotifyVideo(bvid: 'BV1second'));
+    await tester.pumpAndSettle();
+    expect([for (final (how, route) in pages.videos) '$how ${route.bvid}'], ['open BV1first']);
+    navigator.currentState!.removeRoute(login, true);
+    await tester.pumpAndSettle();
+    expect(answer, isTrue);
+    expect([for (final (how, route) in pages.videos) '$how ${route.bvid}'], ['open BV1first', 'replace BV1second']);
+    expect(find.byKey(const ValueKey('video-BV1first'), skipOffstage: false), findsNothing);
+    navigator.currentState!.pop();
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('home')), findsOneWidget);
   });
 
   testWidgets('a post\'s route opens the post', (tester) async {

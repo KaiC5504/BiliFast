@@ -4,6 +4,7 @@ import 'package:bili_core/devlog.dart';
 import 'package:flutter/widgets.dart';
 
 import '../app/app_environment.dart';
+import '../account/login_gate.dart';
 import '../app/app_scope.dart';
 import '../dynamic/post/post_route.dart';
 import '../video/video_route.dart';
@@ -120,6 +121,14 @@ class NotifyTaps {
 
   void _show(NavigatorState navigator, NotifyRoute route) {
     final top = _closePopups(navigator);
+    // A login finishing removes its own page, which would leave a page pushed over it next to the video page under
+    // it; the tap waits until the login has gone, then opens as any other.
+    if (top is ModalRoute<Object?> && top.settings.name == LoginPageGate.routeSettings.name) {
+      unawaited(
+        top.popped.then((_) => WidgetsBinding.instance.addPostFrameCallback((_) => unawaited(_open(route)))),
+      );
+      return;
+    }
     switch (route) {
       case NotifyVideo(:final bvid, :final commentRoot, :final comment):
         final video = VideoRoute(
