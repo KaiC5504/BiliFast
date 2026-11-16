@@ -119,9 +119,13 @@ class _FeedCardViewState extends State<FeedCardView> {
   /// The footer shows the uploader unless a reason tag stands in its place (01's 2万点赞); a 竖屏 tag keeps it.
   static bool _showsUploader(FeedCard card) => card.reason?.isNotEmpty != true;
 
-  VoidCallback? _uploaderTap(FeedCard card) {
-    if (card.ownerMid <= 0 || !_showsUploader(card)) return null;
-    return () => openUploader(context, UploaderRef(mid: card.ownerMid, name: card.ownerName, face: card.ownerFace));
+  /// The iPad's byline always names the uploader; the phone's footer only when no reason tag stands in its place.
+  VoidCallback? _uploaderTap(FeedCard card, {bool pad = false}) {
+    if (card.ownerMid <= 0 || card.ownerName.isEmpty || (!pad && !_showsUploader(card))) return null;
+    return () => openUploader(
+      context,
+      UploaderRef(mid: card.ownerMid, name: card.ownerName, face: card.ownerFace.isEmpty ? null : card.ownerFace),
+    );
   }
 
   Future<void> _more() async {
@@ -279,7 +283,10 @@ class _FeedCardViewState extends State<FeedCardView> {
                               _Tag(reason),
                               const Spacer(),
                             ] else ...[
-                              if (card.isVertical) ...[const _Tag('竖屏'), const SizedBox(width: 4)],
+                              if (card.isVertical) ...[
+                                const _Tag('竖屏', pad: _Tag.verticalPad),
+                                const SizedBox(width: 4),
+                              ],
                               Expanded(child: _uploader(context, card, openUploader)),
                             ],
                             GestureDetector(
@@ -375,10 +382,12 @@ class _FeedCardViewState extends State<FeedCardView> {
     );
     const byline = TextStyle(fontSize: PadHomeTheme.subText, color: PadHomeTheme.subInk, height: 1.2);
     final reason = card.reason;
+    final openUploader = _uploaderTap(card, pad: true);
     return LayoutBuilder(
       builder: (context, box) {
         final cover = PadHomeTheme.coverHeight(box.maxWidth);
         const more = PadHomeTheme.moreTarget;
+        final textWidth = box.maxWidth - PadHomeTheme.titleLeft - PadHomeTheme.titleRight;
         return Stack(
           fit: StackFit.passthrough,
           children: [
@@ -490,10 +499,63 @@ class _FeedCardViewState extends State<FeedCardView> {
                 onTap: () => unawaited(_more()),
               ),
             ),
+            // Over the card rather than inside it, so a finger here reaches neither the card's tap nor its press.
+            if (openUploader != null) ...[
+              Positioned(
+                left: 0,
+                top: cover + PadHomeTheme.faceTop,
+                width: PadHomeTheme.face,
+                height: PadHomeTheme.face,
+                child: ExcludeSemantics(
+                  child: GestureDetector(
+                    key: const ValueKey('card-uploader-face'),
+                    behavior: HitTestBehavior.opaque,
+                    onTap: openUploader,
+                  ),
+                ),
+              ),
+              Positioned(
+                left: PadHomeTheme.titleLeft,
+                top: cover + PadHomeTheme.subTop - _padNameSlop,
+                width: _padNameWidth(context, card.ownerName, byline, textWidth),
+                height: PadHomeTheme.subText * byline.height! + _padNameSlop * 2,
+                child: Semantics(
+                  key: const ValueKey('card-uploader-semantics'),
+                  container: true,
+                  button: true,
+                  label: card.ownerName,
+                  onTap: openUploader,
+                  excludeSemantics: true,
+                  child: GestureDetector(
+                    key: const ValueKey('card-uploader'),
+                    behavior: HitTestBehavior.opaque,
+                    onTap: openUploader,
+                  ),
+                ),
+              ),
+            ],
           ],
         );
       },
     );
+  }
+
+  /// Above and below the byline's name, short of the title's second line.
+  static const _padNameSlop = 4.0;
+
+  /// How wide the byline draws the uploader's name, cut as the line cuts it.
+  static double _padNameWidth(BuildContext context, String name, TextStyle style, double maxWidth) {
+    final painter = TextPainter(
+      text: TextSpan(text: name, style: DefaultTextStyle.of(context).style.merge(style)),
+      strutStyle: BiliFonts.strutOf(context, style),
+      textDirection: Directionality.of(context),
+      textScaler: MediaQuery.textScalerOf(context),
+      maxLines: 1,
+      ellipsis: '…',
+    )..layout(maxWidth: maxWidth);
+    final width = painter.width;
+    painter.dispose();
+    return width;
   }
 }
 
@@ -759,16 +821,20 @@ class _UpIcon extends StatelessWidget {
 }
 
 class _Tag extends StatelessWidget {
-  const _Tag(this.text);
+  const _Tag(this.text, {this.pad = 4});
+
+  /// 01's 竖屏 pill is 28 pt, its ink 11 px in from each side where a reason tag's is 14 px in.
+  static const verticalPad = 3.0;
 
   final String text;
+  final double pad;
 
   static const _style = TextStyle(fontSize: BiliMetrics.cardTagText, color: BiliColors.reason, height: 1);
 
   @override
   Widget build(BuildContext context) => Container(
     height: BiliMetrics.cardTagHeight,
-    padding: const EdgeInsets.symmetric(horizontal: 4),
+    padding: EdgeInsets.symmetric(horizontal: pad),
     alignment: Alignment.center,
     decoration: BoxDecoration(color: BiliColors.reasonTint, borderRadius: BorderRadius.circular(2)),
     child: Text(text, maxLines: 1, style: _style, strutStyle: BiliFonts.strutOf(context, _style)),

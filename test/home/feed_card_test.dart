@@ -291,7 +291,13 @@ void main() {
   });
 
   group("the footer's uploader", () {
-    FeedCard footerCard({String? reason, bool vertical = false, int mid = 7}) => FeedCard(
+    FeedCard footerCard({
+      String? reason,
+      bool vertical = false,
+      int mid = 7,
+      String owner = '4K杜比视界Relaxation',
+      String face = 'https://i0.hdslb.com/bfs/face/up.jpg',
+    }) => FeedCard(
       aid: 1,
       bvid: 'BV1footer',
       cid: 1,
@@ -300,9 +306,9 @@ void main() {
       duration: 794,
       views: 1930,
       danmaku: 0,
-      ownerName: '4K杜比视界Relaxation',
+      ownerName: owner,
       ownerMid: mid,
-      ownerFace: 'https://i0.hdslb.com/bfs/face/up.jpg',
+      ownerFace: face,
       reason: reason,
       isVertical: vertical,
     );
@@ -369,6 +375,42 @@ void main() {
       expect(name, findsOneWidget);
       expect(icon, findsNothing);
       expect(tester.getRect(name).left, greaterThan(tester.getRect(find.text('竖屏')).right));
+    });
+
+    Rect pill(WidgetTester tester, String text) =>
+        tester.getRect(find.ancestor(of: find.text(text), matching: find.byType(Container)).first);
+
+    testWidgets("01's 竖屏 pill is 28 pt, so the name's box starts 40 pt into the card (46 on 01, its card 6 pt in)", (
+      tester,
+    ) async {
+      await show(tester, footerCard(vertical: true));
+      final card = tester.getRect(find.byType(FeedCardView));
+      final tag = pill(tester, '竖屏');
+      expect(tag.left - card.left, BiliMetrics.cardInset);
+      expect(tag.width, moreOrLessEquals(28));
+      expect(tester.getRect(name).left - card.left, moreOrLessEquals(40));
+    });
+
+    testWidgets("a reason tag keeps its 4 pt sides (01's 2万点赞)", (tester) async {
+      await show(tester, footerCard(reason: '2万点赞'));
+      expect(pill(tester, '2万点赞').width, moreOrLessEquals(tester.getSize(find.text('2万点赞')).width + 8));
+    });
+
+    testWidgets('an uploader with no name opens nothing: the footer is part of the card', (tester) async {
+      final shown = await show(tester, footerCard(owner: ''));
+      expect(find.byKey(const ValueKey('card-uploader')), findsNothing);
+      expect(find.byKey(const ValueKey('card-uploader-semantics')), findsNothing);
+      await tester.tap(icon);
+      await tester.pump();
+      expect(shown.opened, isEmpty);
+      expect(shown.videos, hasLength(1));
+    });
+
+    testWidgets('an uploader with no face opens their space with none, not an empty address', (tester) async {
+      final shown = await show(tester, footerCard(face: ''));
+      await tester.tap(name);
+      await tester.pump();
+      expect([for (final up in shown.opened) (up.mid, up.name, up.face)], [(7, '4K杜比视界Relaxation', null)]);
     });
 
     for (final vertical in [false, true]) {
@@ -473,6 +515,145 @@ void main() {
       expect(tester.getRect(name).left - drawn.right, moreOrLessEquals(_upNameGap));
       final shots = Platform.environment['BILIFAST_SHOTS'];
       if (shots != null) await saveShot(tester, find.byKey(boundary), '$shots/01-card-footer-ours.png');
+    });
+
+    testWidgets("look-alike: a 竖屏 card where 01's first is, under the system font (BILIFAST_SHOTS)", (tester) async {
+      final saved = BiliFonts.family;
+      addTearDown(() => BiliFonts.family = saved);
+      await tester.runAsync(loadSystemFontStandIns);
+      await tester.runAsync(loadIconFonts);
+      showAsPhone(tester);
+      BiliFonts.family = BiliFonts.system;
+      const boundary = ValueKey('shot');
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: appTheme(),
+          home: Material(
+            color: BiliColors.pageGrey,
+            child: Align(
+              alignment: Alignment.topLeft,
+              child: RepaintBoundary(
+                key: boundary,
+                child: Container(
+                  width: 440,
+                  color: BiliColors.pageGrey,
+                  padding: const EdgeInsets.only(left: 6, right: 223),
+                  child: FeedCardView(card: footerCard(vertical: true), onOpen: (_) {}, onWatchLater: () {}),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      expect(pill(tester, '竖屏').left, 14);
+      expect(pill(tester, '竖屏').right, moreOrLessEquals(42));
+      expect(tester.getRect(name).left, moreOrLessEquals(46));
+      final shots = Platform.environment['BILIFAST_SHOTS'];
+      if (shots != null) await saveShot(tester, find.byKey(boundary), '$shots/01-card-vertical-ours.png');
+    });
+  });
+
+  group("the iPad card's uploader", () {
+    FeedCard padCard({int mid = 7, String face = 'https://i0.hdslb.com/bfs/face/up.jpg'}) => FeedCard(
+      aid: 1,
+      bvid: 'BV1padup',
+      cid: 1,
+      title: '奶家人捉迷藏大赛：幽邃地窟篇',
+      cover: '',
+      duration: 254,
+      views: 594000,
+      danmaku: 77,
+      ownerName: '暴风城老鼠',
+      ownerMid: mid,
+      ownerFace: face,
+      reason: null,
+      isVertical: false,
+      published: 1761700000,
+    );
+
+    Future<({List<UploaderRef> opened, List<ZoomSource> videos})> show(WidgetTester tester, FeedCard shown) async {
+      showAsPad(tester);
+      final opened = <UploaderRef>[];
+      final videos = <ZoomSource>[];
+      await tester.pumpWidget(
+        MaterialApp(
+          home: UploaderTap(
+            open: opened.add,
+            child: Align(
+              alignment: Alignment.topLeft,
+              child: SizedBox(
+                width: 255,
+                child: FeedCardView(card: shown, onOpen: videos.add, onWatchLater: () {}),
+              ),
+            ),
+          ),
+        ),
+      );
+      return (opened: opened, videos: videos);
+    }
+
+    final byline = find.byKey(const ValueKey('feed-card-byline'));
+    final face = find.byKey(const ValueKey('feed-card-face'));
+    final target = find.byKey(const ValueKey('card-uploader'));
+
+    testWidgets("the byline's name and the face open the uploader, not the video, and don't shrink the card", (
+      tester,
+    ) async {
+      final shown = await show(tester, padCard());
+      final line = tester.getRect(byline);
+      final over = tester.getRect(target);
+      expect(over.left, line.left);
+      expect(over.width, lessThan(line.width), reason: 'the name only, not the date after it');
+      expect(over.top, lessThan(line.center.dy));
+      expect(over.bottom, greaterThan(line.center.dy));
+
+      double scale() => tester.widget<AnimatedScale>(find.byType(AnimatedScale)).scale;
+      final held = await tester.startGesture(tester.getCenter(target));
+      await tester.pump(const Duration(milliseconds: 300));
+      expect(scale(), 1);
+      await held.up();
+      await tester.pump();
+      final faceTarget = find.byKey(const ValueKey('card-uploader-face'));
+      expect(tester.getRect(faceTarget), tester.getRect(face));
+      await tester.tap(faceTarget);
+      await tester.pump();
+      expect(shown.videos, isEmpty);
+      const uploader = (7, '暴风城老鼠', 'https://i0.hdslb.com/bfs/face/up.jpg');
+      expect([for (final up in shown.opened) (up.mid, up.name, up.face)], [uploader, uploader]);
+
+      await tester.tapAt(Offset(over.right + 20, over.center.dy));
+      await tester.pump();
+      expect(shown.videos, hasLength(1), reason: 'the date after the name is the card');
+    });
+
+    testWidgets('a face-less uploader opens with none', (tester) async {
+      final shown = await show(tester, padCard(face: ''));
+      await tester.tap(target);
+      await tester.pump();
+      expect(shown.opened.single.face, isNull);
+    });
+
+    testWidgets('an uploader with no mid opens nothing: the byline and face open the video', (tester) async {
+      final shown = await show(tester, padCard(mid: 0));
+      expect(target, findsNothing);
+      await tester.tap(face);
+      await tester.pump();
+      expect(shown.opened, isEmpty);
+      expect(shown.videos, hasLength(1));
+    });
+
+    testWidgets('the uploader is its own accessibility button, named by the name', (tester) async {
+      final semantics = tester.ensureSemantics();
+      final shown = await show(tester, padCard());
+      expect(
+        tester.getSemantics(find.byKey(const ValueKey('card-uploader-semantics'))),
+        isSemantics(label: '暴风城老鼠', isButton: true, hasTapAction: true),
+      );
+      tester.semantics.tap(find.semantics.byLabel('暴风城老鼠'));
+      await tester.pump();
+      expect(shown.opened.single.mid, 7);
+      expect(shown.videos, isEmpty);
+      semantics.dispose();
     });
   });
 
