@@ -2,6 +2,8 @@
 #include <flutter/flutter_view_controller.h>
 #include <windows.h>
 
+#include <algorithm>
+
 #include "flutter_window.h"
 #include "utils.h"
 
@@ -22,9 +24,16 @@ int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
   std::vector<std::string> command_line_arguments =
       GetCommandLineArguments();
 
+  wchar_t background_env[8] = {};
+  const bool background =
+      std::find(command_line_arguments.begin(), command_line_arguments.end(), "--background") !=
+          command_line_arguments.end() ||
+      (::GetEnvironmentVariableW(L"BILIFAST_BACKGROUND", background_env, 8) > 0 && background_env[0] == L'1');
+
   project.set_dart_entrypoint_arguments(std::move(command_line_arguments));
 
   FlutterWindow window(project);
+  window.SetBackground(background);
   Win32Window::Point origin(10, 10);
   Win32Window::Size size(440, 880);
   if (!window.Create(L"BiliFast", origin, size)) {

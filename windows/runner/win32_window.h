@@ -39,6 +39,11 @@ class Win32Window {
   // Show the current window. Returns true if the window was successfully shown.
   bool Show();
 
+  // Test runs: the window opens off every screen, never takes focus and has no taskbar button, so it doesn't get in
+  // the way of whoever is using the PC; accessibility and PrintWindow still reach it. Set before Create.
+  void SetBackground(bool on) { background_ = on; }
+  bool background() const { return background_; }
+
   // Release OS resources associated with window.
   void Destroy();
 
@@ -72,6 +77,7 @@ class Win32Window {
   virtual void OnDestroy();
 
  private:
+  bool background_ = false;
   friend class WindowClassRegistrar;
 
   // OS callback called by message pump. Handles the WM_NCCREATE message which

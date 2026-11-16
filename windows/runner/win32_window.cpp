@@ -134,8 +134,8 @@ bool Win32Window::Create(const std::wstring& title,
   UINT dpi = FlutterDesktopGetDpiForMonitor(monitor);
   double scale_factor = dpi / 96.0;
 
-  HWND window = CreateWindow(
-      window_class, title.c_str(), WS_OVERLAPPEDWINDOW,
+  HWND window = CreateWindowEx(
+      background_ ? WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE : 0, window_class, title.c_str(), WS_OVERLAPPEDWINDOW,
       Scale(origin.x, scale_factor), Scale(origin.y, scale_factor),
       Scale(size.width, scale_factor), Scale(size.height, scale_factor),
       nullptr, nullptr, GetModuleHandle(nullptr), this);
@@ -146,11 +146,17 @@ bool Win32Window::Create(const std::wstring& title,
 
   UpdateTheme(window);
 
+  if (background_) {
+    // Left of the leftmost screen, so no monitor layout shows it.
+    const int x = GetSystemMetrics(SM_XVIRTUALSCREEN) - Scale(size.width, scale_factor) - 2000;
+    SetWindowPos(window, nullptr, x, 0, 0, 0, SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
+  }
+
   return OnCreate();
 }
 
 bool Win32Window::Show() {
-  return ShowWindow(window_handle_, SW_SHOWNORMAL);
+  return ShowWindow(window_handle_, background_ ? SW_SHOWNOACTIVATE : SW_SHOWNORMAL);
 }
 
 // static

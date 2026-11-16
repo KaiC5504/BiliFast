@@ -13,6 +13,7 @@ passed without running anything again.
 
 from __future__ import annotations
 
+import os
 import shutil
 import subprocess
 import sys
@@ -68,9 +69,13 @@ def lanes(quick: bool) -> dict[str, list[Step]]:
 LOW_PRIORITY = getattr(subprocess, "BELOW_NORMAL_PRIORITY_CLASS", 0)
 
 
+# The integration tests' app window opens off screen, never focused and off the taskbar (windows/runner/main.cpp).
+ENV = {**os.environ, "BILIFAST_BACKGROUND": "1"}
+
+
 def run(command: list[str], cwd: Path) -> tuple[bool, str]:
     result = subprocess.run(command, cwd=cwd, capture_output=True, text=True,
-                            encoding="utf-8", errors="replace", creationflags=LOW_PRIORITY)
+                            encoding="utf-8", errors="replace", creationflags=LOW_PRIORITY, env=ENV)
     return result.returncode == 0, (result.stdout + result.stderr).strip()
 
 

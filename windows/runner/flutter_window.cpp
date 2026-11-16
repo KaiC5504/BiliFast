@@ -91,8 +91,10 @@ void FlutterWindow::SetClientSize(double width, double height) {
   const RECT& work = info.rcWork;
   LONG x = current.left;
   LONG y = current.top;
-  if (x + w > work.right) x = std::max(work.left, work.right - w);
-  if (y + h > work.bottom) y = std::max(work.top, work.bottom - h);
+  if (!background()) {
+    if (x + w > work.right) x = std::max(work.left, work.right - w);
+    if (y + h > work.bottom) y = std::max(work.top, work.bottom - h);
+  }
   SetWindowPos(hwnd, nullptr, x, y, w, h, SWP_NOZORDER | SWP_NOACTIVATE);
 }
 
