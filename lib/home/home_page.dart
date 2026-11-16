@@ -678,7 +678,8 @@ class _FeedGridState extends State<_FeedGrid> with SingleTickerProviderStateMixi
   /// scrolled now. On the iPad page 1 is about three rows, so these show at once.
   CoverPrefetch _beforeInsert(List<FeedCard> above, List<FeedCard> added) {
     if (!mounted) return const CoverPrefetch.skipped(CoverSkip.unmounted);
-    final scrolled = _scroll.hasClients ? math.max(0.0, _scroll.position.pixels) : 0.0;
+    // Mid-way through 首页's scroll back to the top, the top is where the list is going.
+    final scrolled = _toTop || !_scroll.hasClients ? 0.0 : math.max(0.0, _scroll.position.pixels);
     return _coversOnScreen([...above, ...added], from: above.length, scrolled: scrolled);
   }
 

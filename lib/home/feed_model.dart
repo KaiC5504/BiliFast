@@ -447,7 +447,12 @@ class FeedModel extends ChangeNotifier {
     try {
       while (asked < pages) {
         asked++;
-        final page = await _fetch(refresh: false, index: extras.next, firstIdx: firstIdx ?? _firstIdx);
+        final page = await _fetch(
+          refresh: false,
+          index: extras.next,
+          firstIdx: firstIdx ?? _firstIdx,
+          generation: mine,
+        );
         if (_disposed || mine != _generation) return _stopped();
         extras.next = page.index + 1;
         if (extras.shown) {
@@ -723,8 +728,9 @@ class FeedModel extends ChangeNotifier {
 
   /// One page from the source this load should read, with the index it asked for. The indexes only move once the
   /// caller knows the page still counts. An [early] page leaves the refused token for its refresh to note. A refresh's
-  /// extra pages name their official [index] and [firstIdx], as they may be asked before page 1 shows.
-  Future<_Page> _fetch({required bool refresh, bool early = false, int? index, int? firstIdx}) async {
+  /// extra pages name their official [index] and [firstIdx], as they may be asked before page 1 shows, and their
+  /// [generation]: they outlive their refresh, and a refusal that comes back after a newer one has begun is not its.
+  Future<_Page> _fetch({required bool refresh, bool early = false, int? index, int? firstIdx, int? generation}) async {
     if (early ? _officialPossible : wantsOfficial) {
       final official = refresh ? 0 : index ?? _nextOfficialIndex;
       final cold = !_officialSeen && !_coldOut;
@@ -741,7 +747,7 @@ class FeedModel extends ChangeNotifier {
       } catch (error) {
         if (!_refused(error)) rethrow;
         _logger.warn(LogCategory.ui, 'official feed refused, web feed instead', feedLogFields(error));
-        if (!early) _officialRefused = true;
+        if (!early && (generation == null || generation == _generation)) _officialRefused = true;
       } finally {
         if (cold) _coldOut = false;
       }
