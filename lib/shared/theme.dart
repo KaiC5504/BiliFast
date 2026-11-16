@@ -8971,3 +8971,18 @@ abstract final class MessageSettingsTheme {
   static const checkLong = 7.33;
   static const checkStroke = 1.0;
 }
+
+/// 首页's 直播 page (205) and 206.
+abstract final class LiveTabTheme {}
+
+/// A room's header, chat, bottom bar, 醒目留言 and sheets in portrait (207, 208, 221, 224, 228, 229).
+abstract final class LiveRoomTheme {}
+
+/// The live player's box and full screen (209, 210, 222).
+abstract final class LivePlayerTheme {}
+
+/// The 弹幕 inputs and emote panel (223, 226, 227).
+abstract final class LiveSendTheme {}
+
+/// 高能榜 (230-233).
+abstract final class LiveRankTheme {}

@@ -54,6 +54,7 @@ flutter:
     - assets/images/offline/
     - assets/images/friends/
     - assets/images/message/
+    - assets/images/live/
     - assets/images/space/
     - assets/lottie/
     - assets/app_icons/

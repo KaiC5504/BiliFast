@@ -18,6 +18,8 @@ import '../dynamic/dynamic_api.dart';
 import '../dynamic/dynamic_like_book.dart';
 import '../favourites/favourites_api.dart';
 import '../home/recent_store.dart';
+import '../live/fake_live_api.dart';
+import '../live/live_api.dart';
 import '../me/me_api.dart';
 import '../me/me_profile_store.dart';
 import '../message/fake_message_api.dart';
@@ -208,6 +210,7 @@ class AppServices {
     this._dynamicApi,
     this._messageApi,
     this._messages,
+    this._liveApi,
     MessagePrefs? messagePrefs,
     MeProfileStore? meProfile,
     this._skinApi,
@@ -345,6 +348,13 @@ class AppServices {
   late final MessageApi messageApi =
       _messageApi ??
       (environment.fake ? FakeMessageApi.demo() : ClientMessageApi(environment.client, mid: () => environment.mid ?? 0));
+
+  final LiveApi? _liveApi;
+
+  /// 直播's calls, made on first use like [searchApi]; the demo's under `--fake-account`.
+  late final LiveApi liveApi =
+      _liveApi ??
+      (environment.fake ? FakeLiveApi.demo() : ClientLiveApi(environment.client, mid: () => environment.mid ?? 0));
 
   final MessageModel? _messages;
   MessageModel? _madeMessages;
