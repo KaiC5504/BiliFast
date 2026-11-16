@@ -352,17 +352,82 @@ void main() {
     expect(playingNow(player()), isTrue);
   });
 
-  testWidgets('the app in the background pauses it; back in front it plays on', (tester) async {
+  FeedInlineHost inlineHost(WidgetTester tester) =>
+      tester.widget<FeedBigCardView>(find.byType(FeedBigCardView, skipOffstage: false).first).host!;
+
+  testWidgets('the app in the background lets its player go; back in front it starts again where it stood', (
+    tester,
+  ) async {
     await show(tester);
     await started(tester);
     tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
     tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.hidden);
     await frames(tester, 2);
-    expect(playingNow(player()), isFalse);
+    expect(services.playback.live, 0, reason: 'released at once, not kept paused');
+    expect(inlineHost(tester).positions, contains(_bv), reason: 'where it stood, kept for the next start');
     tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
     tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
-    await frames(tester, 2);
+    await started(tester);
+    expect(players, hasLength(2));
+    expect(services.playback.live, 1);
+    expect(playingNow(player(1)), isTrue);
+  });
+
+  testWidgets('paused, its player buffers 1 s and its engine session idles; playing, 8 s and awake', (tester) async {
+    await show(tester);
+    await started(tester);
+    expect(player().forwardBuffers.last, const Duration(seconds: 8));
+    expect(controllers.single.idle, isFalse);
+
+    await tester.tap(find.byKey(ValueKey('home-tab-${HomeTab.mine.name}')));
+    await frames(tester, 10);
+    expect(playingNow(player()), isFalse);
+    expect(player().forwardBuffers.last, const Duration(seconds: 1));
+    expect(controllers.single.idle, isTrue);
+
+    await tester.tap(find.byKey(ValueKey('home-tab-${HomeTab.home.name}')));
+    await frames(tester, 10);
     expect(playingNow(player()), isTrue);
+    expect(player().forwardBuffers.last, const Duration(seconds: 8));
+    expect(controllers.single.idle, isFalse);
+  });
+
+  testWidgets('a held card handed to a page is awake again', (tester) async {
+    await show(tester);
+    await started(tester);
+    inlineHost(tester).shown = false;
+    await frames(tester, 2);
+    expect(controllers.single.idle, isTrue);
+    await tester.tap(inCard(_bv, const ValueKey('big-card-open')));
+    await tester.pump();
+    expect(controllers.single.idle, isFalse);
+    await frames(tester, 30);
+    expect(tester.widget<VideoPage>(find.byType(VideoPage)).route.playback?.controller, same(controllers.single));
+  });
+
+  testWidgets('scrolled onto another big card, nothing starts until the list has rested a moment', (tester) async {
+    pages = {
+      1: [bigCard(_bv), bigCard('BV1two'), ...smalls('a', 8)],
+    };
+    await show(tester);
+    await started(tester);
+    final second = tester.getRect(card('BV1two'));
+    final gesture = await tester.startGesture(const Offset(220, 700));
+    await gesture.moveBy(const Offset(0, -20));
+    await gesture.moveBy(Offset(0, -(second.top - 160)));
+    await frames(tester, 6);
+    inlineHost(tester).settle();
+    await frames(tester, 2);
+    expect(players, hasLength(1), reason: 'the finger still on the list');
+    expect(playingNow(player()), isFalse, reason: 'the first is off screen');
+
+    await gesture.up();
+    await tester.pump(FeedBigCardTheme.startAfterRest - const Duration(milliseconds: 50));
+    expect(players, hasLength(1), reason: 'not yet rested long enough');
+    await frames(tester, 20);
+    expect(players, hasLength(2));
+    expect(playingNow(player(1)), isTrue);
+    expect(services.playback.live, 1, reason: 'the first let go as the second took over');
   });
 
   testWidgets('paused off screen a while, its player is let go; back, it starts again where it stood', (tester) async {

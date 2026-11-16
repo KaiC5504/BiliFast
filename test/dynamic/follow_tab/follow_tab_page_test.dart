@@ -14,6 +14,7 @@ import 'package:bilifast/space/own/own_space_page.dart';
 import 'package:bilifast/shared/theme.dart';
 import 'package:bilifast/skin/skin.dart';
 import 'package:bilifast/video/player_prefs.dart';
+import 'package:flutter/foundation.dart' show ValueListenable;
 import 'package:flutter/material.dart';
 import 'package:flutter/semantics.dart' show SemanticsAction;
 import 'package:flutter/services.dart';
@@ -42,6 +43,12 @@ final class _FakeInlineCard implements FeedInlineCard {
 
   @override
   void inlinePause() => pauses++;
+
+  @override
+  void inlineRelease() {}
+
+  @override
+  ValueListenable<bool>? scrolling() => null;
 }
 
 /// A login page that logs in through [login] before answering.

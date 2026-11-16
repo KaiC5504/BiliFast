@@ -5790,6 +5790,9 @@ abstract final class FeedBigCardTheme {
 
   /// Paused this long off screen (or under another page), its player is let go; the card starts again where it was.
   static const releaseAfter = Duration(seconds: 30);
+
+  /// A new card starts only this long after its list comes to rest, and only if it is still the one to play.
+  static const startAfterRest = Duration(milliseconds: 300);
 }
 
 /// A 动态 card's sizes and colours (127, 128, 135-137, 139), measured in px / 3 from the card's top, which meets the
