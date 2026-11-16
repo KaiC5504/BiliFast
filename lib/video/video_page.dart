@@ -1516,8 +1516,12 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
     }
   }
 
-  void _openRelated(bili.VideoCard card) =>
-      unawaited(widget.openPage(context, VideoRoute(bvid: card.bvid, title: card.title, cover: card.cover)));
+  void _openRelated(bili.VideoCard card) => unawaited(
+    widget.openPage(
+      context,
+      VideoRoute(bvid: card.bvid, cidHint: card.cid > 0 ? card.cid : null, title: card.title, cover: card.cover),
+    ),
+  );
 
   Future<void> _watchLater(bili.VideoCard card) async {
     final details = _details;
