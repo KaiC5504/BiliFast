@@ -586,7 +586,7 @@ final class NotifyCheck {
       content.title = post.title
       content.body = post.body
       content.sound = .default
-      content.threadIdentifier = "com.kaichuan.bilifast.notify.\(post.kind.rawValue)"
+      // No thread of its own: the official app's stack every kind together under the app (234).
       content.userInfo = NotifyRoutes.userInfo(post.route, kind: post.kind)
       let identifier = post.identifier ?? "com.kaichuan.bilifast.notify.\(UUID().uuidString)"
       do {
@@ -790,7 +790,8 @@ struct NotifyPost {
   var identifier: String?
 }
 
-/// Every word the notifications show, in one place: the official app's lock-screen wording isn't captured yet.
+/// Every word the notifications show, in one place. Only 关注's uploads and 私信 are matched to the official app's
+/// lock screen (234); replies, @ and likes are our own words.
 enum NotifyWording {
   static func post(_ item: NotifyItem) -> NotifyPost {
     let who = item.who.isEmpty ? "有人" : item.who
@@ -798,10 +799,11 @@ enum NotifyWording {
     case .replies: "\(who) 回复了你"
     case .mentions: "\(who) 在\(item.business.isEmpty ? "评论" : item.business)中@了你"
     case .likes: likeTitle(who, item)
-    case .uploads: "\(who) 投稿了新视频"
+    case .uploads: "\(who) [你的关注]"
     case .messages: "私信"
     }
-    return NotifyPost(kind: item.kind, title: title, body: item.text, route: item.route)
+    let body = item.kind == .uploads ? "发了视频：\(item.text)" : item.text
+    return NotifyPost(kind: item.kind, title: title, body: body, route: item.route)
   }
 
   private static func likeTitle(_ who: String, _ item: NotifyItem) -> String {
