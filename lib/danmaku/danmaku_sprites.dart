@@ -16,7 +16,8 @@ final class DanmakuSprite {
 
 /// Lays out danmaku text into [DanmakuSprite]s, keeping recent ones so repeated text is laid out once.
 final class DanmakuSprites {
-  DanmakuSprites({this.capacity = 256});
+  // Big enough for a re-lay's whole look-back at 50 danmaku a second, so a timeline swap redraws without laying out.
+  DanmakuSprites({this.capacity = 1024});
 
   final int capacity;
 

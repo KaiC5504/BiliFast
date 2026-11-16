@@ -543,6 +543,26 @@ class PlayerHostApi {
     ;
   }
 
+  /// The current item's preferredForwardBufferDuration, and every later load's: less for a muted card or a held
+  /// player, so AVPlayer stops filling what nobody watches.
+  Future<void> setForwardBuffer(int playerId, double seconds) async {
+    final pigeonVar_channelName = 'dev.flutter.pigeon.bilifast.PlayerHostApi.setForwardBuffer$pigeonVar_messageChannelSuffix';
+    final pigeonVar_channel = BasicMessageChannel<Object?>(
+      pigeonVar_channelName,
+      pigeonChannelCodec,
+      binaryMessenger: pigeonVar_binaryMessenger,
+    );
+    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(<Object?>[playerId, seconds]);
+    final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
+
+    _extractReplyValueOrThrow(
+        pigeonVar_replyList,
+        pigeonVar_channelName,
+        isNullValid: true,
+    )
+    ;
+  }
+
   Future<void> startPiP(int playerId) async {
     final pigeonVar_channelName = 'dev.flutter.pigeon.bilifast.PlayerHostApi.startPiP$pigeonVar_messageChannelSuffix';
     final pigeonVar_channel = BasicMessageChannel<Object?>(

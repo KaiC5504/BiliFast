@@ -59,6 +59,9 @@ final class FakePlayerHost extends PlayerHostApi {
   Future<void> setMirrored(int playerId, bool mirrored) async => calls.add('mirrored $playerId $mirrored');
 
   @override
+  Future<void> setForwardBuffer(int playerId, double seconds) async => calls.add('forward buffer $playerId $seconds');
+
+  @override
   Future<void> startPiP(int playerId) async => calls.add('pip start $playerId');
 
   @override

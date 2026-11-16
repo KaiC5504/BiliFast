@@ -85,6 +85,8 @@ final class NativePlayer {
   private var reportedSize: CGSize?
   private var reportedRanges: [NativeTimeRange]?
   private var lastControl: AVPlayer.TimeControlStatus = .paused
+  /// Dart's setForwardBuffer, for the current item and every later load.
+  private var forwardBuffer: TimeInterval = 30
   /// The lock screen's session while Dart has set it (NowPlaying).
   var nowPlaying: NowPlaying.Session?
 
@@ -122,7 +124,7 @@ final class NativePlayer {
       if let agent = headers["User-Agent"] { options[AVURLAssetHTTPUserAgentKey] = agent }
     }
     let item = AVPlayerItem(asset: AVURLAsset(url: url, options: options))
-    item.preferredForwardBufferDuration = 30
+    item.preferredForwardBufferDuration = forwardBuffer
     PlayerHostView.attachVideoOutput(to: item)
     nowPlaying?.attach(item)
     self.item = item
@@ -216,6 +218,11 @@ final class NativePlayer {
 
   func setMirrored(_ mirrored: Bool) {
     host.mirrored = mirrored
+  }
+
+  func setForwardBuffer(_ seconds: Double) {
+    forwardBuffer = max(seconds, 0)
+    item?.preferredForwardBufferDuration = forwardBuffer
   }
 
   func startPiP() {

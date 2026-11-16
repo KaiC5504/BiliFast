@@ -228,6 +228,9 @@ final class WindowsPlayer implements BiliPlayer {
   }
 
   @override
+  Future<void> setForwardBuffer(Duration ahead) async => _check();
+
+  @override
   Future<void> startPictureInPicture() async => _check();
 
   @override

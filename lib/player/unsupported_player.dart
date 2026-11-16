@@ -66,6 +66,9 @@ final class UnsupportedPlayer implements BiliPlayer {
   Future<void> setMirrored(bool mirrored) async => _check();
 
   @override
+  Future<void> setForwardBuffer(Duration ahead) async => _check();
+
+  @override
   Future<void> startPictureInPicture() async => _check();
 
   @override

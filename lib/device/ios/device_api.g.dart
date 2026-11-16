@@ -578,6 +578,10 @@ abstract class DeviceEventApi {
   /// the phone is on, after [DeviceHostApi.setStatusEvents] and whenever one of them changes.
   void onStatus(double battery, bool charging, NativeNetwork network);
 
+  /// iOS's own memory warning (UIApplication.didReceiveMemoryWarningNotification), unlike Flutter's low-memory notice,
+  /// which also comes on every trip to the background. [footprintMB] is the process's phys_footprint, or -1.
+  void onMemoryWarning(int footprintMB);
+
   static void setUp(DeviceEventApi? api, {
     BinaryMessenger? binaryMessenger, 
     String messageChannelSuffix = '',
@@ -728,6 +732,27 @@ abstract class DeviceEventApi {
           final NativeNetwork arg_network = args[2]! as NativeNetwork;
           try {
             api.onStatus(arg_battery, arg_charging, arg_network);
+            return wrapResponse(empty: true);
+          } on PlatformException catch (e) {
+            return wrapResponse(error: e);
+          }          catch (e) {
+            return wrapResponse(error: PlatformException(code: 'error', message: e.toString()));
+          }
+        });
+      }
+    }
+    {
+      final pigeonVar_channel = BasicMessageChannel<Object?>(
+          'dev.flutter.pigeon.bilifast.DeviceEventApi.onMemoryWarning$messageChannelSuffix', pigeonChannelCodec,
+          binaryMessenger: binaryMessenger);
+      if (api == null) {
+        pigeonVar_channel.setMessageHandler(null);
+      } else {
+        pigeonVar_channel.setMessageHandler((Object? message) async {
+          final List<Object?> args = message! as List<Object?>;
+          final int arg_footprintMB = args[0]! as int;
+          try {
+            api.onMemoryWarning(arg_footprintMB);
             return wrapResponse(empty: true);
           } on PlatformException catch (e) {
             return wrapResponse(error: e);

@@ -224,6 +224,9 @@ class _FaceSheetLayerState extends State<FaceSheetLayer> with SingleTickerProvid
         animation: _curve,
         builder: (context, sheet) {
           final t = _curve.value;
+          // Once open, the opaque sheet hides all the frost but the strip above it and its corners: blurring the rest
+          // would cost a full-screen pass every frame the sheet's list or video draws.
+          final frost = _motion.isCompleted ? sheetTop + DynamicFeedTheme.sheetRadius : null;
           return Stack(
             children: [
               Positioned.fill(
@@ -234,6 +237,7 @@ class _FaceSheetLayerState extends State<FaceSheetLayer> with SingleTickerProvid
                   child: Opacity(
                     opacity: t,
                     child: ClipRect(
+                      clipper: frost == null ? null : _FrostClip(frost),
                       child: BackdropFilter(
                         filter: ImageFilter.blur(
                           sigmaX: DynamicFeedTheme.sheetBlur,
@@ -433,4 +437,17 @@ class _FaceSheetLayerState extends State<FaceSheetLayer> with SingleTickerProvid
       ),
     );
   }
+}
+
+/// The frost's top [height]. The tap that closes the sheet still reaches the whole screen.
+class _FrostClip extends CustomClipper<Rect> {
+  const _FrostClip(this.height);
+
+  final double height;
+
+  @override
+  Rect getClip(Size size) => Rect.fromLTWH(0, 0, size.width, math.min(height, size.height));
+
+  @override
+  bool shouldReclip(_FrostClip oldClipper) => oldClipper.height != height;
 }

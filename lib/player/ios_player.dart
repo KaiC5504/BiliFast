@@ -134,6 +134,12 @@ final class IosPlayer implements BiliPlayer {
   }
 
   @override
+  Future<void> setForwardBuffer(Duration ahead) async {
+    _check();
+    await _host.setForwardBuffer(nativeId, ahead.inMilliseconds / 1000);
+  }
+
+  @override
   Future<void> startPictureInPicture() async {
     _check();
     if (capabilities.pictureInPicture) await _host.startPiP(nativeId);

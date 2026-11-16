@@ -64,6 +64,7 @@ class NativeBackgroundRangeResult {
 @HostApi()
 abstract class OfflineHostApi {
   /// volumeAvailableCapacityForImportantUsage of the app's container; null when iOS doesn't say.
+  @async
   int? freeBytes();
 
   /// UIApplication's applicationState is background: iOS launched the app for the background session.

@@ -69,6 +69,12 @@ final class FakePlayer implements BiliPlayer {
   @override
   Future<void> setMirrored(bool mirrored) async => _record('mirrored $mirrored');
 
+  /// Kept apart from the calls, so lists of them read as before.
+  final forwardBuffers = <Duration>[];
+
+  @override
+  Future<void> setForwardBuffer(Duration ahead) async => forwardBuffers.add(ahead);
+
   @override
   Future<void> startPictureInPicture() async => _record('pip start');
 

@@ -26,8 +26,28 @@ enum DeviceChannel {
       DeviceControls.hardwareVolumeChanged = { volume in
         Task { @MainActor in try? await DeviceChannel.events?.onHardwareVolume(volume: volume) }
       }
+      memoryWarnings = NotificationCenter.default.addObserver(
+        forName: UIApplication.didReceiveMemoryWarningNotification, object: nil, queue: .main
+      ) { _ in
+        let footprint = DeviceChannel.footprintMB()
+        Task { @MainActor in try? await DeviceChannel.events?.onMemoryWarning(footprintMB: footprint) }
+      }
     }
     DeviceHostApiSetup.setUp(binaryMessenger: messenger, api: DeviceHostApiImpl())
+  }
+
+  @MainActor private static var memoryWarnings: NSObjectProtocol?
+
+  /// The process's phys_footprint (what iOS counts against its memory limit, decoder surfaces included), or -1.
+  nonisolated static func footprintMB() -> Int64 {
+    var info = task_vm_info_data_t()
+    var count = mach_msg_type_number_t(MemoryLayout<task_vm_info_data_t>.size / MemoryLayout<integer_t>.size)
+    let result = withUnsafeMutablePointer(to: &info) {
+      $0.withMemoryRebound(to: integer_t.self, capacity: Int(count)) {
+        task_info(mach_task_self_, task_flavor_t(TASK_VM_INFO), $0, &count)
+      }
+    }
+    return result == KERN_SUCCESS ? Int64(info.phys_footprint / 1_048_576) : -1
   }
 
   @MainActor static var scene: UIWindowScene? {

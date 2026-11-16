@@ -4,6 +4,7 @@ import 'dart:math' as math;
 import 'package:bili_core/api.dart';
 import 'package:bili_core/devlog.dart';
 import 'package:flutter/cupertino.dart';
+import 'package:flutter/foundation.dart' show listEquals;
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
@@ -549,6 +550,14 @@ class _FeedGrid extends StatefulWidget {
 /// A card leaving in a refresh's hand-off, drawn as it was.
 typedef _Going = ({FeedCard card, CardDislike? dislike});
 
+typedef _FeedShown = ({
+  List<FeedCard> cards,
+  int? divider,
+  bool emptyLoading,
+  String? emptyError,
+  List<CardDislike?> dislikes,
+});
+
 class _FeedGridState extends State<_FeedGrid> with SingleTickerProviderStateMixin, SkinRefreshRoom {
   static const _skeletons = 6;
 
@@ -598,6 +607,9 @@ class _FeedGridState extends State<_FeedGrid> with SingleTickerProviderStateMixi
   bool _rebuilt = true;
   double _inset = 0;
   TextScaler _scaler = TextScaler.noScaling;
+
+  /// The feed as the last build read it.
+  _FeedShown? _built;
 
   /// Whether the last build asked for Reduce Motion or had 首页 out of sight; either makes a hand-off instant.
   bool _still = false;
@@ -723,17 +735,42 @@ class _FeedGridState extends State<_FeedGrid> with SingleTickerProviderStateMixi
     for (final card in cards) (card: card, dislike: widget.feed.dislikeOf(card)),
   ];
 
+  /// What the grid's build reads from the feed. The footer listens for itself, so a load starting or ending with cards
+  /// on screen rebuilds no card.
+  _FeedShown _feedShown() {
+    final feed = widget.feed;
+    final cards = feed.cards;
+    return (
+      cards: cards,
+      divider: feed.dividerAt,
+      // Outside the footer these show only while the list is empty: the skeleton, or the message with 重试.
+      emptyLoading: cards.isEmpty && feed.loading,
+      emptyError: cards.isEmpty ? feed.error : null,
+      dislikes: [for (final card in cards) feed.dislikeOf(card)],
+    );
+  }
+
+  static bool _sameShown(_FeedShown a, _FeedShown b) =>
+      identical(a.cards, b.cards) &&
+      a.divider == b.divider &&
+      a.emptyLoading == b.emptyLoading &&
+      a.emptyError == b.emptyError &&
+      listEquals(a.dislikes, b.dislikes);
+
   void _feedChanged() {
     final cards = widget.feed.cards;
     final coming = _coming;
+    var handOff = false;
     if (coming != null && identical(widget.feed.refreshed, coming.fresh)) {
       _coming = null;
       _handOffFrom(coming.going, widget.feed.newest);
+      handOff = true;
     } else if (coming != null && identical(cards, coming.old)) {
       // A 不感兴趣 or 撤销 before the swap, read now: by the swap the refresh has dropped every one.
       _coming = (fresh: coming.fresh, old: coming.old, going: _goingOf(cards));
     }
-    setState(() {});
+    final built = _built;
+    if (handOff || built == null || !_sameShown(built, _feedShown())) setState(() {});
     _inline.settleSoon();
     // A page too short to scroll leaves the end on screen with no scrolling to notice it; look once it is laid out.
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -981,6 +1018,7 @@ class _FeedGridState extends State<_FeedGrid> with SingleTickerProviderStateMixi
     // Under a dressed bar the feed runs to the screen's bottom; its end stays above the bar's row.
     final inset = _inset = MediaQuery.paddingOf(context).bottom;
     final pad = _pad = FormFactor.of(context).isPad;
+    _built = _feedShown();
     _rebuilt = true;
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -1192,7 +1230,9 @@ class _Footer extends StatelessWidget {
   final FeedModel feed;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context) => ListenableBuilder(listenable: feed, builder: _build);
+
+  Widget _build(BuildContext context, Widget? _) {
     final error = feed.error;
     return Padding(
       padding: const EdgeInsets.only(top: BiliMetrics.rowGap, bottom: BiliMetrics.sectionGap + BiliMetrics.rowGap),

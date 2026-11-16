@@ -24,6 +24,7 @@ final class IosDeviceEvents implements DeviceEventApi {
   final _turns = StreamController<TurnStart>.broadcast();
   final _network = StreamController<bool>.broadcast();
   final _status = StreamController<DeviceStatusReport>.broadcast();
+  final _memory = StreamController<int>.broadcast();
 
   void connect({BinaryMessenger? binaryMessenger}) => DeviceEventApi.setUp(this, binaryMessenger: binaryMessenger);
 
@@ -41,6 +42,12 @@ final class IosDeviceEvents implements DeviceEventApi {
 
   /// The battery and network while status events are on.
   Stream<DeviceStatusReport> get statusReports => _status.stream;
+
+  /// iOS's own memory warnings, with the process's footprint in MB (-1 when unknown).
+  Stream<int> get memoryWarnings => _memory.stream;
+
+  @override
+  void onMemoryWarning(int footprintMB) => _memory.add(footprintMB);
 
   @override
   void onDeviceOrientation(NativeDeviceOrientation orientation) => _orientations.add(orientation);

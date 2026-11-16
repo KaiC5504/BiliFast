@@ -116,4 +116,8 @@ abstract class DeviceEventApi {
   /// The battery's level (0 to 1, or -1 when iOS can't tell), whether it is charging or full on power, and the network
   /// the phone is on, after [DeviceHostApi.setStatusEvents] and whenever one of them changes.
   void onStatus(double battery, bool charging, NativeNetwork network);
+
+  /// iOS's own memory warning (UIApplication.didReceiveMemoryWarningNotification), unlike Flutter's low-memory notice,
+  /// which also comes on every trip to the background. [footprintMB] is the process's phys_footprint, or -1.
+  void onMemoryWarning(int footprintMB);
 }

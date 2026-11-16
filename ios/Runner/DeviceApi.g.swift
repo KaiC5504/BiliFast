@@ -579,6 +579,9 @@ protocol DeviceEventApiProtocol {
   /// The battery's level (0 to 1, or -1 when iOS can't tell), whether it is charging or full on power, and the network
   /// the phone is on, after [DeviceHostApi.setStatusEvents] and whenever one of them changes.
   @MainActor func onStatus(battery batteryArg: Double, charging chargingArg: Bool, network networkArg: NativeNetwork) async throws
+  /// iOS's own memory warning (UIApplication.didReceiveMemoryWarningNotification), unlike Flutter's low-memory notice,
+  /// which also comes on every trip to the background. [footprintMB] is the process's phys_footprint, or -1.
+  @MainActor func onMemoryWarning(footprintMB footprintMBArg: Int64) async throws
 }
 class DeviceEventApi: DeviceEventApiProtocol {
   private let binaryMessenger: FlutterBinaryMessenger
@@ -725,6 +728,28 @@ class DeviceEventApi: DeviceEventApiProtocol {
       let channelName: String = "dev.flutter.pigeon.bilifast.DeviceEventApi.onStatus\(messageChannelSuffix)"
       let channel = FlutterBasicMessageChannel(name: channelName, binaryMessenger: binaryMessenger, codec: codec)
       channel.sendMessage([batteryArg, chargingArg, networkArg] as [Any?]) { response in
+        guard let listResponse = response as? [Any?] else {
+          continuation.resume(throwing: createConnectionError(withChannelName: channelName))
+          return
+        }
+        if listResponse.count > 1 {
+          let code: String = listResponse[0] as! String
+          let message: String? = nilOrValue(listResponse[1])
+          let details: String? = nilOrValue(listResponse[2])
+          continuation.resume(throwing: DeviceApiError(code: code, message: message, details: details))
+        } else {
+          continuation.resume()
+        }
+      }
+    }
+  }
+  /// iOS's own memory warning (UIApplication.didReceiveMemoryWarningNotification), unlike Flutter's low-memory notice,
+  /// which also comes on every trip to the background. [footprintMB] is the process's phys_footprint, or -1.
+  @MainActor func onMemoryWarning(footprintMB footprintMBArg: Int64) async throws {
+    return try await withCheckedThrowingContinuation { continuation in
+      let channelName: String = "dev.flutter.pigeon.bilifast.DeviceEventApi.onMemoryWarning\(messageChannelSuffix)"
+      let channel = FlutterBasicMessageChannel(name: channelName, binaryMessenger: binaryMessenger, codec: codec)
+      channel.sendMessage([footprintMBArg] as [Any?]) { response in
         guard let listResponse = response as? [Any?] else {
           continuation.resume(throwing: createConnectionError(withChannelName: channelName))
           return

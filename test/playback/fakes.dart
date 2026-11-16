@@ -156,6 +156,11 @@ final class FakeEngine implements PlaybackEngine {
   @override
   void dropPrefetch(String token) => prefetchDrops.add(token);
 
+  final idles = <({String token, bool idle})>[];
+
+  @override
+  void setIdle(String token, bool idle) => idles.add((token: token, idle: idle));
+
   @override
   void hint(String token, double? seconds) => hints.add((token: token, seconds: seconds));
 
@@ -319,6 +324,9 @@ final class RefusingPlayer implements BiliPlayer {
 
   @override
   Future<void> setMirrored(bool mirrored) => _call('mirrored', () => inner.setMirrored(mirrored));
+
+  @override
+  Future<void> setForwardBuffer(Duration ahead) => inner.setForwardBuffer(ahead);
 
   @override
   Future<void> startPictureInPicture() => _call('pip', inner.startPictureInPicture);

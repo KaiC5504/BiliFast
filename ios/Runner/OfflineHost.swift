@@ -19,10 +19,15 @@ enum OfflineHost {
 
 /// Pigeon calls in on the main thread.
 final class OfflineHostApiImpl: OfflineHostApi {
-  func freeBytes() throws -> Int64? {
-    let home = URL(fileURLWithPath: NSHomeDirectory(), isDirectory: true)
-    let values = try? home.resourceValues(forKeys: [.volumeAvailableCapacityForImportantUsageKey])
-    return values?.volumeAvailableCapacityForImportantUsage
+  /// Measured off the main thread, which is also Flutter's UI thread: iOS can take its time over the volume.
+  func freeBytes() async throws -> Int64? {
+    await withCheckedContinuation { continuation in
+      DispatchQueue.global(qos: .utility).async {
+        let home = URL(fileURLWithPath: NSHomeDirectory(), isDirectory: true)
+        let values = try? home.resourceValues(forKeys: [.volumeAvailableCapacityForImportantUsageKey])
+        continuation.resume(returning: values?.volumeAvailableCapacityForImportantUsage)
+      }
+    }
   }
 
   func inBackground() throws -> Bool {

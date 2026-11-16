@@ -223,6 +223,10 @@ abstract interface class BiliPlayer {
 
   Future<void> setMirrored(bool mirrored);
 
+  /// How far ahead the player buffers, now and for later loads: less for a muted card or a held player. A no-op
+  /// where the player has no such setting (Windows).
+  Future<void> setForwardBuffer(Duration ahead);
+
   Future<void> startPictureInPicture();
 
   Future<void> stopPictureInPicture();

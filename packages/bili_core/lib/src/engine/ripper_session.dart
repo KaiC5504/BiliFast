@@ -500,6 +500,15 @@ final class RipperSession {
     _ctx.logger.info(LogCategory.engine, 'prefetch dropped', {'droppedBytes': dropped, 'cancelled': prefetches.length});
   }
 
+  /// Set by [setIdle]: the card is paused or the page covered.
+  bool get idle => _idle;
+  bool _idle = false;
+
+  /// [PlaybackEngine.setIdle] for this session.
+  void setIdle(bool idle) {
+    _idle = idle;
+  }
+
   static const _trimBehindSeconds = 5.0;
 
   void _trimCache() {

@@ -928,6 +928,17 @@ class PlaybackController extends ChangeNotifier {
     if (token != null) _engine.dropPrefetch(token);
   }
 
+  /// A card paused or a page covered ([PlaybackEngine.setIdle]): its engine session keeps little and prefetches
+  /// nothing until played or shown again.
+  bool get idle => _idle;
+  bool _idle = false;
+
+  void setIdle(bool idle) {
+    _idle = idle;
+    final token = _btrToken;
+    if (token != null) _engine.setIdle(token, idle);
+  }
+
   /// iOS can take a suspended app's listening socket: once back in the foreground the local server is probed,
   /// and a playback prepared before a restart is prepared again where it was; a video loaded ahead is let go, its
   /// addresses naming the old listener. A detail whose asks ran out (likely while the network was away) is asked for

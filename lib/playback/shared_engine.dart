@@ -244,6 +244,11 @@ final class EngineLease implements PlaybackEngine {
   }
 
   @override
+  void setIdle(String token, bool idle) {
+    if (!_released) engine.setIdle(token, idle);
+  }
+
+  @override
   void hint(String token, double? seconds) {
     if (!_released) engine.hint(token, seconds);
   }

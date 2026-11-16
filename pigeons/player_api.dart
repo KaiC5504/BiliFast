@@ -79,6 +79,10 @@ abstract class PlayerHostApi {
 
   void setMirrored(int playerId, bool mirrored);
 
+  /// The current item's preferredForwardBufferDuration, and every later load's: less for a muted card or a held
+  /// player, so AVPlayer stops filling what nobody watches.
+  void setForwardBuffer(int playerId, double seconds);
+
   void startPiP(int playerId);
 
   void stopPiP(int playerId);

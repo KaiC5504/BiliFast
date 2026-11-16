@@ -380,7 +380,7 @@ class OfflineApiPigeonCodec: FlutterStandardMessageCodec, @unchecked Sendable {
 /// Generated protocol from Pigeon that represents a handler of messages from Flutter.
 protocol OfflineHostApi {
   /// volumeAvailableCapacityForImportantUsage of the app's container; null when iOS doesn't say.
-  func freeBytes() throws -> Int64?
+  func freeBytes() async throws -> Int64?
   /// UIApplication's applicationState is background: iOS launched the app for the background session.
   func inBackground() throws -> Bool
   func excludeFromBackup(path: String) throws
@@ -409,11 +409,13 @@ class OfflineHostApiSetup {
     let freeBytesChannel = FlutterBasicMessageChannel(name: "dev.flutter.pigeon.bilifast.OfflineHostApi.freeBytes\(channelSuffix)", binaryMessenger: binaryMessenger, codec: codec)
     if let api = api {
       freeBytesChannel.setMessageHandler { _, reply in
-        do {
-          let result = try api.freeBytes()
-          reply(wrapResult(result))
-        } catch {
-          reply(wrapError(error))
+        Task { @MainActor in
+          do {
+            let result = try await api.freeBytes()
+            reply(wrapResult(result))
+          } catch {
+            reply(wrapError(error))
+          }
         }
       }
     } else {

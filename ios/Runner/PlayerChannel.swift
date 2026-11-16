@@ -89,6 +89,11 @@ final class PlayerHostApiImpl: PlayerHostApi {
     try MainActor.assumeIsolated { try registry.player(playerId).setMirrored(mirrored) }
   }
 
+  func setForwardBuffer(playerId: Int64, seconds: Double) throws {
+    let registry = self.registry
+    try MainActor.assumeIsolated { try registry.player(playerId).setForwardBuffer(seconds) }
+  }
+
   func startPiP(playerId: Int64) throws {
     let registry = self.registry
     try MainActor.assumeIsolated { try registry.player(playerId).startPiP() }

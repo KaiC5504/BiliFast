@@ -245,6 +245,11 @@ abstract interface class PlaybackEngine {
   /// back buffer included (Swift's `session.dropCache()` on cover). Its reads go on; the others are untouched.
   void dropPrefetch(String token);
 
+  /// The page or card playing [token] is out of use (a card paused, a page covered) or back ([idle] false). An idle
+  /// playback keeps only a little around the playhead and prefetches nothing beyond it, and is the first to give up
+  /// its cache when the engine's sessions together hold too much.
+  void setIdle(String token, bool idle);
+
   /// The user is about to seek to [seconds] (a finger resting on the seek bar): the playback starts the segments
   /// there, and the seek's reads take them over. A newer hint replaces the last; null cancels it.
   void hint(String token, double? seconds);

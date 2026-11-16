@@ -404,6 +404,9 @@ protocol PlayerHostApi {
   func setKeepAwake(enabled: Bool) throws
   func setFit(playerId: Int64, fit: NativeFit) throws
   func setMirrored(playerId: Int64, mirrored: Bool) throws
+  /// The current item's preferredForwardBufferDuration, and every later load's: less for a muted card or a held
+  /// player, so AVPlayer stops filling what nobody watches.
+  func setForwardBuffer(playerId: Int64, seconds: Double) throws
   func startPiP(playerId: Int64) throws
   func stopPiP(playerId: Int64) throws
   func setAutoPiP(playerId: Int64, enabled: Bool) throws
@@ -615,6 +618,24 @@ class PlayerHostApiSetup {
       }
     } else {
       setMirroredChannel.setMessageHandler(nil)
+    }
+    /// The current item's preferredForwardBufferDuration, and every later load's: less for a muted card or a held
+    /// player, so AVPlayer stops filling what nobody watches.
+    let setForwardBufferChannel = FlutterBasicMessageChannel(name: "dev.flutter.pigeon.bilifast.PlayerHostApi.setForwardBuffer\(channelSuffix)", binaryMessenger: binaryMessenger, codec: codec)
+    if let api = api {
+      setForwardBufferChannel.setMessageHandler { message, reply in
+        let args = message as! [Any?]
+        let playerIdArg = args[0] as! Int64
+        let secondsArg = args[1] as! Double
+        do {
+          try api.setForwardBuffer(playerId: playerIdArg, seconds: secondsArg)
+          reply(wrapResult(nil))
+        } catch {
+          reply(wrapError(error))
+        }
+      }
+    } else {
+      setForwardBufferChannel.setMessageHandler(nil)
     }
     let startPiPChannel = FlutterBasicMessageChannel(name: "dev.flutter.pigeon.bilifast.PlayerHostApi.startPiP\(channelSuffix)", binaryMessenger: binaryMessenger, codec: codec)
     if let api = api {

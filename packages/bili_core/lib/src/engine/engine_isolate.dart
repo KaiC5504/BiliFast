@@ -130,6 +130,9 @@ final class IsolatePlaybackEngine implements PlaybackEngine {
   void dropPrefetch(String token) => _notify(_DropPrefetch(token));
 
   @override
+  void setIdle(String token, bool idle) => _notify(_SetIdle(token, idle));
+
+  @override
   void hint(String token, double? seconds) => _notify(_Hint(token, seconds));
 
   @override
@@ -369,6 +372,13 @@ final class _DropPrefetch extends _Notice {
   final String token;
 }
 
+final class _SetIdle extends _Notice {
+  const _SetIdle(this.token, this.idle);
+
+  final String token;
+  final bool idle;
+}
+
 final class _Hint extends _Notice {
   const _Hint(this.token, this.seconds);
 
@@ -570,6 +580,8 @@ final class _EngineHost {
         }
       case _DropPrefetch(:final token):
         _sessions[token]?.dropPrefetch();
+      case _SetIdle(:final token, :final idle):
+        _sessions[token]?.setIdle(idle);
       case _Hint(:final token, :final seconds):
         _sessions[token]?.hint(seconds);
       case _Preconnect(:final urls):

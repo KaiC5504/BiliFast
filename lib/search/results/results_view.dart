@@ -51,8 +51,8 @@ class ResultsView extends StatefulWidget {
 class _ResultsViewState extends State<ResultsView> with TickerProviderStateMixin {
   final _scrolls = {for (final tab in SearchTab.values) tab: ScrollController()};
 
-  /// How far the header has gone up behind the field.
-  double _shift = 0;
+  /// How far the header has gone up behind the field. Only the header follows it: scrolling rebuilds no rows.
+  final _shift = ValueNotifier<double>(0);
 
   /// Carries [_shift] the rest of the way in or out once a scroll stops with the header part shown.
   late final AnimationController _snap = AnimationController(vsync: this, duration: SearchResultTheme.headerSnap)
@@ -131,6 +131,7 @@ class _ResultsViewState extends State<ResultsView> with TickerProviderStateMixin
       scroll.dispose();
     }
     _snap.dispose();
+    _shift.dispose();
     _filterCurve.dispose();
     _filter.dispose();
     super.dispose();
@@ -175,20 +176,21 @@ class _ResultsViewState extends State<ResultsView> with TickerProviderStateMixin
 
   void _showHeader() {
     _snap.stop();
-    _shift = 0;
+    _shift.value = 0;
   }
 
-  void _snapped() => setState(() => _shift = _snapFrom + (_snapTo - _snapFrom) * Curves.easeOut.transform(_snap.value));
+  void _snapped() => _shift.value = _snapFrom + (_snapTo - _snapFrom) * Curves.easeOut.transform(_snap.value);
 
   /// A scroll that stops with the header part shown carries it on to whichever end is nearer. While the rows' top is
   /// still under the header, it moves with them, so it stays.
   void _settleHeader(SearchTab tab, ScrollMetrics metrics) {
     final height = _headerHeight(tab);
-    if (_shift <= 0 || _shift >= height || metrics.pixels < height) return;
-    _snapFrom = _shift;
-    _snapTo = _shift * 2 < height ? 0 : height;
+    final shift = _shift.value;
+    if (shift <= 0 || shift >= height || metrics.pixels < height) return;
+    _snapFrom = shift;
+    _snapTo = shift * 2 < height ? 0 : height;
     if (_snap.duration == Duration.zero) {
-      setState(() => _shift = _snapTo);
+      _shift.value = _snapTo;
     } else {
       unawaited(_snap.forward(from: 0));
     }
@@ -211,8 +213,7 @@ class _ResultsViewState extends State<ResultsView> with TickerProviderStateMixin
       final delta = notification.scrollDelta ?? 0;
       final height = _headerHeight(tab);
       final pixels = metrics.pixels.clamp(0.0, double.infinity);
-      final next = (_shift + delta).clamp(0.0, height).clamp(0.0, pixels);
-      if (next != _shift) setState(() => _shift = next);
+      _shift.value = (_shift.value + delta).clamp(0.0, height).clamp(0.0, pixels);
     }
     if (notification is ScrollEndNotification && !_filterOpen) _settleHeader(tab, metrics);
     _loadMoreNearEnd(metrics);
@@ -386,11 +387,10 @@ class _ResultsViewState extends State<ResultsView> with TickerProviderStateMixin
                 ),
               ),
             if (!model.awaitingFirstPage)
-              Positioned(
-                left: 0,
-                right: 0,
-                top: -_shift,
-                height: header,
+              ValueListenableBuilder<double>(
+                valueListenable: _shift,
+                builder: (context, shift, child) =>
+                    Positioned(left: 0, right: 0, top: -shift, height: header, child: child!),
                 child: _Header(
                   tab: tab,
                   filterOpen: _filterOpen,

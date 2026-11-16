@@ -1762,8 +1762,8 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
             body: PrimaryScrollController.none(
               child: LayoutBuilder(
                 builder: (context, constraints) {
-                  final media = MediaQuery.of(context);
-                  final top = pad ? padPageTop(media.padding.top) : media.padding.top;
+                  final safeTop = MediaQuery.paddingOf(context).top;
+                  final top = pad ? padPageTop(safeTop) : safeTop;
                   final columnWidth = sideways ? padPlayerColumnWidth(constraints.maxWidth) : constraints.maxWidth;
                   if (pad) {
                     // Each layout builds its own lists: their places go with the turn, read before the old ones go.
@@ -1790,7 +1790,7 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
                   // 评论详情 and the uploader sheet cover the tab row and the list, for VoiceOver too.
                   Widget belowPlayer(Widget child) => ExcludeSemantics(
                     excluding: _threadOpen || _uploaderSheet.isOpen,
-                    child: MediaQuery.removePadding(context: context, removeTop: true, child: child),
+                    child: _WithoutPadding(top: true, child: child),
                   );
                   // Out of sight in full screen, except while the player grows over it or shrinks back.
                   Widget hideable(bool hidden, Widget child) =>
@@ -1804,8 +1804,9 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
                   final sheetOver = layout == Presentation.vertical && _uploaderSheet.isOpen;
                   // Full screen runs under the notch and the home indicator, so its chrome keeps clear of them itself;
                   // the small player sits below the status bar with no insets of its own.
-                  final area = MediaQuery(
-                    data: media.removePadding(removeTop: !fullScreen, removeBottom: !fullScreen),
+                  final area = _WithoutPadding(
+                    top: !fullScreen,
+                    bottom: !fullScreen,
                     // An open panel covers the player for VoiceOver too, as landscape's panel does, and so does the
                     // uploader sheet over 竖屏, whose controls are gone.
                     child: ExcludeSemantics(
@@ -2232,9 +2233,8 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
         // Leaving, a related row's cover would otherwise fly back to a feed card showing the same video.
         child: HeroMode(
           enabled: !_left || _replaced,
-          child: MediaQuery.removePadding(
-            context: context,
-            removeTop: true,
+          child: _WithoutPadding(
+            top: true,
             child: PadRelatedColumn(
               cards: _intro.related,
               onOpen: _openRelated,
@@ -2601,6 +2601,20 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
 /// The iPad page's pieces below and beside the player, built once per page build: [tabs] under the player (the
 /// sideways column, or the upright pager), [tabRow] upright, [related] and the pinned [strip] sideways.
 typedef _PadBody = ({Widget tabs, Widget? tabRow, Widget? related, Widget? strip});
+
+/// [MediaQuery.removePadding] read in its own build, so a keyboard's slide rebuilds this and what depends on the insets,
+/// not the whole page around it.
+class _WithoutPadding extends StatelessWidget {
+  const _WithoutPadding({this.top = false, this.bottom = false, required this.child});
+
+  final bool top;
+  final bool bottom;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) =>
+      MediaQuery.removePadding(context: context, removeTop: top, removeBottom: bottom, child: child);
+}
 
 /// The turning window, in the clipped child's coordinates.
 class _WindowClip extends CustomClipper<Rect> {
