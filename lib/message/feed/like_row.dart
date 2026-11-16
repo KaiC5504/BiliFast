@@ -75,8 +75,8 @@ class LikeRow extends StatelessWidget {
               ),
               Positioned(
                 right: MessageFeedTheme.sideRight,
-                top: 0,
-                bottom: 0,
+                top: -MessageFeedTheme.likeSideRise,
+                bottom: MessageFeedTheme.likeSideRise,
                 width: MessageFeedTheme.sideWidth,
                 child: Align(
                   alignment: Alignment.centerLeft,
@@ -106,12 +106,11 @@ class LikeRow extends StatelessWidget {
                               TextSpan(
                                 children: [
                                   for (final (index, who) in line.names.indexed) ...[
-                                    // iOS squeezes the 、 to about half its width.
-                                    if (index > 0)
-                                      TextSpan(
-                                        text: ' 、',
-                                        style: grey.copyWith(letterSpacing: -MessageFeedTheme.likeCommaSqueeze),
-                                      ),
+                                    if (index > 0) ...[
+                                      const WidgetSpan(child: SizedBox(width: MessageFeedTheme.likeCommaBefore)),
+                                      TextSpan(text: '、', style: grey),
+                                      const WidgetSpan(child: SizedBox(width: MessageFeedTheme.likeCommaAfter)),
+                                    ],
                                     TextSpan(text: who, style: name),
                                   ],
                                   const WidgetSpan(child: SizedBox(width: MessageFeedTheme.nameGap)),

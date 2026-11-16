@@ -8567,11 +8567,13 @@ abstract final class MessageFeedTheme {
   static const rowRuleInk = BiliColors.divider;
 
   /// The right column (197, 198): what was replied to or liked, 10 pt grey in up to three 12 pt lines, 41 wide ending
-  /// 12 from the right; on 回复与@ its top 17.67 down, on 收到喜欢 centred on the row. A picture where there are no
-  /// words: no screenshot, so a 40 square with 4 corners in the same place.
+  /// 11.17 from the right (its words' ink from 388.33-388.67 to about 427 on both); on 回复与@ its top 17.67 down, on
+  /// 收到喜欢 centred 1 above the row's middle. A picture where there are no words: no screenshot, so a 40 square with 4
+  /// corners in the same place.
   static const sideWidth = 41.0;
-  static const sideRight = 12.0;
+  static const sideRight = 67 / 6;
   static const sideTop = 53 / 3;
+  static const likeSideRise = 1.0;
   static const sideText = 10.0;
   static const sideLine = 12.0;
   static const sideLines = 3;
@@ -8580,10 +8582,13 @@ abstract final class MessageFeedTheme {
   static const sidePictureRadius = 4.0;
 
   /// A like (198): one face 40 at 12 in, 16 down; two as a pair of 30s, the older at 12 in and 15.33 down, the newer 8
-  /// right of it and 8 lower over a 1.5 white ring. The names 13 pt semibold, 、 (squeezed, as iOS sets it) and, 6
-  /// after, the rest 13 pt #61666D, the line's middle 22.83 down; the date's 48.67 down, and the row ends as a reply's.
+  /// right of it and 8 lower over a 1.5 white ring. The names 13 pt semibold with a whole-width 13 pt grey 、 between,
+  /// 3.33 after the first name and 1 before the second (the second's ink starts 18.33-18.67 after the first's ends on
+  /// all three of 198's pairs; a name starting with a combining ゚ draws it over the 、's corner), and, 6 after, the
+  /// rest 13 pt #61666D, the line's middle 22.83 down; the date's 48.67 down, and the row ends as a reply's.
   static const likeNameCentre = 137 / 6;
-  static const likeCommaSqueeze = 4 / 3;
+  static const likeCommaBefore = 10 / 3;
+  static const likeCommaAfter = 1.0;
   static const likeFaceTop = 16.0;
   static const pairFace = 30.0;
   static const pairTop = 46 / 3;

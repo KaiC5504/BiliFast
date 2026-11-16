@@ -31,7 +31,7 @@ void main() {
 
   Future<void> toastGone(WidgetTester tester) => settle(tester, 60);
 
-  testWidgets('two likers read "A 、B 等总计N人赞了…", one "A 点赞了…", by what was liked', (tester) async {
+  testWidgets('two likers read "A、B 等总计N人赞了…", one "A 点赞了…", by what was liked', (tester) async {
     final api = FakeMessageApi(
       likeList: [
         like(
@@ -56,7 +56,7 @@ void main() {
       ],
     );
     final messages = await open(tester, api);
-    expect(lineOf(tester, 1), '演示甲 、演示乙等总计12人赞了我的评论');
+    expect(lineOf(tester, 1), '演示甲、演示乙等总计12人赞了我的评论');
     expect(lineOf(tester, 3), '演示丙点赞了我的弹幕');
     expect(lineOf(tester, 4), '演示丁等总计5人赞了我的视频');
     expect(messages.opened, [NoticeFeed.like]);
