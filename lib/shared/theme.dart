@@ -8975,8 +8975,286 @@ abstract final class MessageSettingsTheme {
 /// 首页's 直播 page (205) and 206.
 abstract final class LiveTabTheme {}
 
-/// A room's header, chat, bottom bar, 醒目留言 and sheets in portrait (207, 208, 221, 224, 228, 229).
-abstract final class LiveRoomTheme {}
+/// A room's header, chat, bottom bar, 醒目留言 and sheets in portrait (207, 208, 221, 224, 228, 229), measured in
+/// px / 3. Heights count from the safe area's top (62 on the Pro Max) unless they say otherwise.
+abstract final class LiveRoomTheme {
+  /// The official app draws each room's own picture behind the page; the room's answers carry none, so one dark tone
+  /// stands in for 207's navy.
+  static const page = Color(0xFF050A19);
+
+  /// Every translucent box on the page (the header's capsules, the chips, the chat's rows and cards): white at 8%.
+  static const glass = Color(0x14FFFFFF);
+  static const ink = Color(0xFFFFFFFF);
+
+  /// The chat's names without a colour of their own.
+  static const nameBlue = Color(0xFFAEEBFF);
+
+  /// ‹: its tip 16.67 in, 8.33 wide and 14.67 tall on the capsule's middle, a 2 pt round stroke.
+  static const backTipX = 16.67;
+  static const backWidth = 8.33;
+  static const backHeight = 14.67;
+  static const backStroke = 2.0;
+  static const backTarget = 37.0;
+
+  /// The anchor capsule: 36 tall, 7 under the safe area, from 37.83; the face 30 across 3 in; the name and the 点赞 line
+  /// from 6 after the face; 关注 26 × 40, 5 from the capsule's end.
+  static const headerTop = 7.0;
+  static const capsuleLeft = 113.5 / 3;
+  static const capsuleHeight = 36.0;
+  static const faceInset = 3.0;
+  static const face = 30.0;
+  static const nameGap = 6.0;
+  static const nameText = 12.0;
+  static const nameLine = 15.0;
+
+  /// The name's line centred 6.33 above the capsule's middle, the 点赞 line's 8.5 below it.
+  static const nameCentre = -6.33;
+  static const likesText = 9.0;
+  static const likesLine = 12.0;
+  static const likesCentre = 8.5;
+  static const likesInk = Color(0xE6FFFFFF);
+  static const capsuleEnd = 5.0;
+
+  /// Followed, 关注 goes and the capsule ends this far after the longer of the two lines (no screenshot shows it).
+  static const capsuleEndBare = 12.0;
+  static const nameMax = 112.0;
+  static const followWidth = 40.0;
+  static const followHeight = 26.0;
+  static const followGap = 6.0;
+  static const followText = 12.0;
+  static const pink = Color(0xFFFF6699);
+
+  /// The verified disc on the face's lower right: 9.33 across in a 1 pt white ring.
+  static const verifyDisc = 28 / 3;
+  static const verifyRing = 1.0;
+  static const verifyPerson = Color(0xFFFFC62E);
+  static const verifyOrganisation = Color(0xFF3EA2F4);
+  static const verifyRingInk = Color(0xFFFFFFFF);
+
+  /// The three top faces: 23.67 across in a 1 pt ring (gold, silver, bronze), 18.67 apart, the first's left 327.33
+  /// from the screen's left, the leftmost on top; the count capsule 22.67 tall under them, from the last face's middle
+  /// to 12.17 from the right, its number 12 pt 5 after the last face.
+  static const topFace = 71 / 3;
+  static const topFaceStep = 56 / 3;
+  static const topFaceRing = 1.0;
+  static const topFaceRings = [Color(0xFFFFD700), Color(0xFFC0C0C0), Color(0xFFCD7F32)];
+  static const countHeight = 68 / 3;
+  static const countRight = 36.5 / 3;
+  static const countText = 12.0;
+  static const countGap = 5.0;
+  static const countPadRight = 9.5;
+
+  /// The chips row: 21.67 tall, 52 under the safe area, from 11.83, 3.83 apart; 12 pt words 9 in from each end. 更多直播
+  /// at the right ends 12.17 from the edge, its › 5 × 9.33.
+  static const chipsTop = 52.0;
+  static const chipHeight = 65 / 3;
+  static const chipLeft = 35.5 / 3;
+  static const chipGap = 11.5 / 3;
+  static const chipPad = 9.0;
+  static const chipText = 12.0;
+  static const chipChevronWidth = 5.0;
+  static const chipChevronHeight = 28 / 3;
+  static const chipChevronGap = 4.0;
+  static const chipChevronStroke = 1.5;
+
+  /// The player box: the screen's width at 16:9, 138 under the safe area.
+  static const boxTop = 138.0;
+
+  /// 醒目留言's strip: 6.67 under the box, its pills 27.67 tall and 7.33 apart from 12; in each the face 23.67 across 2
+  /// in, the battery 9 × 13 5 after it, the amount 13 pt 4 after that, 10 to the pill's end.
+  static const stripGap = 20 / 3;
+  static const stripHeight = 83 / 3;
+  static const pillGap = 22 / 3;
+  static const pillFace = 71 / 3;
+  static const pillFaceInset = 2.0;
+  static const pillBatteryWidth = 9.0;
+  static const pillBatteryHeight = 13.0;
+  static const pillBatteryGap = 5.0;
+  static const pillAmountGap = 4.0;
+  static const pillAmountText = 13.0;
+  static const pillPadRight = 10.0;
+  static const batteryInk = Color(0xFFFDE369);
+  static const batteryBolt = Color(0xFFFFFFFF);
+
+  /// What a pill's colour is darkened by where its time has run out.
+  static const pillSpent = 0.47;
+  static const superChatFallback = Color(0xFF2A60B2);
+  static const superChatHeaderFallback = Color(0xFFEDF5FF);
+
+  /// The chat: from the box (or the strip) down to 15 above the bottom bar, 12 to 330 across; a 40 pt fade at its top.
+  static const chatLeft = 12.0;
+  static const chatRight = 330.0;
+  static const chatBottomGap = 15.0;
+  static const chatFade = 40.0;
+  static const rowGap = 10 / 3;
+
+  /// A row: a capsule at least 25.33 tall, 14 pt words on 20 pt lines 6.33 in, the chips 16 (荣耀) and 15 (medal) tall,
+  /// 3.67 apart, the name 4.67 after them.
+  static const rowMinHeight = 76 / 3;
+  static const rowPadX = 19 / 3;
+  static const rowText = 14.0;
+  static const rowLine = 20.0;
+  static const rowChipGap = 11 / 3;
+  static const rowNameGap = 14 / 3;
+  static const tipInk = Color(0xFFF394AE);
+  static const emoteInline = 20.0;
+  static const emoteBig = 56.0;
+
+  /// 系统提示's card: 14 pt on 18 pt lines, 2.83 above and below, 12.67 corners; the room card's title 14 pt on a 16 pt
+  /// line, its announcement 12 pt on 18 pt lines and the live time 12 pt on 16, 1.67 under the last.
+  static const cardRadius = 38 / 3;
+  static const cardPadY = 2.83;
+  static const cardLine = 18.0;
+  static const roomTitleLine = 16.0;
+  static const roomTextSize = 12.0;
+  static const roomTimeLine = 16.0;
+  static const roomPadBottom = 5 / 3;
+  static const roomTimeInk = Color(0xFFCCCCCC);
+
+  /// A 醒目留言 row (228): a 1 pt border, 6 pt corners, the header band 24 with the medal 8 in and the 电池 5.33 from
+  /// the end, the message band 14 pt on a 25.67 band 10 in.
+  static const scRowBorder = 1.0;
+  static const scRowRadius = 6.0;
+  static const scRowHeader = 24.0;
+  static const scRowBody = 77 / 3;
+  static const scRowHeaderPad = 8.0;
+  static const scRowPriceRight = 16 / 3;
+  static const scRowBodyPad = 10.0;
+  static const scHeaderInk = Color(0xFF333333);
+
+  /// The card over the chat (228): 8 in from both sides, 14 under the strip; the header band 49.67 with the framed
+  /// face's middle 25.83 in and 26.17 down (the face 27 across), the name 14 pt centred 15.67 down 59.67 in, the price
+  /// 36.33 down; ⋮ 24 square centred 18 down 12 from the end; the message band 26 tall, 14 pt 10.67 in.
+  static const cardSide = 8.0;
+  static const cardBelowStrip = 14.0;
+  static const cardHeader = 149 / 3;
+  static const cardBody = 26.0;
+  static const cardCorner = 8.0;
+  static const cardFaceX = 25.83;
+  static const cardFaceY = 26.17;
+  static const cardFace = 27.0;
+  static const cardNameX = 59.67;
+  static const cardNameCentre = 15.67;
+  static const cardPriceCentre = 36.33;
+  static const cardMore = 24.0;
+  static const cardMoreCentre = 18.0;
+  static const cardMoreRight = 12.0;
+  static const cardBodyPad = 32 / 3;
+
+  /// The card and the chat's 醒目留言 rows let 20% of what is under them through.
+  static const cardAlpha = 0.8;
+
+  /// The page under the card, and the card under 229's sheet: black at 50%.
+  static const dim = Color(0x80000000);
+
+  /// 229: rows 48 tall from the sheet's top (12 pt grey 管理本条醒目留言, 14 pt 举报) 20.67 in, an 8 pt band, then
+  /// 取消 16 pt centred in 56 over the home indicator.
+  static const actionFill = Color(0xFF1F2022);
+  static const actionBand = Color(0xFF0F1011);
+  static const actionRow = 48.0;
+  static const actionBandHeight = 8.0;
+  static const actionCancel = 56.0;
+  static const actionLeft = 62 / 3;
+  static const actionRadius = 12.0;
+  static const actionManageText = 12.0;
+  static const actionManageInk = Color(0xFF999999);
+  static const actionText = 14.0;
+  static const actionCancelText = 16.0;
+
+  /// The bottom bar (207, 224): 36 tall, its bottom on the home indicator's inset; ⋯ 36 across from 12 (three 2.67
+  /// dots 7.67 apart); the input from 56 to 329.33, 弹幕支持下～ 15 pt 10.67 in, the emote face 30 across 4 from its
+  /// end; the gift's 36 circle at 335.33, its art 27; the + capsule 47.33 wide to 12.67 from the right, the face 28
+  /// across 4 in.
+  static const barHeight = 36.0;
+  static const barLeft = 12.0;
+  static const barCircle = 36.0;
+  static const barCircleFill = Color(0x24FFFFFF);
+  static const barDot = 8 / 3;
+  static const barDotStep = 23 / 3;
+  static const inputLeft = 56.0;
+  static const inputRight = 988 / 3;
+  static const inputFill = Color(0x38FFFFFF);
+  static const inputText = 15.0;
+  static const inputPad = 32 / 3;
+  static const inputInk = Color(0xFFFFFFFF);
+  static const emoteFace = 30.0;
+  static const emoteFaceFill = Color(0xFFC4C5C8);
+  static const emoteFaceInk = Color(0xFF393D43);
+  static const emoteFaceEnd = 4.0;
+  static const giftLeft = 1006 / 3;
+  static const giftArt = 27.0;
+  static const giftDot = 7.0;
+  static const giftDotInk = Color(0xFFFF5C5C);
+  static const plusRight = 38 / 3;
+  static const plusWidth = 142 / 3;
+  static const plusFill = Color(0xFFE84B85);
+  static const plusFace = 28.0;
+  static const plusFaceInset = 4.0;
+  static const plusArm = 9.0;
+  static const plusStroke = 2.0;
+
+  /// 221: from 662 on the screen to the bottom; 分享 14 pt centred 20.17 down 12.67 in; the targets in 64 wide slots from
+  /// 12, their 44 circles centred 63.67 down and their 12 pt names 102 down; a 1 pt #333 line 130 down; the settings'
+  /// circles centred 172.67 down, names 210 down.
+  static const sheetFill = Color(0xFF110F1A);
+  static const sheetTitleText = 14.0;
+  static const sheetTitleCentre = 20.17;
+  static const sheetTitleLeft = 12.67;
+  static const sheetSlot = 64.0;
+  static const sheetSlotsLeft = 12.0;
+  static const sheetCircle = 44.0;
+  static const sheetShareCentre = 63.67;
+  static const sheetShareLabel = 102.0;
+  static const sheetRuleTop = 130.0;
+  static const sheetRule = 1.0;
+  static const sheetRuleInk = Color(0xFF333333);
+  static const sheetMoreCentre = 172.67;
+  static const sheetMoreLabel = 210.0;
+  static const sheetLabelText = 12.0;
+  static const sheetLabelLine = 16.0;
+  static const sheetLabelInk = Color(0xFFE6E6E6);
+  static const sheetMoreFill = Color(0xFF323232);
+  static const sheetHeight = 294.0;
+  static const sheetDotInk = Color(0xFFFF4D4F);
+  static const sheetDot = 6.0;
+  static const boostIconWidth = 16.0;
+  static const boostIconHeight = 20.0;
+  static const glyphStroke = 1.6;
+  static const facebookFill = Color(0xFF0079F8);
+  static const xFill = Color(0xFF000000);
+  static const whatsAppFill = Color(0xFF25D366);
+  static const brandMark = Color(0xFFFFFFFF);
+
+  /// 荣耀等级's chip (207): 16 tall, the V 8.33 × 7.33 6 in, the level bold 10.5 6.33 after it, 7 to the end; deeper
+  /// blues from levels 10 and 20.
+  static const wealthHeight = 16.0;
+  static const wealthPadLeft = 6.0;
+  static const wealthV = 25 / 3;
+  static const wealthVHeight = 22 / 3;
+  static const wealthGap = 19 / 3;
+  static const wealthPadRight = 7.0;
+  static const wealthText = 10.5;
+  static const wealthFills = [Color(0xFF3F547B), Color(0xFF3A5387), Color(0xFF35508F)];
+  static const wealthVTop = Color(0xFFE2F0FF);
+  static const wealthVBottom = Color(0xFF9DB8EC);
+
+  /// A medal chip: 15 tall, 9 pt bold words 4.33 / 3.67 from its ends, the level 2 after the name; the guard's anchor
+  /// 17 across over its left end.
+  static const medalHeight = 15.0;
+  static const medalText = 9.0;
+  static const medalPadLeft = 13 / 3;
+  static const medalPadRight = 11 / 3;
+  static const medalLevelGap = 2.0;
+  static const medalFill = Color(0xFF2E759E);
+  static const medalUnlit = Color(0xFF8C8C8C);
+  static const medalGuard = 17.0;
+
+  /// A guard frame's hole is 0.7 of the frame's width (the APK's 200 px frames, 140 px hole).
+  static const guardFrameScale = 1 / 0.7;
+
+  /// A frame from the server, drawn around the face.
+  static const serverFrameScale = 1.4;
+}
 
 /// The live player's box and full screen (209, 210, 222).
 abstract final class LivePlayerTheme {}
