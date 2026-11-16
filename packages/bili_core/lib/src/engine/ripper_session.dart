@@ -436,7 +436,9 @@ final class RipperSession {
   void updatePlayhead({required double seconds, required double rate}) {
     _playhead = seconds;
     _rate = rate > 0 ? rate : 1;
+    if (!_idle) _lastPlayed = ++_playOrder;
     _cache.removeWhere((_, entry) => entry.endTime < seconds - _ctx.config.keepBehindSeconds);
+    if (_idle) _trimAround(_idleAheadSeconds, prefetches: false);
     if (_retains) _trimKept();
   }
 
@@ -481,6 +483,11 @@ final class RipperSession {
   /// every prime, hint and prefetch still downloading go; the player's own reads go on. A reader that took a
   /// prefetch over doesn't hand it back.
   void dropPrefetch() {
+    final (:dropped, :cancelled) = _dropAll();
+    _ctx.logger.info(LogCategory.engine, 'prefetch dropped', {'droppedBytes': dropped, 'cancelled': cancelled});
+  }
+
+  ({int dropped, int cancelled}) _dropAll() {
     var dropped = 0;
     for (final entry in _cache.values) {
       dropped += entry.bytes.length;
@@ -497,28 +504,62 @@ final class RipperSession {
       dropped += prefetch.received;
       prefetch.token.cancel();
     }
-    _ctx.logger.info(LogCategory.engine, 'prefetch dropped', {'droppedBytes': dropped, 'cancelled': prefetches.length});
+    return (dropped: dropped, cancelled: prefetches.length);
   }
 
   /// Set by [setIdle]: the card is paused or the page covered.
   bool get idle => _idle;
   bool _idle = false;
 
-  /// [PlaybackEngine.setIdle] for this session.
+  /// When the session last played or stopped playing, as an order across sessions: [EngineBudget] sheds the idle
+  /// session with the lowest first.
+  int get lastPlayed => _lastPlayed;
+  int _lastPlayed = ++_playOrder;
+  static var _playOrder = 0;
+
+  /// [PlaybackEngine.setIdle] for this session. Idle, it keeps [_trimBehindSeconds] behind and [_idleAheadSeconds]
+  /// ahead of the playhead, at once and after every read, and prefetches nothing past that; back in use, the next
+  /// prefetch reaches as far as before.
   void setIdle(bool idle) {
+    if (_closed || idle == _idle) return;
     _idle = idle;
+    _lastPlayed = ++_playOrder;
+    if (!idle) return;
+    final (:kept, :dropped) = _trimAround(_idleAheadSeconds);
+    _ctx.logger.info(LogCategory.engine, 'idle trimmed', {'keptBytes': kept, 'droppedBytes': dropped});
   }
 
   static const _trimBehindSeconds = 5.0;
+  static const _idleAheadSeconds = 10.0;
+
+  /// What the session holds: its cache, the back buffer included, and what its prefetches have received so far.
+  int get heldBytes {
+    var bytes = 0;
+    for (final entry in _cache.values) {
+      bytes += entry.bytes.length;
+    }
+    for (final prefetch in _inflight.values) {
+      bytes += prefetch.received;
+    }
+    return bytes;
+  }
 
   void _trimCache() {
     // Not scaled by the rate: at 2x on 8K that would keep about 100 MB after the warning.
-    final ahead = _ctx.config.hurryAheadSeconds;
-    bool near(double start, double end) => end >= _playhead - _trimBehindSeconds && start <= _playhead + ahead;
+    final (:kept, :dropped) = _trimAround(_ctx.config.hurryAheadSeconds);
+    _ctx.logger.info(LogCategory.engine, 'cache trimmed', {'keptBytes': kept, 'droppedBytes': dropped});
+  }
+
+  bool _near(double start, double end, double ahead) =>
+      end >= _playhead - _trimBehindSeconds && start <= _playhead + ahead;
+
+  /// Without [prefetches], downloads are left alone: a hint or a seek's prime can be far from a playhead that
+  /// hasn't caught up yet.
+  ({int kept, int dropped}) _trimAround(double ahead, {bool prefetches = true}) {
     var kept = 0;
     var dropped = 0;
     _cache.removeWhere((key, entry) {
-      final drop = !near(entry.startTime, entry.endTime);
+      final drop = !_near(entry.startTime, entry.endTime, ahead);
       if (drop) {
         dropped += entry.bytes.length;
       } else {
@@ -526,15 +567,35 @@ final class RipperSession {
       }
       return drop;
     });
+    if (!prefetches) return (kept: kept, dropped: dropped);
     for (final key in _inflight.keys.toList()) {
       final segment = _segmentFor(key);
-      if (segment != null && near(segment.startTime, segment.endTime)) continue;
+      if (segment != null && _near(segment.startTime, segment.endTime, ahead)) continue;
       final prefetch = _inflight.remove(key);
       if (prefetch == null) continue;
       dropped += prefetch.received;
       prefetch.token.cancel();
     }
-    _ctx.logger.info(LogCategory.engine, 'cache trimmed', {'keptBytes': kept, 'droppedBytes': dropped});
+    return (kept: kept, dropped: dropped);
+  }
+
+  /// [EngineBudget]'s last step for a session in use: segments the player read outside the idle window, furthest
+  /// from the playhead first, until [excess] is freed. Its prefetch stays.
+  int _shedBackBuffer(int excess) {
+    final kept = [
+      for (final MapEntry(:key, :value) in _cache.entries)
+        if (value.served && !_near(value.startTime, value.endTime, _idleAheadSeconds)) (key: key, entry: value),
+    ];
+    double distance(_CacheEntry entry) =>
+        entry.endTime < _playhead ? _playhead - entry.endTime : max(0.0, entry.startTime - _playhead);
+    kept.sort((a, b) => distance(b.entry).compareTo(distance(a.entry)));
+    var freed = 0;
+    for (final item in kept) {
+      if (freed >= excess) break;
+      _cache.remove(item.key);
+      freed += item.entry.bytes.length;
+    }
+    return freed;
   }
 
   EngineSnapshot stats({double downloadBps = 0, String transport = '', String? token}) => _ctx.stats.snapshot(
@@ -946,7 +1007,7 @@ final class RipperSession {
     return (rate * ahead * 1.25).round().clamp(fixed, max(fixed, ceiling));
   }
 
-  /// Nothing while warm: the video may never be opened.
+  /// Nothing while warm: the video may never be opened; while idle, nothing past [_idleAheadSeconds].
   void _schedulePrefetch(TrackKind track, MediaSegment? segment) {
     final resolver = _resolvers[track];
     if (segment == null || resolver == null || _closed || _warm) return;
@@ -957,7 +1018,7 @@ final class RipperSession {
     final segments = _segments[track];
     final position = _segmentAt[track]?[segment.range.start];
     if (segments == null || position == null) return;
-    final ahead = _lookAhead();
+    final ahead = _idle ? min(_lookAhead(), _idleAheadSeconds) : _lookAhead();
     final total = _headers[track]?.totalSize;
     var budget = _prefetchCap(track, ahead) - _prefetchedBytes(track);
     for (final next in segments.skip(position + 1)) {
@@ -1096,6 +1157,7 @@ final class RipperSession {
   void _keep(_Key key, Uint8List bytes, MediaSegment segment) {
     _cache[key] = _CacheEntry(bytes, segment.endTime, startTime: segment.startTime, served: true);
     _trimKept();
+    if (_idle) _trimAround(_idleAheadSeconds, prefetches: false);
   }
 
   /// Each track keeps at most [RipperConfig.keepBehindBytes] of segments the player read, dropping those furthest
@@ -1141,4 +1203,69 @@ final class RipperSession {
   bool hinting(TrackKind track, ByteRange range) => _inflight[(track, range)]?.kind == _FetchKind.hint;
   bool priming(TrackKind track, ByteRange range) => _inflight[(track, range)]?.kind == _FetchKind.prime;
   EngineContext get context => _ctx;
+}
+
+/// What one engine's sessions hold together ([RipperSession.heldBytes]) stays under [bytes]. Over it, idle sessions
+/// give theirs up least recently played first, back to their window and then all of it, and after them the sessions
+/// in use their back buffer outside the window. Prefetch ahead of a session in use is never touched.
+final class EngineBudget {
+  EngineBudget({this.bytes = defaultBytes, Logger? logger}) : _logger = logger ?? Logger.shared;
+
+  static const defaultBytes = 128 << 20;
+
+  final int bytes;
+  final Logger _logger;
+
+  /// A shed goes down to three quarters, so sessions held at the edge don't shed on every check.
+  int get _target => bytes * 3 ~/ 4;
+
+  /// A shed was logged and the sessions have stayed over since (a playing 8K prefetch alone can be): the sheds that
+  /// follow aren't logged again.
+  bool _quiet = false;
+
+  /// Returns the bytes shed.
+  int check(Iterable<RipperSession> sessions) {
+    final open = [
+      for (final session in sessions)
+        if (!session.isClosed) session,
+    ];
+    final before = open.fold(0, (sum, session) => sum + session.heldBytes);
+    if (before <= bytes) {
+      _quiet = false;
+      return 0;
+    }
+    var held = before;
+    final touched = <RipperSession>{};
+    void shed(RipperSession session, int Function() step) {
+      if (held <= _target) return;
+      final freed = step();
+      if (freed <= 0) return;
+      held -= freed;
+      touched.add(session);
+    }
+
+    int byLastPlayed(RipperSession a, RipperSession b) => a.lastPlayed.compareTo(b.lastPlayed);
+    final idle = open.where((session) => session.idle).toList()..sort(byLastPlayed);
+    for (final session in idle) {
+      shed(session, () => session._trimAround(RipperSession._idleAheadSeconds).dropped);
+    }
+    for (final session in idle) {
+      shed(session, () => session._dropAll().dropped);
+    }
+    final inUse = open.where((session) => !session.idle).toList()..sort(byLastPlayed);
+    for (final session in inUse) {
+      shed(session, () => session._shedBackBuffer(held - _target));
+    }
+    if (touched.isNotEmpty && !_quiet) {
+      _logger.info(LogCategory.engine, 'engine budget shed', {
+        'beforeBytes': before,
+        'afterBytes': held,
+        'sessions': touched.length,
+        'idle': touched.where((session) => session.idle).length,
+        'budgetBytes': bytes,
+      });
+    }
+    _quiet = held > bytes && (_quiet || touched.isNotEmpty);
+    return before - held;
+  }
 }
