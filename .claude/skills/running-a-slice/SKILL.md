@@ -19,7 +19,17 @@ pt portrait, 956×440 landscape). KaiC wants the layout identical to them, and t
 PiliPlus gives APIs, behaviour and assets, never layout. `local/` is
 gitignored: never copy, commit or embed them. For every icon or picture the slice draws, look in the official APK
 first (`uv run tools/apk_asset.py find <words>`, CLAUDE.md's Art rule), then PiliPlus's assets, before planning to
-draw one; extract them into the shared pieces. Show one screen:
+draw one; extract them into the shared pieces.
+
+Rename every screenshot or recording KaiC adds, unasked, the moment you first open it (here and at any later point
+of the slice), to the format of its folder's other files: lowercase, hyphens, the extension as it came.
+- `local/official-app-reference/iphone/` and `ipad/`: the next free number in that folder, then what it shows
+  (`100-watch-later-empty.png`).
+- `local/differences/`: the next free number, `official` or `ours`, then what it shows; an official and ours pair
+  share one number (`26-official-reload-violet.PNG`, `26-ours-reload-violet.PNG`). A clip of a bug he says is fixed
+  ends in `-fixed`.
+
+Refer to them by the new name from then on, and list the renames in your reply. Show one screen:
 
 1. **Done:** the numbered phone test steps.
 2. **Shared pieces** Claude commits first (step 2).
