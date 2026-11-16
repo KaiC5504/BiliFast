@@ -27,7 +27,7 @@ BiliFast 是一个从零开始写的第三方 B 站客户端，用 Flutter 开�
 需要 iOS / iPadOS 26 及以上。
 
 > [!NOTE]
-> TestFlight 公开测试被苹果拒了 😭 第三方 B 站客户端过不了审，目前只能自签安装 IPA。
+> TestFlight 公开测试被苹果拒了，第三方 B 站客户端过不了审，目前只能自签安装 IPA。
 
 到 [Releases](https://github.com/KaiC5504/BiliFast/releases) 下载最新的 IPA，任选一种方式安装：
 
