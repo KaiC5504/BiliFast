@@ -377,7 +377,12 @@ class _LiveRoomPageState extends State<LiveRoomPage> with RouteAware {
         landscape: true,
       ),
       LiveOverlay.rank => LiveRankSheet(room: _model, overlays: _overlays, landscape: true),
-      LiveOverlay.send => LiveSendInput(room: _model, overlays: _overlays, landscape: true),
+      LiveOverlay.send => LiveSendInput(
+        room: _model,
+        overlays: _overlays,
+        landscape: true,
+        startOnEmotes: _overlays.sendOnEmotes,
+      ),
       LiveOverlay.superChat || LiveOverlay.none => null,
     };
     if (_overlays.value == LiveOverlay.superChat) {
@@ -451,12 +456,16 @@ class _LiveRoomPageState extends State<LiveRoomPage> with RouteAware {
                 top: boxTop,
                 width: width,
                 height: boxBottom - boxTop,
-                child: LivePlayerView(
-                  controller: _controller,
-                  room: _model,
-                  overlays: _overlays,
-                  fullScreen: false,
-                  onBack: _back,
+                // The box (its picture, controls and flying danmaku) and the chat change at their own pace; each keeps
+                // its own layer so neither repaints the other or the header.
+                child: RepaintBoundary(
+                  child: LivePlayerView(
+                    controller: _controller,
+                    room: _model,
+                    overlays: _overlays,
+                    fullScreen: false,
+                    onBack: _back,
+                  ),
                 ),
               ),
               Positioned(
@@ -464,7 +473,7 @@ class _LiveRoomPageState extends State<LiveRoomPage> with RouteAware {
                 right: 0,
                 top: chatTop,
                 bottom: padding.bottom + LiveRoomTheme.barHeight + LiveRoomTheme.chatBottomGap,
-                child: RoomChatList(chat: _model.chat, now: _model.now),
+                child: RepaintBoundary(child: RoomChatList(chat: _model.chat, now: _model.now)),
               ),
               Positioned(
                 left: 0,
@@ -539,7 +548,12 @@ class _LiveRoomPageState extends State<LiveRoomPage> with RouteAware {
       landscape: false,
     ),
     LiveOverlay.rank => LiveRankSheet(room: _model, overlays: _overlays, landscape: false),
-    LiveOverlay.send => LiveSendInput(room: _model, overlays: _overlays, landscape: false),
+    LiveOverlay.send => LiveSendInput(
+      room: _model,
+      overlays: _overlays,
+      landscape: false,
+      startOnEmotes: _overlays.sendOnEmotes,
+    ),
     LiveOverlay.superChat || LiveOverlay.none => null,
   };
 

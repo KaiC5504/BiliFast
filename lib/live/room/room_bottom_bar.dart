@@ -1,9 +1,7 @@
 import 'package:flutter/widgets.dart';
 
-import '../../app/app_scope.dart';
 import '../../shared/theme.dart';
 import '../live_badges.dart';
-import '../live_login.dart';
 import 'live_overlays.dart';
 import 'room_actions.dart';
 import 'room_glyphs.dart';
@@ -18,13 +16,7 @@ class RoomBottomBar extends StatelessWidget {
   /// The viewer's face for the + capsule; empty for the default one.
   final String ownFace;
 
-  Future<void> _openSend(BuildContext context) async {
-    if (roomLoggedOut(AppScope.of(context))) {
-      await requestLiveLogin(context);
-      return;
-    }
-    overlays.open(LiveOverlay.send);
-  }
+  Future<void> _openSend(BuildContext context) => openRoomSend(context, overlays);
 
   @override
   Widget build(BuildContext context) {

@@ -99,6 +99,7 @@ PNGs by `tools/apk_asset.py` and cut to their ink:
 | `tab_cover_switch.png`, `tab_areas.png` | `ic_live_home_tab_cover`, `live_home_tab_edit` |
 | `player_pause.png`, `player_play.png`, `player_refresh.png` | `live_ic_player_pause`, `live_ic_player_play`, `live_ic_player_refresh` |
 | `player_danmaku_on.png`, `player_danmaku_off.png` | `live_ic_danmu_open`, `live_ic_danmu_close` |
+| `player_danmaku_settings.png` | `icon_live_player_danmu_setting` |
 | `player_watch_movies.png`, `player_full_screen.png` | `live_ic_watch_movies_open`, `live_ic_player_toggle_zoom_v2` |
 | `player_share.png`, `player_gift.png` | `ic_live_menu_share`, `ic_gift_icon_static` |
 | `player_more_share.png`, `player_more_pip.png` | `ic_live_setting_share`, `ic_live_small_window` |

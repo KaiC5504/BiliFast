@@ -14,8 +14,11 @@ import 'package:bilifast/live/room/room_header.dart';
 import 'package:bilifast/live/room/room_more_sheet.dart';
 import 'package:bilifast/live/room/superchat/room_superchat.dart';
 import 'package:bilifast/shared/theme.dart';
+import 'package:bilifast/live/danmaku/live_danmaku_layer.dart';
+import 'package:bilifast/live/room/live_chat_item.dart';
 import 'package:flutter/foundation.dart' show ValueListenable;
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart' show debugOnProfilePaint;
 import 'package:flutter_test/flutter_test.dart';
 
 import '../../home/fake_login_gate.dart';
@@ -336,6 +339,46 @@ void main() {
     harness.navigator.currentState!.pop();
     await settle(tester);
     expect(toast('直播已结束'), findsNothing, reason: 'that end was already said');
+  });
+
+  testWidgets('flying danmaku repaint their own layer only; with nothing flying its ticker sleeps', (tester) async {
+    final model = TestRoomModel(info: roomInfo());
+    model.chatList.value = const [LiveChatNotice('测试公告行')];
+    await pumpRoom(tester, await roomServices(gate: gate), model: model);
+    final layer = tester.state<LiveDanmakuLayerState>(find.byType(LiveDanmakuLayer));
+    expect(layer.ticking, isFalse);
+
+    final watched = {
+      tester.renderObject(find.textContaining('测试公告行')),
+      tester.renderObject(find.text('测试主播')),
+      tester.renderObject(find.text('9349')),
+    };
+    final danmaku = tester.renderObject(
+      find.descendant(of: find.byType(LiveDanmakuLayer), matching: find.byType(CustomPaint)).last,
+    );
+    var paints = 0;
+    var flights = 0;
+    debugOnProfilePaint = (painted) {
+      if (watched.contains(painted)) paints++;
+      if (identical(painted, danmaku)) flights++;
+    };
+    try {
+      model.flyingFeed.add(
+        LiveChatMessage(id: 'fly', user: roomUser(1), text: '飞过的弹幕', time: roomNow),
+      );
+      await tester.pump();
+      for (var i = 0; i < 30; i++) {
+        await tester.pump(const Duration(milliseconds: 16));
+      }
+      expect(layer.ticking, isTrue);
+      expect(flights, greaterThan(20), reason: 'the layer itself paints every frame');
+      expect(paints, 0, reason: 'the chat, the header and the count were not painted again');
+    } finally {
+      debugOnProfilePaint = null;
+    }
+    await tester.pump(const Duration(seconds: 20));
+    await tester.pump();
+    expect(layer.ticking, isFalse, reason: 'nothing left flying');
   });
 
   testWidgets('a room already ended when opened toasts nothing', (tester) async {

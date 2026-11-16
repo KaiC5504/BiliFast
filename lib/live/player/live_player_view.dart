@@ -359,6 +359,8 @@ abstract final class LivePlayerAssets {
   static const refresh = '$_folder/player_refresh.png';
   static const danmakuOn = '$_folder/player_danmaku_on.png';
   static const danmakuOff = '$_folder/player_danmaku_off.png';
+  static const danmakuSettings = '$_folder/player_danmaku_settings.png';
+  static const translate = '$_folder/send_translate.png';
   static const watchMovies = '$_folder/player_watch_movies.png';
   static const fullScreen = '$_folder/player_full_screen.png';
   static const share = '$_folder/player_share.png';

@@ -82,6 +82,9 @@ class TestRoomModel extends LiveRoomModel {
   final chatList = ValueNotifier<List<LiveChatItem>>(const []);
   final superChatList = ValueNotifier<List<LiveSuperChat>>(const []);
 
+  /// Danmaku for the flying layer only, with no chat row.
+  final flyingFeed = StreamController<LiveChatMessage>.broadcast();
+
   final shown = <bool>[];
   final follows = <bool>[];
   int starts = 0;
@@ -114,6 +117,9 @@ class TestRoomModel extends LiveRoomModel {
   ValueListenable<List<LiveSuperChat>> get superChats => superChatList;
 
   @override
+  Stream<LiveChatMessage> get flying => flyingFeed.stream;
+
+  @override
   Future<void> start() async => starts++;
 
   @override
@@ -131,6 +137,7 @@ class TestRoomModel extends LiveRoomModel {
   void dispose() {
     chatList.dispose();
     superChatList.dispose();
+    unawaited(flyingFeed.close());
     super.dispose();
   }
 }

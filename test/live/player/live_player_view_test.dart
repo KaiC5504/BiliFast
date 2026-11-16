@@ -230,6 +230,66 @@ void main() {
       await finish(tester, out);
     });
 
+    testWidgets("弹 on lays 235's row: 弹幕设置, the 原画 badge, the 弹幕 capsule and 人气; 弹 off, 209's", (tester) async {
+      final rig = await liveRig();
+      rig.controller.setDanmakuOn(true);
+      final overlays = await show(tester, rig, landscape: true);
+      await tester.pump(const Duration(seconds: 3));
+
+      expect(tester.getCenter(_key('live-danmaku-settings')).dx, closeTo(62 + 361 / 3 + 48, 0.01));
+      expect(tester.getCenter(_key('live-watch')).dx, closeTo(62 + 233.5 + 48, 0.01));
+      final quality = tester.getRect(find.text('1080P'));
+      expect(quality.left, closeTo(62 + 472 / 3 + 48, 0.01));
+      final badge = tester.getRect(_key('live-quality-badge'));
+      expect(badge.center.dx, closeTo(quality.right, 0.01));
+      expect(badge.center.dy, closeTo(440 - 55 - 18, 1));
+      expect(badge.width, closeTo(68 / 3, 0.01));
+      expect(badge.height, closeTo(35 / 3, 0.01));
+
+      final capsule = tester.getRect(_key('live-full-capsule'));
+      expect(capsule.left, closeTo(62 + 965 / 3, 0.01));
+      expect(capsule.right, closeTo(956 - 62 - 442 / 3, 0.01));
+      expect(capsule.height, 36);
+      expect(capsule.center.dy, closeTo(440 - 166 / 3, 0.01));
+      expect(find.descendant(of: _key('live-full-capsule'), matching: find.text('弹幕支持下～')), findsOneWidget);
+      expect(tester.getCenter(_key('live-popularity')).dx, closeTo(894 - 445 / 6 - 43, 0.01));
+
+      await _tapToast(tester, 'live-full-translate', '暂未开放');
+      await _tapToast(tester, 'live-popularity', '暂未开放');
+
+      await tester.tap(_key('live-danmaku-settings'));
+      await tester.pump();
+      expect(overlays.value, LiveOverlay.danmakuSettings);
+      overlays.close();
+      await tester.pump();
+      await tester.tap(find.byKey(const ValueKey('live-full-gestures')), warnIfMissed: false);
+      await tester.pump(const Duration(milliseconds: 400));
+
+      await tester.tap(_key('live-full-send'));
+      await tester.pump();
+      expect((overlays.value, overlays.sendOnEmotes), (LiveOverlay.send, false));
+      overlays.close();
+      await tester.pump();
+      await tester.tap(find.byKey(const ValueKey('live-full-gestures')), warnIfMissed: false);
+      await tester.pump(const Duration(milliseconds: 400));
+
+      await tester.tap(_key('live-full-emote'));
+      await tester.pump();
+      expect((overlays.value, overlays.sendOnEmotes), (LiveOverlay.send, true));
+      overlays.close();
+      await tester.pump();
+      await tester.tap(find.byKey(const ValueKey('live-full-gestures')), warnIfMissed: false);
+      await tester.pump(const Duration(milliseconds: 400));
+
+      await tester.tap(_key('live-danmaku'));
+      await tester.pump();
+      for (final gone in ['live-danmaku-settings', 'live-full-capsule', 'live-popularity']) {
+        expect(_key(gone), findsNothing, reason: gone);
+      }
+      expect(tester.getCenter(_key('live-watch')).dx, closeTo(62 + 233.5, 0.01));
+      await finish(tester, rig);
+    });
+
     testWidgets('every control does its job, the rest toast 暂未开放', (tester) async {
       final rig = await liveRig();
       var backs = 0;
