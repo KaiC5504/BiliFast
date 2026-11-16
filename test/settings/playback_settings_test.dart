@@ -110,6 +110,30 @@ void main() {
       expect(checkOf('home-feed-sound-muted'), findsOneWidget);
     });
 
+    testWidgets('每次刷新数量 starts at 约7条, moves the ✓ and saves each choice', (tester) async {
+      await open(tester);
+      final sections = [
+        tester.getRect(find.text('大卡默认声音（重启后生效）')).top,
+        tester.getRect(find.text('每次刷新数量')).top,
+        tester.getRect(find.text('首页推荐自动刷新')).top,
+      ];
+      expect(sections, orderedEquals([...sections]..sort()), reason: 'between 大卡默认声音 and 首页推荐自动刷新');
+      for (final size in FeedRefreshSize.values) {
+        expect(find.descendant(of: row('home-feed-refresh-size-${size.name}'), matching: find.text(size.label)),
+            findsOneWidget);
+      }
+      expect(checkOf('home-feed-refresh-size-one'), findsOneWidget);
+      for (final size in [FeedRefreshSize.three, FeedRefreshSize.two, FeedRefreshSize.one, FeedRefreshSize.three]) {
+        await tap(tester, 'home-feed-refresh-size-${size.name}');
+        expect(prefs.feedRefreshSize, size);
+        for (final other in FeedRefreshSize.values) {
+          expect(checkOf('home-feed-refresh-size-${other.name}'), other == size ? findsOneWidget : findsNothing);
+        }
+      }
+      expect(toast, findsNothing);
+      expect(prefs.toJson()['feedRefreshSize'], 'three', reason: 'what the file keeps');
+    });
+
     testWidgets('自动模式 and 关闭 are what 首页 does; 竖屏模式, 开启 and 首页单双列切换 toast and change nothing', (tester) async {
       await open(tester);
       expect(checkOf('home-feed-mode-auto'), findsOneWidget);
@@ -309,6 +333,9 @@ void main() {
     tester.semantics.tap(find.semantics.byLabel('默认打开'));
     await tester.pumpAndSettle();
     expect(prefs.bigCardSound, isTrue);
+    tester.semantics.tap(find.semantics.byLabel('约14条'));
+    await tester.pumpAndSettle();
+    expect(prefs.feedRefreshSize, FeedRefreshSize.two);
     tester.semantics.tap(find.semantics.byLabel('返回').last);
     await tester.pumpAndSettle();
 

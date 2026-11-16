@@ -260,7 +260,6 @@ class FeedModel extends ChangeNotifier {
   final Duration _minimumRefresh;
 
   /// 每次刷新数量: the official feed's pages one refresh shows, page 1 included.
-  // ignore: unused_field
   final int Function() _refreshPages;
 
   /// Answers the website's pages in place of the client: tests whose cards the web feed can't send (the big card).
@@ -343,6 +342,10 @@ class FeedModel extends ChangeNotifier {
   /// refresh drops it. With cards on screen, a page that comes sooner than [minimumRefresh] waits out the rest before
   /// it shows, counted for a held pull from when it armed, so a long hold still shows the page at the release; a
   /// failure doesn't wait.
+  ///
+  /// With 每次刷新数量 above one page, an official page 1 is followed by the next pages one at a time, after the
+  /// refresh has come back (its TV is gone): their new cards join [newest], above 刚刚看到这里, and [loading] holds
+  /// until they are in, so load more asks nothing meanwhile.
   Future<String?> refresh({bool pulled = false, bool replace = false}) async {
     final early = pulled ? _joinable() : null;
     _early = null;
@@ -354,6 +357,7 @@ class FeedModel extends ChangeNotifier {
     _notify();
     final heldMs = early == null ? null : _now().difference(early.started).inMilliseconds;
     String? failure;
+    var extra = 0;
     try {
       final page = await (early?.page ?? _fetch(refresh: true));
       if (_disposed || mine != _generation) return null;
@@ -381,18 +385,58 @@ class FeedModel extends ChangeNotifier {
         _dislikes.clear();
         _error = null;
         _exhausted = false;
+        // The website's page is 12 already.
+        if (page.source == FeedSource.official) extra = math.max(_refreshPages() - 1, 0);
       }
     } catch (error) {
       if (_disposed || mine != _generation) return null;
       _logger.warn(LogCategory.ui, 'feed refresh failed', feedLogFields(error));
       failure = requestFailureMessage(error);
     }
-    _loading = false;
+    _loading = extra > 0;
     final kept = _cards.isNotEmpty;
     if (failure != null && !kept) _error = failure;
     _notify();
+    if (extra > 0) unawaited(_extend(mine, extra));
     return kept ? failure : null;
   }
+
+  /// A refresh's [pages] past page 1, asked one after another as load more asks them, each counted whether it adds
+  /// anything or not. Their new cards go in under [newest] and over the cards kept from before. A failure, a refresh
+  /// since or dispose ends them, logged only: page 1 is shown already.
+  Future<void> _extend(int mine, int pages) async {
+    var asked = 0;
+    try {
+      while (asked < pages) {
+        asked++;
+        final page = await _fetch(refresh: false);
+        if (_disposed || mine != _generation) return _stopped();
+        final added = _appending(page.cards, _cards).sublist(_cards.length);
+        final top = _newest.length;
+        _newest = [..._newest, ...added];
+        final cards = [..._cards.take(top), ...added, ..._cards.skip(top)];
+        _cards = cards.length > keptCards ? cards.take(math.max(keptCards, _newest.length)).toList() : cards;
+        _dividerAt = _cards.length > _newest.length ? _newest.length : null;
+        _advance(page);
+        _source = page.source;
+        _logPage(page, added.length);
+        _notify();
+        // The token was refused on the way: the rest of this scroll is the website's, and so is its page size.
+        if (page.source == FeedSource.web) break;
+      }
+    } catch (error) {
+      if (_disposed || mine != _generation) return _stopped();
+      _logger.warn(LogCategory.ui, 'feed extra page failed', {...feedLogFields(error), 'page': asked + 1});
+    } finally {
+      if (!_disposed && mine == _generation) {
+        _loading = false;
+        _notify();
+      }
+    }
+  }
+
+  void _stopped() =>
+      _logger.info(LogCategory.ui, 'feed extra pages stopped', {'why': _disposed ? 'disposed' : 'refresh'});
 
   Future<void> loadMore() async {
     if (_loading) return;

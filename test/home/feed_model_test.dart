@@ -1531,4 +1531,238 @@ void main() {
       expect(bvids(feed).last, 'BVa${FeedModel.keptCards - page - 1}');
     });
   });
+
+  group('每次刷新数量', () {
+    late BiliClient client;
+    var pages = 3;
+
+    FeedModel feed() {
+      pages = 3;
+      client = BiliClient(transport: http, cookies: CookieJar(Canned.cookies), logger: Logger(session: 'test'))
+        ..appToken = fakeAppToken;
+      return FeedModel(
+        client: client,
+        logger: Logger(session: 'test')..add(logs),
+        officialWanted: () => true,
+        refreshPages: () => pages,
+        minimumRefresh: Duration.zero,
+      );
+    }
+
+    List<Map<String, Object?>> items(String prefix, int count) => [
+      for (var i = 0; i < count; i++) officialItem('BV$prefix$i'),
+    ];
+
+    /// Lets the extra pages come in, as many event-queue turns as they need.
+    Future<void> settled(FeedModel feed) async {
+      for (var turn = 0; turn < 50 && feed.loading; turn++) {
+        await pumpEventQueue();
+      }
+      expect(feed.loading, isFalse);
+    }
+
+    List<String> newest(FeedModel feed) => [for (final card in feed.newest) card.bvid];
+
+    test('one page shows as before: one call, and the refresh is done when it comes back', () async {
+      http.officialPages[0] = items('a', 2);
+      http.officialPages[1] = items('b', 2);
+      final model = feed();
+      pages = 1;
+      await model.refresh();
+      expect(model.loading, isFalse);
+      await pumpEventQueue();
+      expect(http.officialAsked, [0]);
+      expect(bvids(model), ['BVa0', 'BVa1']);
+    });
+
+    test('three pages: page 1 shows as the refresh comes back, then two more calls one after another, their cards '
+        'under it in order and above 刚刚看到这里', () async {
+      http.officialPages[0] = items('old', 2);
+      final model = feed();
+      pages = 1;
+      await model.refresh();
+      pages = 3;
+      http.officialPages[0] = items('a', 2);
+      http.officialPages[1] = [officialItem('BVa1'), ...items('b', 2), officialItem('BVold0')];
+      http.officialPages[2] = items('c', 2);
+      http.officialGates[1] = Completer<void>();
+      http.officialAsked.clear();
+
+      await model.refresh();
+      expect(bvids(model), ['BVa0', 'BVa1', 'BVold0', 'BVold1'], reason: 'page 1 alone at first');
+      expect(model.dividerAt, 2);
+      expect(model.loading, isTrue, reason: 'the extra pages are still coming');
+      await pumpEventQueue();
+      expect(http.officialAsked, [0, 1], reason: 'one call out at a time');
+
+      http.officialGates[1]!.complete();
+      await settled(model);
+      expect(http.officialAsked, [0, 1, 2]);
+      expect(
+        bvids(model),
+        ['BVa0', 'BVa1', 'BVb0', 'BVb1', 'BVc0', 'BVc1', 'BVold0', 'BVold1'],
+        reason: 'a card already shown is not shown twice',
+      );
+      expect(model.dividerAt, 6);
+      expect(newest(model), ['BVa0', 'BVa1', 'BVb0', 'BVb1', 'BVc0', 'BVc1']);
+      expect(model.error, isNull);
+
+      http.officialPages[3] = items('d', 1);
+      await model.loadMore();
+      expect(http.officialAsked, [0, 1, 2, 3], reason: 'load more goes on from the last extra page');
+      expect(bvids(model).last, 'BVd0');
+      expect(model.dividerAt, 6);
+
+      final logged = [
+        for (final event in logs.events.where((event) => event.msg == 'feed page'))
+          (event.f['index']?.toJson(), event.f['new']?.toJson()),
+      ];
+      expect(logged.sublist(1), [(0, 2), (1, 2), (2, 2), (3, 1)]);
+    });
+
+    test('a page that adds nothing still counts: no more than pages - 1 extra calls', () async {
+      http.officialPages[0] = items('a', 2);
+      http.officialPages[1] = items('a', 2);
+      http.officialPages[2] = [];
+      final model = feed();
+      await model.refresh();
+      await settled(model);
+      expect(http.officialAsked, [0, 1, 2]);
+      expect(bvids(model), ['BVa0', 'BVa1']);
+      expect(model.dividerAt, isNull);
+      expect(model.exhausted, isFalse);
+    });
+
+    test('an extra page that fails keeps page 1, says nothing and asks no more', () async {
+      http.officialPages[0] = items('a', 2);
+      http.officialGates[1] = Completer<void>();
+      final model = feed();
+      expect(await model.refresh(), isNull);
+      http.officialCode = -352;
+      http.officialGates[1]!.complete();
+      await settled(model);
+      expect(http.officialAsked, [0, 1]);
+      expect(bvids(model), ['BVa0', 'BVa1']);
+      expect(model.error, isNull);
+      expect(model.canLoadMore, isTrue);
+      final line = logs.events.singleWhere((event) => event.msg == 'feed extra page failed');
+      expect(line.f['code']?.toJson(), -352);
+      expect(line.f['page']?.toJson(), 2);
+    });
+
+    test("a refresh while extra pages are coming stops the first's: its late page never shows", () async {
+      http.officialPages[0] = items('a', 2);
+      http.officialPages[1] = items('b', 2);
+      http.officialGates[1] = Completer<void>();
+      final model = feed();
+      await model.refresh();
+      await pumpEventQueue();
+      pages = 1;
+      http.officialPages[0] = items('n', 1);
+      await model.refresh();
+      http.officialGates[1]!.complete();
+      await settled(model);
+      await pumpEventQueue();
+      expect(http.officialAsked, [0, 1, 0], reason: 'the first refresh asks nothing after the second starts');
+      expect(bvids(model), ['BVn0', 'BVa0', 'BVa1']);
+      expect(model.dividerAt, 1);
+      expect(newest(model), ['BVn0']);
+      final stopped = logs.events.singleWhere((event) => event.msg == 'feed extra pages stopped');
+      expect(stopped.f['why']?.toJson(), 'refresh');
+    });
+
+    test('disposed while extra pages are coming, nothing more is asked or shown', () async {
+      http.officialPages[0] = items('a', 1);
+      http.officialPages[1] = items('b', 1);
+      http.officialGates[1] = Completer<void>();
+      final model = feed();
+      await model.refresh();
+      await pumpEventQueue();
+      model.dispose();
+      http.officialGates[1]!.complete();
+      await pumpEventQueue();
+      expect(http.officialAsked, [0, 1]);
+      expect(bvids(model), ['BVa0']);
+      final stopped = logs.events.singleWhere((event) => event.msg == 'feed extra pages stopped');
+      expect(stopped.f['why']?.toJson(), 'disposed');
+    });
+
+    test('a refresh read from the website asks no extra pages', () async {
+      http.pages[1] = [feedItem('BVweb1')];
+      http.pages[2] = [feedItem('BVweb2')];
+      final model = feed();
+      client.appToken = null;
+      await model.refresh();
+      await pumpEventQueue();
+      expect(model.source, FeedSource.web);
+      expect(model.loading, isFalse);
+      expect(http.asked, [1]);
+
+      http.officialCode = -101;
+      client.appToken = fakeAppToken;
+      await model.refresh();
+      await pumpEventQueue();
+      expect(model.source, FeedSource.web, reason: 'the token refused: the same load from the website');
+      expect(model.loading, isFalse);
+      expect(http.officialAsked, [0]);
+      expect(http.asked, [1, 1]);
+    });
+
+    test('load more while extra pages are coming asks nothing; once they are in it asks the next', () async {
+      http.officialPages[0] = items('a', 1);
+      http.officialPages[1] = items('b', 1);
+      http.officialPages[2] = items('c', 1);
+      http.officialGates[1] = Completer<void>();
+      final model = feed();
+      await model.refresh();
+      expect(model.canLoadMore, isFalse);
+      await model.loadMore();
+      await pumpEventQueue();
+      expect(http.officialAsked, [0, 1]);
+
+      http.officialGates[1]!.complete();
+      await settled(model);
+      expect(model.canLoadMore, isTrue);
+      expect(http.officialAsked, [0, 1, 2]);
+      http.officialPages[3] = items('d', 1);
+      await model.loadMore();
+      expect(http.officialAsked, [0, 1, 2, 3]);
+      expect(bvids(model), ['BVa0', 'BVb0', 'BVc0', 'BVd0']);
+    });
+
+    test("a held pull's early page is followed by the extra pages too", () async {
+      http.officialPages[0] = items('old', 1);
+      final model = feed();
+      pages = 1;
+      await model.refresh();
+      pages = 2;
+      http.officialPages[0] = items('a', 1);
+      http.officialPages[1] = items('b', 1);
+      model.pullArmed();
+      await pumpEventQueue();
+      await model.refresh(pulled: true);
+      await settled(model);
+      expect(http.officialAsked, [0, 0, 1]);
+      expect(bvids(model), ['BVa0', 'BVb0', 'BVold0']);
+      expect(model.dividerAt, 2);
+    });
+
+    test('at most keptCards stay, the oldest going from the bottom as the extra pages come', () async {
+      const first = FeedModel.keptCards - 10;
+      http.officialPages[0] = items('old', first);
+      final model = feed();
+      pages = 1;
+      await model.refresh();
+      pages = 3;
+      http.officialPages[0] = items('a', 5);
+      http.officialPages[1] = items('b', 10);
+      http.officialPages[2] = items('c', 10);
+      await model.refresh();
+      await settled(model);
+      expect(model.cards, hasLength(FeedModel.keptCards));
+      expect(model.dividerAt, 25);
+      expect(bvids(model)[25], 'BVold0');
+      expect(bvids(model).last, 'BVold${FeedModel.keptCards - 25 - 1}');
+    });
+  });
 }
