@@ -8,6 +8,7 @@ import 'package:bilifast/message/settings/notice_picker_page.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import '../../home/fake_login_gate.dart';
 import 'feed_support.dart';
 
 RelationUser fan(int mid, {int attribute = RelationUser.none}) => RelationUser(
@@ -33,8 +34,14 @@ void main() {
 
   setUp(() => opens = RecordingOpeners());
 
-  Future<AppServices> open(WidgetTester tester, FakeMessageApi api) async {
-    final services = await feedServices(api);
+  Future<AppServices> open(
+    WidgetTester tester,
+    FakeMessageApi api, {
+    bool loggedIn = true,
+    bool checked = true,
+    FakeLoginGate? gate,
+  }) async {
+    final services = await feedServices(api, loggedIn: loggedIn, checked: checked, loginGate: gate);
     await pumpFeed(tester, services, NewFansPage(opens: opens));
     return services;
   }
@@ -107,5 +114,30 @@ void main() {
     await tester.tap(byKey('feed-gear'));
     await settle(tester);
     expect(tester.widget<NoticePickerPage>(find.byType(NoticePickerPage)).kind, NoticeSettingKind.fans);
+  });
+
+  testWidgets('logged out, the gear asks for the login before 消息提醒', (tester) async {
+    final gate = FakeLoginGate();
+    final api = FakeMessageApi(fanList: [fan(1)]);
+    await open(tester, api, loggedIn: false, gate: gate);
+    await tester.tap(byKey('feed-gear'));
+    await settle(tester);
+    expect(gate.requests, 1);
+    expect(find.byType(NoticePickerPage), findsNothing);
+    expect(api.calls, isEmpty);
+  });
+
+  testWidgets('the fans start once the account is known; a failure then waits for 重试', (tester) async {
+    final api = FakeMessageApi(fanList: [fan(1)]);
+    api.failures['newFans'] = const BiliError.http(500);
+    final services = await open(tester, api, checked: false);
+    expect(api.calls, isEmpty, reason: 'the fans need the account\'s mid');
+    await services.environment.refreshAccount();
+    await settle(tester);
+    expect(api.calls, ['newFans page=1']);
+    expect(byKey('feed-fans-failed'), findsOneWidget);
+    await services.environment.refreshAccount();
+    await settle(tester);
+    expect(api.calls, ['newFans page=1']);
   });
 }

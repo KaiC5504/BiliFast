@@ -80,6 +80,53 @@ void main() {
     expect(model.opened, [NoticeFeed.reply]);
   });
 
+  testWidgets('opening clears 回复 and @ after the first frame, so 消息\'s badges outside the route can rebuild', (
+    tester,
+  ) async {
+    final api = FakeMessageApi(counts: const MessageUnread(reply: 2, at: 1, like: 1), replyList: [reply(1)]);
+    final services = await feedServices(api, realMessages: true);
+    final messages = services.messages;
+    await messages.refreshUnread(force: true);
+    expect(messages.unread.reply, 2);
+    await pumpFeed(
+      tester,
+      services,
+      RepliesPage(opens: opens),
+      around: (child) => ListenableBuilder(listenable: messages, builder: (context, _) => child),
+    );
+    expect(tester.takeException(), isNull);
+    expect(messages.unread, const MessageUnread(like: 1));
+  });
+
+  testWidgets('a first page refused by risk control waits for 重试: the account\'s checks ask nothing again', (
+    tester,
+  ) async {
+    final api = FakeMessageApi(replyList: [reply(1)]);
+    api.failures['replies'] = const BiliError.api(code: -352, message: '');
+    final services = await feedServices(api);
+    await pumpFeed(tester, services, RepliesPage(opens: opens));
+    expect(byKey('feed-replies-failed'), findsOneWidget);
+    for (var i = 0; i < 2; i++) {
+      await services.environment.refreshAccount();
+      await settle(tester);
+    }
+    expect(api.calls, ['replies 0'], reason: 'each return to the app checks the account');
+    api.failures.clear();
+    await tester.tap(byKey('feed-replies-retry'));
+    await settle(tester);
+    expect(api.calls, ['replies 0', 'replies 0']);
+    expect(byKey('feed-reply-1'), findsOneWidget);
+  });
+
+  testWidgets('logged out, the gear asks for the login before 消息提醒', (tester) async {
+    final gate = FakeLoginGate();
+    await open(tester, FakeMessageApi(), loggedIn: false, gate: gate);
+    await tester.tap(byKey('feed-gear'));
+    await settle(tester);
+    expect(gate.requests, 1);
+    expect(find.byType(NoticePickerPage), findsNothing);
+  });
+
   testWidgets('@我 with nothing shows the empty picture', (tester) async {
     await open(tester, FakeMessageApi(), mentions: true);
     expect(find.text('这里还什么都没有呢～'), findsOneWidget);

@@ -56,7 +56,8 @@ String? _bvid(Iterable<String> links) {
 }
 
 /// A reply or @ on a video opens its page on the reply's thread; on a 动态 the post, on its comments unless an @ was
-/// in the post itself. The same as NotifyHost.swift's NotifyRoutes.comment for a notification.
+/// in the post itself. Mirrors NotifyHost.swift's NotifyRoutes.comment, plus an @ inside a comment (`business`
+/// reply) opens the comments.
 FeedTarget replyTarget(ReplyNotice notice) {
   final links = [notice.uri, notice.nativeUri];
   final thread = notice.rootId > 0 ? notice.rootId : notice.sourceId;

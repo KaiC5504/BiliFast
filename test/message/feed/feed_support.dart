@@ -88,10 +88,13 @@ class RecordingPageApi extends FakePageApi {
   }
 }
 
-/// The app's services over [api], logged in as Canned's account (mid 12345) or logged out.
+/// The app's services over [api], logged in as Canned's account (mid 12345) or logged out; with [checked] false the
+/// account is still unknown. [realMessages] puts 消息's own model in place of [RecordingMessages].
 Future<AppServices> feedServices(
   FakeMessageApi api, {
   bool loggedIn = true,
+  bool checked = true,
+  bool realMessages = false,
   FakePageApi? page,
   LoginGate? loginGate,
 }) async {
@@ -101,9 +104,13 @@ Future<AppServices> feedServices(
     http: Canned.http(loggedIn: loggedIn),
     logger: logger,
   );
-  await environment.refreshAccount();
+  if (checked) await environment.refreshAccount();
   final playback = AppPlayback(() async => throw UnimplementedError());
   addTearDown(playback.dispose);
+  final messages = realMessages
+      ? MessageModel(api: api, environment: environment, logger: logger)
+      : RecordingMessages(api: api, environment: environment);
+  addTearDown(messages.dispose);
   return AppServices(
     environment: environment,
     playback: playback,
@@ -111,12 +118,19 @@ Future<AppServices> feedServices(
     loginGate: loginGate ?? FakeLoginGate(),
     pageApi: page ?? RecordingPageApi(),
     messageApi: api,
-    messages: RecordingMessages(api: api, environment: environment),
+    messages: messages,
   );
 }
 
-/// The app over [services] with a page that pushes [page] on a tap, at the phone's size unless [sized] is false.
-Future<void> pumpFeed(WidgetTester tester, AppServices services, Widget page, {bool sized = true}) async {
+/// The app over [services] with a page that pushes [page] on a tap, at the phone's size unless [sized] is false;
+/// [around] wraps the navigator, outside every route.
+Future<void> pumpFeed(
+  WidgetTester tester,
+  AppServices services,
+  Widget page, {
+  bool sized = true,
+  Widget Function(Widget child)? around,
+}) async {
   if (sized) {
     tester.view
       ..physicalSize = const Size(440, 956)
@@ -128,7 +142,7 @@ Future<void> pumpFeed(WidgetTester tester, AppServices services, Widget page, {b
       theme: appTheme(),
       builder: (context, child) => RepaintBoundary(
         key: const ValueKey('shot'),
-        child: AppScope(services: services, child: child!),
+        child: AppScope(services: services, child: around?.call(child!) ?? child!),
       ),
       home: Builder(
         builder: (context) => Center(
