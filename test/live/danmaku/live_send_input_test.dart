@@ -5,6 +5,7 @@ import 'package:bilifast/live/danmaku/live_recent_emotes.dart';
 import 'package:bilifast/live/danmaku/live_send_input.dart';
 import 'package:bilifast/live/fake_live_api.dart';
 import 'package:bilifast/live/room/live_overlays.dart';
+import 'package:bilifast/live/room/live_room_model.dart' show LiveNotLoggedIn;
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -190,6 +191,17 @@ void main() {
       await tester.pump();
       expect(harness.loginGate.requests, 1);
       expect(find.text('需要登录'), findsNothing);
+      expect(field(tester).text, '你好');
+    });
+
+    testWidgets("the room's own logged-out refusal goes to the login too", (tester) async {
+      await open(tester);
+      room.failure = const LiveNotLoggedIn();
+      await tester.enterText(byKey('live-send-field'), '你好');
+      await tester.pump();
+      await tester.tap(byKey('live-send-button'));
+      await tester.pump();
+      expect(harness.loginGate.requests, 1);
       expect(field(tester).text, '你好');
     });
 

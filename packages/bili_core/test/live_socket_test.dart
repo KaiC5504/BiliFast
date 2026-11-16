@@ -372,14 +372,20 @@ void main() {
       ]);
     });
 
-    test('eight failures in a row stop it with a final failed; start begins again', () async {
+    test('eight failures in a row stop it with gaveUp; start begins again', () async {
       final harness = Harness();
       harness.server.refuse = true;
       await harness.start();
       await harness.timers.elapse(const Duration(seconds: 1 + 2 + 4 + 8 + 16 + 30 + 30));
       expect(harness.server.attempts, hasLength(LiveSocket.maxAttempts));
       expect(harness.timers.active, 0);
-      expect(harness.states.last, LiveSocketState.failed);
+      expect(harness.states.last, LiveSocketState.gaveUp);
+      expect(harness.states.where((state) => state == LiveSocketState.gaveUp), hasLength(1));
+      expect(
+        harness.states.where((state) => state == LiveSocketState.failed),
+        hasLength(LiveSocket.maxAttempts - 1),
+        reason: 'every loss before the last is retryable',
+      );
       expect(harness.sink.text, contains('live socket gave up'));
       await harness.timers.elapse(const Duration(minutes: 30));
       expect(harness.server.attempts, hasLength(LiveSocket.maxAttempts));
@@ -748,6 +754,40 @@ void main() {
       expect(decode({'cmd': 'SEND_GIFT', 'data': {}}), isNull);
       expect(decode({'data': {}}), isNull);
       expect(() => decode({'cmd': 'WATCHED_CHANGE', 'data': {}}), throwsA(isA<DecodeError>()));
+    });
+
+    test("a command's medal objects read as the calls' do: v2 colours first, then RGB or #hex, then medal_color", () {
+      LiveMedal medalOf(Map<String, Object?> fansMedal) =>
+          (decode({
+                    'cmd': 'INTERACT_WORD',
+                    'data': {'uid': 10007, 'uname': '牌子', 'msg_type': 1, 'fans_medal': fansMedal},
+                  })
+                  as LiveInteractEvent)
+              .user
+              .medal!;
+
+      final v2 = {
+        'medal_name': '新牌',
+        'medal_level': 9,
+        'medal_color_start': 398668,
+        'medal_color_end': 6850801,
+        'medal_color_border': 398668,
+        'v2_medal_color_start': '#4775EFCC',
+        'v2_medal_color_end': '#4775EFCC',
+        'v2_medal_color_border': '#58A1F8FF',
+      };
+      expect((medalOf(v2).colorStart, medalOf(v2).colorEnd, medalOf(v2).border), (0xCC4775EF, 0xCC4775EF, 0xFF58A1F8));
+      final fromCalls = LiveDecode.medal(v2)!;
+      expect(
+        (fromCalls.name, fromCalls.level, fromCalls.colorStart, fromCalls.border),
+        ('新牌', 9, 0xCC4775EF, 0xFF58A1F8),
+      );
+
+      final single = medalOf({'medal_name': '单色', 'medal_level': 3, 'medal_color': 6067854, 'is_lighted': 0});
+      expect((single.colorStart, single.colorEnd, single.border, single.lit), (0xFF5C968E, 0xFF5C968E, 0, false));
+
+      final hex = medalOf({'name': '字串', 'level': 4, 'color_start': '#06154C', 'color_end': '398668'});
+      expect((hex.colorStart, hex.colorEnd), (0xFF06154C, 0xFF06154C));
     });
 
     test('INTERACT_WORD kinds and LIKE_INFO_V3_CLICK', () {

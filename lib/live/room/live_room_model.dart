@@ -54,7 +54,7 @@ class LiveRoomModel extends ChangeNotifier {
 
   static const likeTip = '试试双击点赞，让主播被更多人看到吧～';
 
-  /// The chat's row when the danmaku channel was refused twice in one showing.
+  /// The chat's row when the danmaku channel was refused twice in one showing, or its socket gave up.
   static const channelFailedNotice = '弹幕连接失败，请稍后重试';
 
   static const maxRows = 500;
@@ -152,8 +152,9 @@ class LiveRoomModel extends ChangeNotifier {
   Stream<Object> get writeFailures => _writeFailures.stream;
   final _writeFailures = StreamController<Object>.broadcast();
 
-  /// Rises by one each time the room ends: not live when opened, or PREPARING while watched. Each rise is one
-  /// 直播已结束; a listener that comes later sees a count above 0 for an end it missed.
+  /// Rises by one each time the room ends while watched (PREPARING, or a fresh play info saying so). Each rise is one
+  /// 直播已结束 toast; a room not live when opened shows its ended cover and doesn't rise. A listener that comes later
+  /// compares the count to the one it last saw for an end it missed.
   ValueListenable<int> get endedNotices => _endedNotices;
   final _endedNotices = ValueNotifier<int>(0);
 
@@ -282,6 +283,9 @@ class LiveRoomModel extends ChangeNotifier {
     return _askStream(qn);
   }
 
+  /// A [setQuality] or [refreshStream] call is still out.
+  bool get askingStream => _streamAsk != null;
+
   /// ⟳: asks the play info again at the current quality.
   Future<void> refreshStream() {
     if (_state == LiveRoomState.failed) return retry();
@@ -388,7 +392,7 @@ class LiveRoomModel extends ChangeNotifier {
   }
 
   void _setState(LiveRoomState state) {
-    if (state == LiveRoomState.ended && _state != LiveRoomState.ended) _endedNotices.value++;
+    if (state == LiveRoomState.ended && _state == LiveRoomState.live) _endedNotices.value++;
     _state = state;
   }
 
@@ -509,7 +513,17 @@ class LiveRoomModel extends ChangeNotifier {
   }
 
   void _onSocketState(LiveChannel channel, LiveSocketState state) {
-    if (_disposed || state != LiveSocketState.refused || !identical(channel, _channel)) return;
+    if (_disposed || !identical(channel, _channel)) return;
+    if (state == LiveSocketState.gaveUp) {
+      // The socket stopped itself; its token wasn't refused, so the next show starts the same channel once more.
+      _logger.warn(LogCategory.api, 'live socket gave up', {'room': roomId});
+      _socketOn = false;
+      _socketGeneration++;
+      _channelHeld = true;
+      _append([const LiveChatNotice(channelFailedNotice)]);
+      return;
+    }
+    if (state != LiveSocketState.refused) return;
     final giveUp = _channelAsks >= _channelAsksPerShow;
     _logger.warn(LogCategory.api, 'live socket refused', {'room': roomId, 'asks': _channelAsks, 'give_up': giveUp});
     _dropChannel();

@@ -161,6 +161,9 @@ abstract final class LiveDecode {
     return data.lenientList('room', _historyMessage);
   }
 
+  /// A fan medal object, as the calls and the socket's commands give it; null without a name or an object.
+  static LiveMedal? medal(Object? json) => json is Map<String, Object?> ? _medal(JsonObject(json)) : null;
+
   /// One 醒目留言: a row of [superChats]' list, or the socket's `SUPER_CHAT_MESSAGE` data.
   static LiveSuperChat superChat(Object? json) => _superChat(json);
 
@@ -545,25 +548,36 @@ List<String> _rankChips(JsonObject data, JsonObject room) {
   return chips;
 }
 
-/// A fan medal from `uinfo.medal` (or `user.medal`); the v2 colours win over the RGB integers. None without a name.
+/// A fan medal in any of its spellings: `uinfo.medal` / `user.medal` (name, level, color_start…), `fans_medal` and
+/// `medal_info` (medal_name, medal_level, medal_color_start…). The v2 colours win over the others, which come as RGB
+/// integers or `#RRGGBB` strings, then the one `medal_color`. None without a name.
 LiveMedal? _medal(JsonObject? medal) {
   if (medal == null) return null;
   final name = _firstText([medal.text('name'), medal.text('medal_name')]);
   if (name.isEmpty) return null;
+  final map = medal.map;
+  int colour(String key, {bool orSingle = true}) =>
+      _webColor(map['v2_medal_$key']) ??
+      _medalColour(map[key]) ??
+      _medalColour(map['medal_$key']) ??
+      (orSingle ? _medalColour(map['medal_color']) : null) ??
+      0;
   return LiveMedal(
     name: name,
-    level: _int(medal.map['level']) ?? _int(medal.map['medal_level']) ?? 0,
-    colorStart:
-        _webColor(medal.map['v2_medal_color_start']) ??
-        _rgb(medal.map['color_start'] ?? medal.map['medal_color_start']),
-    colorEnd:
-        _webColor(medal.map['v2_medal_color_end']) ?? _rgb(medal.map['color_end'] ?? medal.map['medal_color_end']),
-    border:
-        _webColor(medal.map['v2_medal_color_border']) ??
-        _rgb(medal.map['color_border'] ?? medal.map['medal_color_border']),
-    guardLevel: _int(medal.map['guard_level']) ?? 0,
-    lit: (_int(medal.map['is_light']) ?? _int(medal.map['is_lighted']) ?? 1) == 1,
+    level: _int(map['level']) ?? _int(map['medal_level']) ?? 0,
+    colorStart: colour('color_start'),
+    colorEnd: colour('color_end'),
+    border: colour('color_border', orSingle: false),
+    guardLevel: _int(map['guard_level']) ?? 0,
+    lit: (_int(map['is_light']) ?? _int(map['is_lighted']) ?? 1) != 0,
   );
+}
+
+/// A medal colour as an RGB integer (or its digits) or a `#RRGGBB[AA]` string; null for none or 0.
+int? _medalColour(Object? value) {
+  if (value is String && value.trim().startsWith('#')) return _webColor(value);
+  final rgb = _rgb(value);
+  return rgb == 0 ? null : rgb;
 }
 
 /// A sender from the website's `uinfo` shape (`uid`, `base`, `medal`, `wealth`, `guard`, `uhead_frame`).

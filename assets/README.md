@@ -100,17 +100,17 @@ PNGs by `tools/apk_asset.py` and cut to their ink:
 | `player_pause.png`, `player_play.png`, `player_refresh.png` | `live_ic_player_pause`, `live_ic_player_play`, `live_ic_player_refresh` |
 | `player_danmaku_on.png`, `player_danmaku_off.png` | `live_ic_danmu_open`, `live_ic_danmu_close` |
 | `player_watch_movies.png`, `player_full_screen.png` | `live_ic_watch_movies_open`, `live_ic_player_toggle_zoom_v2` |
-| `player_share.png`, `player_gift.png`, `room_gift.png` | `ic_live_menu_share`, `ic_gift_icon_static` |
-| `player_more_share.png`, `player_more_pip.png`, `room_more_pip.png` | `ic_live_setting_share`, `ic_live_small_window` |
-| `player_more_settings.png`, `room_more_player.png` | `ic_live_setting_player` |
-| `player_more_danmaku.png`, `room_more_danmaku.png` | `ic_live_setting_danmaku` |
+| `player_share.png`, `player_gift.png` | `ic_live_menu_share`, `ic_gift_icon_static` |
+| `player_more_share.png`, `player_more_pip.png` | `ic_live_setting_share`, `ic_live_small_window` |
+| `player_more_settings.png` | `ic_live_setting_player` |
+| `player_more_danmaku.png` | `ic_live_setting_danmaku` |
 | `room_more_quality.png` | `ic_live_setting_clarity` |
-| `player_more_effects.png`, `room_more_effects.png` | `ic_live_setting_magic` |
-| `player_more_cast.png`, `room_more_cast.png` | `ic_live_setting_cast_screen` |
-| `player_more_report.png`, `room_more_report.png` | `ic_live_setting_report` |
-| `player_more_feedback.png`, `room_more_feedback.png` | `ic_live_setting_feedback` |
-| `player_more_audio.png`, `room_more_audio.png` | `ic_live_setting_audio_only` |
-| `player_more_desktop.png`, `room_more_desktop.png` | `ic_live_setting_launcher` |
+| `player_more_effects.png` | `ic_live_setting_magic` |
+| `player_more_cast.png` | `ic_live_setting_cast_screen` |
+| `player_more_report.png` | `ic_live_setting_report` |
+| `player_more_feedback.png` | `ic_live_setting_feedback` |
+| `player_more_audio.png` | `ic_live_setting_audio_only` |
+| `player_more_desktop.png` | `ic_live_setting_launcher` |
 | `player_more_colour.png` | `biliplayer_ic_setting_background_daltonism` |
 | `room_more_boost.png` | `comment_bihuo_icon` |
 | `room_share_qzone.png` | `bili_socialize_qq_zone` |

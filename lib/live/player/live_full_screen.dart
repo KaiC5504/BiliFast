@@ -10,10 +10,9 @@ import '../../player_ui/portrait_controls.dart' show BackGlyph, ChromeTap, MoreD
 import '../../shared/theme.dart';
 import '../../shared/toast.dart';
 import '../live_badges.dart';
-import '../live_login.dart';
 import '../room/live_overlays.dart';
 import '../room/live_room_model.dart';
-import '../room/room_actions.dart' show liveNeedsLogin;
+import '../room/room_actions.dart' show roomWrite;
 import 'live_player_controller.dart';
 import 'live_player_view.dart';
 
@@ -388,7 +387,7 @@ class _AnchorCapsule extends StatelessWidget {
               key: const ValueKey('live-follow'),
               label: '关注',
               square: false,
-              onTap: touch(() => unawaited(followRoom(context, room))),
+              onTap: touch(() => unawaited(roomWrite(context, () => room.setFollowing(true)))),
               child: Container(
                 width: LivePlayerTheme.followWidth,
                 height: LivePlayerTheme.followHeight,
@@ -422,24 +421,6 @@ Widget _line(String text, double size, double centre, String key) => Padding(
     ),
   ),
 );
-
-/// 关注 in the header, through the login page when logged out.
-Future<void> followRoom(BuildContext context, LiveRoomModel room) async {
-  if (!room.loggedIn()) {
-    unawaited(requestLiveLogin(context));
-    return;
-  }
-  try {
-    await room.setFollowing(true);
-  } catch (error) {
-    if (!context.mounted) return;
-    if (liveNeedsLogin(error)) {
-      unawaited(requestLiveLogin(context));
-    } else {
-      showToast(context, '关注失败，请稍后重试');
-    }
-  }
-}
 
 /// The 在线榜's first three faces and the count after them, which open 高能榜.
 class _RankFaces extends StatelessWidget {

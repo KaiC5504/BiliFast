@@ -1,3 +1,4 @@
+import 'package:bili_core/api.dart';
 import 'package:bili_core/devlog.dart';
 import 'package:bilifast/home/feed_inline_player.dart';
 import 'package:bilifast/home/live/live_inline_player.dart';
@@ -109,6 +110,30 @@ void main() {
     expect(card.inline.failed, isFalse);
     expect(card.named('playInfo'), hasLength(3));
     card.inline.release();
+  });
+
+  testWidgets('a live room offering no stream it can play shows the cover at once', (tester) async {
+    final players = LivePlayers();
+    final api = FakeLiveApi(
+      plays: {9100: const LivePlayInfo(roomId: 9100, uid: 600, status: LiveStatus.live)},
+      channels: (_) => FakeLiveChannel(),
+    );
+    final inline = LiveInlinePlayback(
+      services: await liveServices(api: api),
+      api: api,
+      entry: const LiveRoomEntry(roomId: 9100),
+      loggedIn: () => true,
+      logger: Logger(session: 'test')..add(MemorySink()),
+    );
+    addTearDown(inline.dispose);
+    inline.play();
+    await tester.pump();
+    expect(inline.failed, isTrue);
+    expect(inline.loading, isFalse);
+    expect([for (final call in players.last.calls) if (call.startsWith('load ')) call], isEmpty);
+    await tester.pump(const Duration(seconds: 20));
+    expect(api.calls.where((call) => call.startsWith('playInfo')), hasLength(1), reason: 'no fresh stream asked');
+    inline.release();
   });
 
   testWidgets('15 s without a picture asks a fresh stream once; a later stall leaves the cover', (tester) async {

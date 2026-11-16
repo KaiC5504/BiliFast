@@ -79,5 +79,7 @@ final class LiveStatusEvent extends LiveEvent {
   final bool live;
 }
 
-/// `refused`: the server turned the token down and the socket stopped; only a new token can connect.
-enum LiveSocketState { connecting, open, closed, failed, refused }
+/// `failed`: the connection was lost and a retry is due. `gaveUp`: too many failures in a row stopped it; only a new
+/// start connects. `refused`: the server turned the token down and the socket stopped; only a new token
+/// can connect.
+enum LiveSocketState { connecting, open, closed, failed, gaveUp, refused }

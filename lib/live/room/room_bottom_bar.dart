@@ -109,7 +109,7 @@ class RoomBottomBar extends StatelessWidget {
                 children: [
                   Center(
                     child: Image.asset(
-                      'assets/images/live/room_gift.png',
+                      'assets/images/live/player_gift.png',
                       width: LiveRoomTheme.giftArt,
                       height: LiveRoomTheme.giftArt,
                       excludeFromSemantics: true,

@@ -14,6 +14,7 @@ import '../../shared/toast.dart';
 import '../live_login.dart';
 import '../room/live_overlays.dart';
 import '../room/live_room_model.dart';
+import '../room/room_actions.dart' show liveNeedsLogin;
 import 'live_emote_panel.dart';
 import 'live_recent_emotes.dart';
 import 'live_send_glyphs.dart';
@@ -219,7 +220,7 @@ class _LiveSendInputState extends State<LiveSendInput> {
   }
 
   Future<void> _failed(Object error) async {
-    if (error is BiliError && error.needsLogin) {
+    if (liveNeedsLogin(error)) {
       await requestLiveLogin(context);
       return;
     }

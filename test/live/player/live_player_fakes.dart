@@ -63,6 +63,9 @@ class FakeRoom extends LiveRoomModel {
   /// Makes [setQuality] throw.
   Object? qualityError;
 
+  /// Makes [setFollowing] throw.
+  Object? followError;
+
   void go(LiveRoomState state, {LivePlayInfo? play}) {
     stateValue = state;
     if (play != null) playValue = play;
@@ -118,6 +121,7 @@ class FakeRoom extends LiveRoomModel {
   @override
   Future<void> setFollowing(bool on) async {
     asked.add('follow $on');
+    if (followError case final error?) throw error;
     followingValue = on;
     notifyListeners();
   }

@@ -496,6 +496,36 @@ void main() {
     });
   });
 
+  test('a socket that gave up says so in the chat and starts the same channel once more on the next show', () {
+    fakeAsync((async) {
+      final room = _Room(async);
+      room.start();
+      expect(room.channel.starts, 1);
+
+      room.channel.setState(LiveSocketState.failed);
+      async.flushMicrotasks();
+      expect(room.chat.whereType<LiveChatNotice>(), hasLength(1), reason: 'a retryable loss says nothing');
+
+      room.channel.setState(LiveSocketState.gaveUp);
+      async.flushMicrotasks();
+      expect((room.chat.last as LiveChatNotice).text, '弹幕连接失败，请稍后重试');
+
+      unawaited(room.model.setQuality(400));
+      async.elapse(const Duration(minutes: 1));
+      expect(room.channel.starts, 1, reason: 'held until the next show');
+      expect(room.callsNamed('channel'), hasLength(1));
+
+      room.model.setShown(false);
+      async.elapse(const Duration(seconds: 2));
+      expect(room.channel.closes, 0, reason: 'it had already stopped');
+      room.model.setShown(true);
+      async.flushMicrotasks();
+      expect(room.channel.starts, 2);
+      expect(room.callsNamed('channel'), hasLength(1), reason: 'its token was never refused');
+      room.model.dispose();
+    });
+  });
+
   test('a failed channel ask waits for the next show: a quality switch asks nothing', () {
     fakeAsync((async) {
       final room = _Room(async);
@@ -540,14 +570,15 @@ void main() {
     });
   });
 
-  test('endedNotices rises once for a room offline at open, and once for each PREPARING', () {
+  test('endedNotices stays at 0 for a room offline at open, and rises once for each PREPARING', () {
     fakeAsync((async) {
       final offline = _Room(async, play: _playInfo(status: LiveStatus.offline));
       offline.start();
-      expect(offline.model.endedNotices.value, 1);
+      expect(offline.model.state, LiveRoomState.ended);
+      expect(offline.model.endedNotices.value, 0, reason: 'its cover says so; no toast');
       unawaited(offline.model.refreshStream());
       async.flushMicrotasks();
-      expect(offline.model.endedNotices.value, 1, reason: 'still the same end');
+      expect(offline.model.endedNotices.value, 0);
       offline.model.dispose();
 
       final room = _Room(async);

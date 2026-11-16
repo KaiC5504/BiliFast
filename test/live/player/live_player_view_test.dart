@@ -178,6 +178,20 @@ void main() {
       await finish(tester, rig);
     });
 
+    testWidgets('暂不支持该直播流 offers no 重试: asking again gets the same answer', (tester) async {
+      final rig = await liveRig();
+      await show(tester, rig, landscape: false);
+      rig.room.go(
+        LiveRoomState.live,
+        play: const LivePlayInfo(roomId: 1000002, uid: 2000002, status: LiveStatus.live, qualities: qualities),
+      );
+      await tester.pump();
+      expect(_key('live-failed'), findsOneWidget);
+      expect(find.text('暂不支持该直播流'), findsOneWidget);
+      expect(_key('live-retry'), findsNothing);
+      await finish(tester, rig);
+    });
+
     testWidgets('画质 in portrait is a sheet of 210\'s rows, 自动 last', (tester) async {
       final rig = await liveRig();
       final overlays = await show(tester, rig, landscape: false);
@@ -197,6 +211,25 @@ void main() {
   });
 
   group('full screen (209)', () {
+    testWidgets("关注 goes the room's one write path: a refusal toasts Bilibili's words, logged out opens the login", (
+      tester,
+    ) async {
+      final rig = await liveRig();
+      rig.room.followError = const BiliAPIError(code: 22009, message: '关注上限了');
+      await show(tester, rig, landscape: true);
+      await _tapToast(tester, 'live-follow', '关注上限了');
+      expect(rig.room.asked, ['follow true']);
+      await finish(tester, rig);
+
+      final out = await liveRig(loggedIn: false);
+      out.room.followError = const LiveNotLoggedIn();
+      await show(tester, out, landscape: true);
+      await tester.tap(_key('live-follow'));
+      await tester.pump();
+      expect(out.gate.requests, 1);
+      await finish(tester, out);
+    });
+
     testWidgets('every control does its job, the rest toast 暂未开放', (tester) async {
       final rig = await liveRig();
       var backs = 0;

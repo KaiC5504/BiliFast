@@ -79,16 +79,16 @@ class RoomMoreSheet extends StatelessWidget {
 
   static Widget _itemIcon(RoomMoreItem item) {
     final asset = switch (item) {
-      RoomMoreItem.pictureInPicture => 'room_more_pip',
-      RoomMoreItem.playSettings => 'room_more_player',
-      RoomMoreItem.danmakuSettings => 'room_more_danmaku',
+      RoomMoreItem.pictureInPicture => 'player_more_pip',
+      RoomMoreItem.playSettings => 'player_more_settings',
+      RoomMoreItem.danmakuSettings => 'player_more_danmaku',
       RoomMoreItem.quality => 'room_more_quality',
-      RoomMoreItem.effects => 'room_more_effects',
-      RoomMoreItem.cast => 'room_more_cast',
-      RoomMoreItem.report => 'room_more_report',
-      RoomMoreItem.feedback => 'room_more_feedback',
-      RoomMoreItem.audioOnly => 'room_more_audio',
-      RoomMoreItem.desktop => 'room_more_desktop',
+      RoomMoreItem.effects => 'player_more_effects',
+      RoomMoreItem.cast => 'player_more_cast',
+      RoomMoreItem.report => 'player_more_report',
+      RoomMoreItem.feedback => 'player_more_feedback',
+      RoomMoreItem.audioOnly => 'player_more_audio',
+      RoomMoreItem.desktop => 'player_more_desktop',
       RoomMoreItem.boost || RoomMoreItem.spending || RoomMoreItem.colourVision => null,
     };
     final Widget glyph = switch (item) {
