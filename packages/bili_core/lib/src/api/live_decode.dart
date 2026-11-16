@@ -104,6 +104,7 @@ abstract final class LiveDecode {
           LiveQuality(qn: qn, name: (names[qn] ?? '').isEmpty ? '$qn' : names[qn]!),
       ],
       currentQn: stream?.current ?? 0,
+      offeredStreams: _offeredStreams(playurl),
     );
   }
 
@@ -475,6 +476,17 @@ int _rgb(Object? value) {
   final accept = [for (final value in chosen.codec.lenientList('accept_qn', (json) => json)) ?_int(value)];
   return (url: chosen.url, accept: accept.isEmpty && current > 0 ? [current] : accept, current: current);
 }
+
+List<String> _offeredStreams(JsonObject? playurl) => [
+  for (final stream in playurl?.lenientList('stream', _object) ?? const <JsonObject>[])
+    for (final format in stream.lenientList('format', _object))
+      for (final codec in format.lenientList('codec', _object))
+        [
+          stream.text('protocol_name'),
+          format.text('format_name'),
+          codec.text('codec_name'),
+        ].map((name) => name ?? '?').join('/'),
+];
 
 /// The first host's `host + base_url + extra`.
 Uri? _streamUrl(JsonObject codec) {

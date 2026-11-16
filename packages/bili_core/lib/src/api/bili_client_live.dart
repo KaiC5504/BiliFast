@@ -16,7 +16,7 @@ const _liveAndroidFields = {
   'scale': '2',
 };
 
-/// No capture of the iPhone app's live calls exists: its common fields, its model, and its screen's scale.
+/// The iPhone identity's model and scale; no capture of its live calls backs them.
 const _liveIphoneFields = {'device_name': IphoneLabels.model, 'scale': '3'};
 
 const _liveAppFields = {'fnval': '912', 'https_url_req': '1', 'network': 'wifi'};
@@ -36,7 +36,8 @@ const _liveAndroidHeaders = {
 
 String _liveRoomReferer(int roomId) => 'https://live.bilibili.com/$roomId';
 
-/// 直播's calls, on `api.live.bilibili.com` (the website's) apart from the tab's feed, which is the official app's.
+/// 直播's calls, on `api.live.bilibili.com`: the website's, apart from the tab's feed and area lists, which are the
+/// official app's.
 extension BiliClientLive on BiliClient {
   /// The 直播 tab's feed (`xlive/app-interface/v2/index/feed`) under the held identity, page [page] from 1.
   Future<LiveFeedPage> liveFeed({required int page}) =>
@@ -90,7 +91,13 @@ extension BiliClientLive on BiliClient {
     signed: true,
     host: BiliClient.liveAPI,
     referer: _liveRoomReferer(roomId),
-    decode: (json) => LiveDecode.playInfo(json, qn: qn),
+    decode: (json) {
+      final info = LiveDecode.playInfo(json, qn: qn);
+      if (info.unsupportedStream) {
+        _logger.warn(LogCategory.api, 'live stream unsupported', {'offered': info.offeredStreams.toSet().join(' ')});
+      }
+      return info;
+    },
   );
 
   /// The header's and the chat's room card's words: `getInfoByRoom`, then, logged in, the anchor's card for 关注
@@ -260,6 +267,13 @@ extension BiliClientLive on BiliClient {
       decode: (_) => null,
     );
     if (envelope.code != 0) throw BiliError.api(code: envelope.code, message: envelope.message ?? '');
+    // A dropped danmaku still answers 0, with a word in `message` (`f`, `k`: believed filtered / the room's blocked
+    // words); a sent one leaves it empty or says 0.
+    final word = (envelope.message ?? '').trim();
+    if (word.isEmpty || const {'0', 'ok', 'success'}.contains(word.toLowerCase())) return;
+    final logged = word.length <= 24 ? word : '(${word.length} chars)';
+    _logger.warn(LogCategory.api, 'live send dropped', {'message': logged});
+    throw BiliError.api(code: 0, message: word == 'f' || word == 'k' ? '您发送的弹幕被屏蔽了' : word);
   }
 
   /// [clicks] double taps' 点赞, sent as one. The website signs the form itself, csrf among it.

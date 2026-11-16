@@ -148,6 +148,7 @@ final class LivePlayInfo {
     this.url,
     this.qualities = const [],
     this.currentQn = 0,
+    this.offeredStreams = const [],
   });
 
   final int roomId;
@@ -163,6 +164,12 @@ final class LivePlayInfo {
   final Uri? url;
   final List<LiveQuality> qualities;
   final int currentQn;
+
+  /// Every stream the answer offered, as `protocol/format/codec` names (`http_stream/flv/avc`), for the log.
+  final List<String> offeredStreams;
+
+  /// Streams were offered but none AVPlayer plays (flv only, or HEVC only in TS): 暂不支持该直播流, not 重试.
+  bool get unsupportedStream => url == null && offeredStreams.isNotEmpty;
 }
 
 /// What a room's header and chat need besides its stream.

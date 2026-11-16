@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:bili_core/api.dart';
@@ -411,8 +412,72 @@ void main() {
         },
       });
       expect((none.url, none.qualities.length, none.currentQn, none.status), (null, 0, 0, LiveStatus.offline));
-      expect(LiveDecode.playInfo({'room_id': 2, 'live_status': 2, 'playurl_info': null}).status, LiveStatus.rotating);
+      expect(ts.unsupportedStream, isFalse);
+      final rotating = LiveDecode.playInfo({'room_id': 2, 'live_status': 2, 'playurl_info': null});
+      expect(rotating.status, LiveStatus.rotating);
+      expect(rotating.offeredStreams, isEmpty);
+      expect(rotating.unsupportedStream, isFalse);
       expect(() => LiveDecode.playInfo({'live_status': 1}), throwsA(isA<DecodeError>()));
+    });
+
+    test('a live room offering only flv (or HEVC in TS) is an unsupported stream, its names logged', () async {
+      Map<String, Object?> codec(String name) => {
+        'codec_name': name,
+        'current_qn': 10000,
+        'accept_qn': [10000],
+        'base_url': '/live-test/$name.flv?',
+        'url_info': [
+          {'host': 'https://cn-test.bilivideo.com', 'extra': 'sign=MADE-UP-FLV'},
+        ],
+      };
+      http.routes[_playPath] = (
+        200,
+        jsonEncode({
+          'code': 0,
+          'message': '0',
+          'data': {
+            'room_id': 5001,
+            'live_status': 1,
+            'playurl_info': {
+              'playurl': {
+                'stream': [
+                  {
+                    'protocol_name': 'http_stream',
+                    'format': [
+                      {
+                        'format_name': 'flv',
+                        'codec': [codec('avc'), codec('hevc')],
+                      },
+                    ],
+                  },
+                  {
+                    'protocol_name': 'http_hls',
+                    'format': [
+                      {
+                        'format_name': 'ts',
+                        'codec': [codec('hevc')],
+                      },
+                    ],
+                  },
+                ],
+              },
+            },
+          },
+        }),
+      );
+      final info = await client.livePlayInfo(5001);
+      expect((info.status, info.url, info.unsupportedStream), (LiveStatus.live, null, true));
+      expect(info.offeredStreams, ['http_stream/flv/avc', 'http_stream/flv/hevc', 'http_hls/ts/hevc']);
+      expect(log(), contains('live stream unsupported'));
+      expect(log(), contains('http_stream/flv/avc http_stream/flv/hevc http_hls/ts/hevc'));
+      expect(log(), isNot(contains('MADE-UP-FLV')));
+      expect(log(), isNot(contains('bilivideo')));
+
+      http.routes[_playPath] = (200, _fixture('play_info'));
+      final playable = await client.livePlayInfo(5001);
+      expect(playable.unsupportedStream, isFalse);
+      expect(playable.offeredStreams, isNotEmpty);
+      expect('live stream unsupported'.allMatches(log()), hasLength(1));
     });
   });
 
@@ -669,6 +734,29 @@ void main() {
       expect(form, containsPair('dm_type', '1'));
       expect(form, containsPair('emoticonOptions', '[object Object]'));
       expect(form.containsKey('reply_mid'), isFalse);
+    });
+
+    test('code 0 with a word in message is a dropped danmaku: f and k say 被屏蔽, others its words', () async {
+      for (final word in ['f', 'k']) {
+        http.routes['POST $_sendPath'] = (200, '{"code":0,"data":{},"message":"$word","msg":"$word"}');
+        await expectLater(
+          client.liveSend(5001, '秘密弹幕'),
+          throwsA(const BiliError.api(code: 0, message: '您发送的弹幕被屏蔽了')),
+        );
+      }
+      http.routes['POST $_sendPath'] = (200, '{"code":0,"data":{},"message":"超出限制长度","msg":""}');
+      await expectLater(
+        client.liveSendEmote(5001, const LiveEmote(text: 'a', url: 'u', unique: 'official_1')),
+        throwsA(const BiliError.api(code: 0, message: '超出限制长度')),
+      );
+      expect(log(), contains('live send dropped'));
+      expect(log(), contains('"message":"k"'));
+      expect(log(), isNot(contains('秘密弹幕')));
+
+      for (final sent in ['{"code":0,"data":{},"message":"","msg":""}', '{"code":0,"data":{}}', _ok]) {
+        http.routes['POST $_sendPath'] = (200, sent);
+        await client.liveSend(5001, 'x');
+      }
     });
 
     test('a refusal throws its code; logged out nothing is sent', () async {

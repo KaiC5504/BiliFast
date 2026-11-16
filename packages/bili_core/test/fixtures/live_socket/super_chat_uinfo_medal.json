@@ -1,0 +1,52 @@
+{
+ "cmd": "SUPER_CHAT_MESSAGE",
+ "roomid": 30001,
+ "data": {
+  "background_bottom_color": "#2A60B2",
+  "background_color": "#EDF5FF",
+  "background_color_start": "#3171D2",
+  "background_price_color": "#7497CD",
+  "end_time": 1763350360,
+  "id": 7000002,
+  "medal_info": {
+   "anchor_roomid": 30001,
+   "guard_level": 3,
+   "is_lighted": 0,
+   "medal_color_border": 12632256,
+   "medal_color_end": 12632256,
+   "medal_color_start": 12632256,
+   "medal_level": 12,
+   "medal_name": "旧牌",
+   "target_id": 20001
+  },
+  "message": "两块牌子的醒目留言",
+  "price": 50,
+  "start_time": 1763350300,
+  "time": 60,
+  "ts": 1763350300,
+  "uid": 10005,
+  "uinfo": {
+   "uid": 10005,
+   "base": {
+    "name": "牌子甲",
+    "face": "https://i0.hdslb.com/bfs/face/face-0105.jpg"
+   },
+   "medal": {
+    "name": "新牌",
+    "level": 30,
+    "is_light": 1,
+    "guard_level": 1,
+    "v2_medal_color_start": "#4775EFCC",
+    "v2_medal_color_end": "#4775EFCC",
+    "v2_medal_color_border": "#58A1F8FF"
+   },
+   "wealth": {
+    "level": 12
+   }
+  },
+  "user_info": {
+   "face": "https://i0.hdslb.com/bfs/face/face-0105-old.jpg",
+   "uname": "牌子甲"
+  }
+ }
+}

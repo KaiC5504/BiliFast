@@ -79,4 +79,5 @@ final class LiveStatusEvent extends LiveEvent {
   final bool live;
 }
 
-enum LiveSocketState { connecting, open, closed, failed }
+/// `refused`: the server turned the token down and the socket stopped; only a new token can connect.
+enum LiveSocketState { connecting, open, closed, failed, refused }

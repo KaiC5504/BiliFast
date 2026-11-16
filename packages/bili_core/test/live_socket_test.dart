@@ -316,17 +316,32 @@ void main() {
       expect(harness.server.connections, hasLength(1));
     });
 
-    test('a refused auth reconnects after the backoff to the next host', () async {
+    test('a refused auth stops the socket: no retry with the same token', () async {
       final harness = Harness();
       await harness.start();
       harness.server.last.push(authReply(-101));
       await pumpEventQueue();
       expect(harness.server.connections.single.closed, isTrue);
-      expect(harness.states, [LiveSocketState.connecting, LiveSocketState.failed]);
+      expect(harness.states, [LiveSocketState.connecting, LiveSocketState.refused]);
+      expect(harness.timers.active, 0);
 
-      await harness.timers.elapse(const Duration(milliseconds: 999));
+      await harness.timers.elapse(const Duration(minutes: 10));
       expect(harness.server.attempts, hasLength(1));
-      await harness.timers.elapse(const Duration(milliseconds: 1));
+      expect(harness.sink.text, contains('live socket auth refused'));
+
+      await harness.start();
+      expect(harness.server.attempts, hasLength(2));
+      expect(harness.states.last, LiveSocketState.connecting);
+    });
+
+    test('an unreadable auth reply is a failure, retried on the next host', () async {
+      final harness = Harness();
+      await harness.start();
+      final garbled = LivePacket(op: LiveOp.authReply, body: Uint8List.fromList(utf8.encode('nope')));
+      harness.server.last.push(garbled.encode());
+      await pumpEventQueue();
+      expect(harness.states.last, LiveSocketState.failed);
+      await harness.timers.elapse(const Duration(seconds: 1));
       expect(harness.server.hosts, ['a.chat.example:2245', 'b.chat.example:443']);
     });
 
@@ -355,7 +370,49 @@ void main() {
         'a.chat.example:2245',
         'b.chat.example:443',
       ]);
-      expect(harness.timers.active, 1, reason: 'only the next retry is waiting');
+    });
+
+    test('eight failures in a row stop it with a final failed; start begins again', () async {
+      final harness = Harness();
+      harness.server.refuse = true;
+      await harness.start();
+      await harness.timers.elapse(const Duration(seconds: 1 + 2 + 4 + 8 + 16 + 30 + 30));
+      expect(harness.server.attempts, hasLength(LiveSocket.maxAttempts));
+      expect(harness.timers.active, 0);
+      expect(harness.states.last, LiveSocketState.failed);
+      expect(harness.sink.text, contains('live socket gave up'));
+      await harness.timers.elapse(const Duration(minutes: 30));
+      expect(harness.server.attempts, hasLength(LiveSocket.maxAttempts));
+
+      harness.server.refuse = false;
+      await harness.start();
+      expect(harness.server.attempts, hasLength(LiveSocket.maxAttempts + 1));
+      harness.server.last.push(authReply(0));
+      await pumpEventQueue();
+      expect(harness.states.last, LiveSocketState.open);
+    });
+
+    test('a steady connection between failures resets the count', () async {
+      final harness = Harness();
+      harness.server.refuse = true;
+      await harness.start();
+      await harness.timers.elapse(const Duration(seconds: 1 + 2 + 4 + 8 + 16 + 30));
+      expect(harness.server.attempts, hasLength(7));
+      harness.server.refuse = false;
+      await harness.timers.elapse(const Duration(seconds: 30));
+      expect(harness.server.attempts, hasLength(8));
+      final steady = harness.server.last;
+      steady.push(authReply(0));
+      await pumpEventQueue();
+      for (var i = 0; i < 3; i++) {
+        steady.push(heartbeatReply());
+        await harness.timers.elapse(const Duration(seconds: 30));
+      }
+      steady.drop();
+      await pumpEventQueue();
+      expect(harness.timers.active, 1, reason: 'a retry is due, not a stop');
+      await harness.timers.elapse(const Duration(seconds: 1));
+      expect(harness.server.attempts, hasLength(9));
     });
 
     test('the fallback host is not tried twice when the answer already lists it', () async {
@@ -632,6 +689,14 @@ void main() {
         },
       });
       expect((deleted as LiveSuperChatDeletedEvent).ids, [7000001, 7000002]);
+    });
+
+    test('SUPER_CHAT_MESSAGE with both: uinfo’s medal wins over medal_info', () {
+      final chat = (decode(fixture('super_chat_uinfo_medal')) as LiveSuperChatEvent).superChat;
+      final medal = chat.user.medal!;
+      expect((medal.name, medal.level, medal.lit, medal.guardLevel), ('新牌', 30, true, 1));
+      expect((medal.colorStart, medal.border), (0xCC4775EF, 0xFF58A1F8));
+      expect((chat.user.name, chat.user.face), ('牌子甲', 'https://i0.hdslb.com/bfs/face/face-0105.jpg'));
     });
 
     test('counts, faces and room changes', () {

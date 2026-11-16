@@ -52,7 +52,9 @@ final class _SystemTimers implements LiveTimers {
 /// [headers] go with the upgrade (User-Agent, Origin, the `buvid3` cookie).
 ///
 /// [states]: connecting on each attempt, open once the auth is accepted, failed when an attempt or an open connection
-/// is lost (a reconnect is then due), closed after [close].
+/// is lost (a reconnect is then due, unless [maxAttempts] in a row have failed: then it stops), refused when the
+/// server turns the token down (it stops: the token won't work again), closed after [close]. After a stop, [start]
+/// begins again.
 final class LiveSocket implements LiveChannel {
   LiveSocket({
     required this.roomId,
@@ -82,6 +84,9 @@ final class LiveSocket implements LiveChannel {
   /// An open connection that lasts this long clears the backoff.
   static const steadyAfter = Duration(seconds: 60);
   static const backoff = [1, 2, 4, 8, 16, 30];
+
+  /// Failed attempts in a row, with no steady connection between, after which the socket stops.
+  static const maxAttempts = 8;
 
   final _events = StreamController<LiveEvent>.broadcast();
   final _states = StreamController<LiveSocketState>.broadcast();
@@ -246,9 +251,13 @@ final class LiveSocket implements LiveChannel {
     } on FormatException {
       code = null;
     }
+    if (code is! int) {
+      _lost(epoch, 'auth reply unreadable');
+      return;
+    }
     if (code != 0) {
-      _logger.warn(LogCategory.api, 'live socket auth refused', {'code': code is int ? code : -1});
-      _lost(epoch, 'auth refused');
+      _logger.warn(LogCategory.api, 'live socket auth refused', {'code': code});
+      _stop(LiveSocketState.refused);
       return;
     }
     _authTimer?.cancel();
@@ -308,6 +317,11 @@ final class LiveSocket implements LiveChannel {
     _teardown();
     _failures++;
     _hostIndex++;
+    if (_failures >= maxAttempts) {
+      _logger.warn(LogCategory.api, 'live socket gave up', {'reason': reason, 'attempts': _failures});
+      _stop(LiveSocketState.failed);
+      return;
+    }
     final seconds = backoff[(_failures - 1).clamp(0, backoff.length - 1)];
     _logger.info(LogCategory.api, 'live socket lost', {'reason': reason, 'retry_s': seconds});
     _states.add(LiveSocketState.failed);
@@ -315,6 +329,15 @@ final class LiveSocket implements LiveChannel {
       _retry = null;
       if (_running) unawaited(_connect());
     });
+  }
+
+  void _stop(LiveSocketState state) {
+    _running = false;
+    _epoch++;
+    _retry?.cancel();
+    _retry = null;
+    _teardown();
+    _states.add(state);
   }
 
   void _teardown() {
