@@ -16,7 +16,7 @@ final class NotifyHost: NotifyHostApi, @unchecked Sendable {
 
   static func register(with messenger: FlutterBinaryMessenger) {
     let events = NotifyEventApi(binaryMessenger: messenger)
-    MainActor.assumeIsolated { NotifyTaps.events = events }
+    MainActor.assumeIsolated { NotifyTaps.attach(events) }
     NotifyHostApiSetup.setUp(binaryMessenger: messenger, api: shared)
   }
 
@@ -102,6 +102,9 @@ extension NativeNotifyRoute {
   private var registered = false
   private var background: NSObjectProtocol?
   private var current: Run?
+  /// The submit errors already kept as a trip this launch: every move to the background submits again, and
+  /// Background App Refresh left off refuses each one.
+  private var refusals: Set<Int> = []
 
   private struct Run {
     let task: BGTask
@@ -117,6 +120,10 @@ extension NativeNotifyRoute {
     let identifier = NotifyHost.refreshIdentifier
     registered = BGTaskScheduler.shared.register(forTaskWithIdentifier: identifier, using: .main) { task in
       MainActor.assumeIsolated { NotifyRefresh.shared.start(task) }
+    }
+    if !registered {
+      NSLog("%@", "notify refresh not registered")
+      Self.trip("failed not registered")
     }
     background = NotificationCenter.default.addObserver(forName: UIApplication.didEnterBackgroundNotification,
                                                         object: nil, queue: .main) { _ in
@@ -138,7 +145,14 @@ extension NativeNotifyRoute {
     } catch {
       let failure = error as NSError
       NSLog("%@", "notify refresh not scheduled: \(failure.domain) \(failure.code)")
+      if refusals.insert(failure.code).inserted { Self.trip("failed not scheduled \(failure.code)") }
     }
+  }
+
+  /// A trip with no check behind it, so the phone log says why nothing arrives.
+  private static func trip(_ outcome: String) {
+    NotifyStore.record(NativeNotifyTrip(atMs: Int64(Date().timeIntervalSince1970 * 1000), outcome: outcome,
+                                        calls: 0, posted: 0))
   }
 
   private func start(_ given: BGTask) {
@@ -151,7 +165,7 @@ extension NativeNotifyRoute {
     current = Run(task: given, work: work, calls: calls, started: Date())
     let id = ObjectIdentifier(given)
     // iOS may call it off the main thread. Cancelling the check cancels its request in flight; it then neither saves
-    // nor posts anything.
+    // nor posts anything, unless its cursors were saved already, when it still posts what they passed.
     given.expirationHandler = { @Sendable in
       work.cancel()
       DispatchQueue.main.async {
@@ -178,17 +192,30 @@ extension NativeNotifyRoute {
 
 /// Taps reach Dart once it has asked for the launch's route (it does at start); until then only the latest is kept.
 @MainActor enum NotifyTaps {
-  static var events: NotifyEventApi?
-
+  private static var events: NotifyEventApi?
   private static var dartReady = false
   private static var pending: NativeNotifyRoute?
+
+  /// A new engine's Dart hasn't asked yet, so taps wait for it again; the old engine's channel is dropped.
+  static func attach(_ api: NotifyEventApi) {
+    events = api
+    dartReady = false
+  }
 
   static func tapped(_ route: NativeNotifyRoute) {
     guard dartReady, events != nil else {
       pending = route
       return
     }
-    Task { @MainActor in try? await NotifyTaps.events?.onTap(route: route) }
+    Task { @MainActor in
+      do {
+        try await NotifyTaps.events?.onTap(route: route)
+      } catch {
+        let failure = error as NSError
+        let code = (error as? NotifyApiError)?.code ?? "\(failure.domain) \(failure.code)"
+        NSLog("%@", "notify tap not delivered: \(code)")
+      }
+    }
   }
 
   static func take() -> NativeNotifyRoute? {
@@ -230,6 +257,7 @@ enum NotifyStore {
   private static let stateKey = "notify.state"
   private static let tripsKey = "notify.trips"
   private static let riskKey = "notify.riskUntil"
+  private static let saltKey = "notify.salt"
   private static let maxTrips = 50
   private static let riskPause: TimeInterval = 6 * 60 * 60
 
@@ -274,10 +302,19 @@ enum NotifyStore {
     UserDefaults.standard.set(data, forKey: stateKey)
   }
 
-  /// The mid itself is never kept; the cursors only need to know the account changed.
+  /// Kept in place of the mid, only to tell that the account changed: salted with a random value made once per
+  /// install, so it matches no table of hashed mids and no other install. Mids are small numbers, so whoever holds
+  /// these defaults, salt included, could still find the mid by trying them all.
   static func account(_ mid: String) -> String {
-    SHA256.hash(data: Data(mid.utf8)).prefix(8).map { String(format: "%02x", $0) }.joined()
+    SHA256.hash(data: salt + Data(mid.utf8)).prefix(8).map { String(format: "%02x", $0) }.joined()
   }
+
+  private static let salt: Data = {
+    if let saved = UserDefaults.standard.data(forKey: saltKey), saved.count == 16 { return saved }
+    let made = SymmetricKey(size: .bits128).withUnsafeBytes { Data($0) }
+    UserDefaults.standard.set(made, forKey: saltKey)
+    return made
+  }()
 
   static func riskHeld() -> Bool {
     Date().timeIntervalSince1970 < UserDefaults.standard.double(forKey: riskKey)
@@ -311,7 +348,8 @@ struct NotifyState: Codable {
 }
 
 struct NotifyCursor: Codable {
-  /// The newest item's time seen (unix seconds); a seed's is when it was made, so only later items count.
+  /// The newest item's time seen (unix seconds); a seed's, or one whose count last read 0, is when it was asked, so
+  /// only later items count.
   var time: Int64
   /// The items seen at `time`: another one in the same second is still new.
   var keys: [String] = []
@@ -334,6 +372,13 @@ struct NotifyCursor: Codable {
     keys += fresh.filter { $0.time == newest }.map(\.key)
     return fresh
   }
+
+  /// Nothing unread: everything before `now` has been read, here or in the official app.
+  mutating func readAll(before now: Int64) {
+    guard now > time else { return }
+    time = now
+    keys = []
+  }
 }
 
 /// How a check ended, for its trip.
@@ -344,7 +389,7 @@ struct NotifyResult: Sendable {
   static let outOfTime = NotifyResult(outcome: "failed out of time", posted: 0)
 }
 
-/// The calls a check made, read by the expiration handler from another thread.
+/// The calls a check made, counted on its task and read on the main actor, maybe while it still runs.
 final class NotifyCalls: @unchecked Sendable {
   private let lock = NSLock()
   private var count = 0
@@ -415,10 +460,14 @@ final class NotifyCheck {
     let state = self.state
     guard let kindsNow = await MainActor.run(body: { NotifyStore.keep(state) }) else { return .outOfTime }
     let posts = found.filter { kindsNow.isOn($0.kind) }
-    let posted = await Self.post(posts)
-    if let failure { return NotifyResult(outcome: "failed \(failure.reason)", posted: posted) }
-    if posted > 0 { return NotifyResult(outcome: "posted", posted: posted) }
-    if !posts.isEmpty { return NotifyResult(outcome: "failed post", posted: 0) }
+    let sent = await Self.post(posts)
+    if let failure { return NotifyResult(outcome: "failed \(failure.reason)", posted: sent.posted) }
+    if let refused = sent.refused {
+      return sent.posted > 0
+        ? NotifyResult(outcome: "posted, \(sent.failed) failed \(refused)", posted: sent.posted)
+        : NotifyResult(outcome: "failed post \(refused)", posted: 0)
+    }
+    if sent.posted > 0 { return NotifyResult(outcome: "posted", posted: sent.posted) }
     return NotifyResult(outcome: seeded ? "seeded" : "nothing new", posted: 0)
   }
 
@@ -433,6 +482,8 @@ final class NotifyCheck {
   private func checkComments(_ kinds: NativeNotifyKinds, _ web: NotifyWeb) async throws {
     let wanted = [NotifyKind.replies, .mentions, .likes].filter(kinds.isOn)
     guard !wanted.isEmpty else { return }
+    // Taken before the call, so an item that comes while it is answered is past the cursor and still counts.
+    let asked = Self.now
     let unread = try await web.get("https://api.bilibili.com/x/msgfeed/unread", ["build": "0", "mobi_app": "web"])
     for kind in wanted {
       let count: Int64 = switch kind {
@@ -441,9 +492,11 @@ final class NotifyCheck {
       default: NotifyJSON.int(unread["reply"]) ?? 0
       }
       guard var cursor = state.cursors[kind.rawValue] else {
-        seed(kind, NotifyCursor(time: Self.now, count: count))
+        seed(kind, NotifyCursor(time: asked, count: count))
         continue
       }
+      // Whatever came has been read meanwhile (in the official app, say), so none of it is posted later.
+      if count == 0 { cursor.readAll(before: asked) }
       guard count > 0, count != cursor.count else {
         cursor.count = count
         state.cursors[kind.rawValue] = cursor
@@ -451,9 +504,10 @@ final class NotifyCheck {
       }
       let items = try await list(kind, web)
       let fresh = cursor.take(items)
-      // Reading the list may clear the count on Bilibili's side, so the next new item can bring it back to the
-      // same number; remembering 0 makes that one count as moved.
-      cursor.count = 0
+      // Kept as seen, so a count that stays up lists once, not every run. Whether listing marks the items read on
+      // Bilibili's side is unconfirmed; if it does, new items bringing the count back to this number wait until it
+      // moves again, still past the cursor.
+      cursor.count = count
       state.cursors[kind.rawValue] = cursor
       plan(kind, fresh)
     }
@@ -521,11 +575,13 @@ final class NotifyCheck {
     found.append(contentsOf: shown.map(NotifyWording.post))
   }
 
-  private static func post(_ posts: [NotifyPost]) async -> Int {
+  /// Runs to the end even once out of time: the cursors are already saved, so a post skipped now would never come,
+  /// and adding a local notification is quick. `refused` is the first failure's domain and code.
+  private static func post(_ posts: [NotifyPost]) async -> (posted: Int, failed: Int, refused: String?) {
     let center = UNUserNotificationCenter.current()
-    var posted = 0
+    var posted = 0, failed = 0
+    var refused: String?
     for post in posts {
-      guard !Task.isCancelled else { break }
       let content = UNMutableNotificationContent()
       content.title = post.title
       content.body = post.body
@@ -537,10 +593,12 @@ final class NotifyCheck {
         try await center.add(UNNotificationRequest(identifier: identifier, content: content, trigger: nil))
         posted += 1
       } catch {
-        continue
+        let failure = error as NSError
+        failed += 1
+        refused = refused ?? "\(failure.domain) \(failure.code)"
       }
     }
-    return posted
+    return (posted, failed, refused)
   }
 }
 
