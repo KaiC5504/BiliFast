@@ -49,7 +49,7 @@ class _LiveTabState extends State<LiveTab> with SkinRefreshRoom, AutomaticKeepAl
   final _scroll = ScrollController();
   late final _host = FeedInlineHost(viewport: _area, pip: _services.pipKeeper, autoplay: InlineAutoplay.home);
 
-  /// 首页's tap holds the refresh's room open at the top until it's done; [_reloadRoom] keeps it built while closing.
+  /// 首页's tap holds the refresh's space open at the top until it's done; [_reloadRoom] keeps it built while closing.
   bool _reloadHeader = false;
   bool _reloadRoom = false;
 
@@ -145,7 +145,7 @@ class _LiveTabState extends State<LiveTab> with SkinRefreshRoom, AutomaticKeepAl
     if (failure != null && mounted) showToast(context, failure);
   }
 
-  /// 首页 tapped while 直播 shows, as 推荐's: back to the top, then the refresh's room held open there until it is
+  /// 首页 tapped while 直播 shows, as 推荐's: back to the top, then the refresh's space held open there until it is
   /// done. Nothing more while a refresh or the first page is out.
   Future<void> _reload() async {
     final model = _model!;
@@ -226,11 +226,15 @@ class _LiveTabState extends State<LiveTab> with SkinRefreshRoom, AutomaticKeepAl
     super.build(context);
     final model = _model!;
     // A route over 首页 (a page, a sheet) or another place shown stills the carousel; the app leaving, its host.
-    _host.shown = widget.active && (ModalRoute.isCurrentOf(context) ?? true);
+    final shown = _host.shown = widget.active && (ModalRoute.isCurrentOf(context) ?? true);
     return ColoredBox(
       color: LiveTabTheme.page,
-      // Never shown yet: nothing to draw, and no TV ticking out of sight.
-      child: model.started ? _list(context, model) : const SizedBox.expand(),
+      // Out of sight the 直播中 gifs stop decoding frames (an Image listens to its stream only while tickers run).
+      child: TickerMode(
+        enabled: shown,
+        // Never shown yet: nothing to draw, and no TV ticking out of sight.
+        child: model.started ? _list(context, model) : const SizedBox.expand(),
+      ),
     );
   }
 
@@ -554,8 +558,9 @@ class _FollowingSection extends StatelessWidget {
   }
 }
 
-/// The area tabs: 推荐 and the feed's areas, sideways; the picture and ⊞ at the right over the fading row.
-class _AreaTabs extends StatelessWidget {
+/// The area tabs: 推荐 and the feed's areas, sideways; the picture and ⊞ at the right over the fading row. A tab
+/// chosen half under the fade or past the left edge slides fully into the clear part.
+class _AreaTabs extends StatefulWidget {
   const _AreaTabs({required this.areas, required this.selected, required this.onSelect, required this.onIcon});
 
   final List<LiveArea> areas;
@@ -564,27 +569,74 @@ class _AreaTabs extends StatelessWidget {
   final VoidCallback onIcon;
 
   @override
+  State<_AreaTabs> createState() => _AreaTabsState();
+}
+
+class _AreaTabsState extends State<_AreaTabs> {
+  final _row = ScrollController();
+  double _fadeFrom = LiveTabTheme.areaFadeFrom;
+
+  @override
+  void dispose() {
+    _row.dispose();
+    super.dispose();
+  }
+
+  void _choose(LiveArea area, BuildContext tab) {
+    widget.onSelect(area);
+    // Measured once drawn chosen: the semibold words are wider.
+    SchedulerBinding.instance.addPostFrameCallback((_) {
+      if (mounted && tab.mounted) _reveal(tab);
+    });
+    SchedulerBinding.instance.ensureVisualUpdate();
+  }
+
+  void _reveal(BuildContext tab) {
+    final box = tab.findRenderObject();
+    final strip = context.findRenderObject();
+    if (box is! RenderBox || strip is! RenderBox || !box.attached || !_row.hasClients) return;
+    final left = box.localToGlobal(Offset.zero, ancestor: strip).dx;
+    // The tab's box carries the gap after its words; only the words need to clear the fade.
+    final right = left + box.size.width - LiveTabTheme.areaGap;
+    final shift = right > _fadeFrom
+        ? right - _fadeFrom
+        : left < LiveTabTheme.areaLead
+        ? left - LiveTabTheme.areaLead
+        : 0.0;
+    if (shift == 0) return;
+    final position = _row.position;
+    final target = (position.pixels + shift).clamp(position.minScrollExtent, position.maxScrollExtent);
+    if (MediaQuery.disableAnimationsOf(context)) {
+      _row.jumpTo(target);
+    } else {
+      unawaited(_row.animateTo(target, duration: LiveTabTheme.areaReveal, curve: Curves.easeOut));
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
-    const iconsWidth = LiveTabTheme.areaGridRight + LiveTabTheme.areaIconPitch + LiveTabTheme.areaIconTarget;
+    const iconsWidth = LiveTabTheme.areaGridRight + LiveTabTheme.areaIconPitch + LiveTabTheme.areaIconTarget / 2;
+    final selected = widget.selected;
     return SizedBox(
       key: const ValueKey('live-areas'),
       height: LiveTabTheme.areaRow,
       child: LayoutBuilder(
         builder: (context, box) {
-          final fadeFrom = math.min(LiveTabTheme.areaFadeFrom, box.maxWidth - iconsWidth);
+          final fadeFrom = _fadeFrom = math.min(LiveTabTheme.areaFadeFrom, box.maxWidth - iconsWidth);
           final fadeWidth = box.maxWidth - fadeFrom;
           return Stack(
             children: [
               ListView(
                 key: const ValueKey('live-area-row'),
+                controller: _row,
                 scrollDirection: Axis.horizontal,
                 padding: EdgeInsets.only(left: LiveTabTheme.areaLead, right: fadeWidth),
                 children: [
-                  for (final area in areas)
+                  for (final area in widget.areas)
                     _AreaTab(
                       area: area,
                       chosen: area.id == selected.id && area.parentId == selected.parentId,
-                      onTap: () => onSelect(area),
+                      onTap: (tab) => _choose(area, tab),
                     ),
                 ],
               ),
@@ -611,16 +663,17 @@ class _AreaTabs extends StatelessWidget {
               _icon(
                 key: const ValueKey('live-area-cover'),
                 label: '切换封面',
-                right: LiveTabTheme.areaGridRight + LiveTabTheme.areaGridIcon / 2 + LiveTabTheme.areaIconPitch,
+                right: LiveTabTheme.areaGridRight + LiveTabTheme.areaIconPitch,
                 asset: LiveArt.coverSwitch,
-                size: LiveTabTheme.areaCoverIcon,
+                height: LiveTabTheme.areaCoverIcon,
               ),
               _icon(
                 key: const ValueKey('live-area-all'),
                 label: '全部分区',
-                right: LiveTabTheme.areaGridRight + LiveTabTheme.areaGridIcon / 2,
+                right: LiveTabTheme.areaGridRight,
                 asset: LiveArt.areas,
-                size: LiveTabTheme.areaGridIcon,
+                width: LiveTabTheme.areaGridIcon,
+                height: LiveTabTheme.areaGridIcon,
               ),
             ],
           );
@@ -635,7 +688,8 @@ class _AreaTabs extends StatelessWidget {
     required String label,
     required double right,
     required String asset,
-    required double size,
+    required double height,
+    double? width,
   }) => Positioned(
     right: right - LiveTabTheme.areaIconTarget / 2,
     top: 0,
@@ -644,14 +698,14 @@ class _AreaTabs extends StatelessWidget {
     child: Semantics(
       button: true,
       label: label,
-      onTap: onIcon,
+      onTap: widget.onIcon,
       excludeSemantics: true,
       child: GestureDetector(
         key: key,
         behavior: HitTestBehavior.opaque,
-        onTap: onIcon,
+        onTap: widget.onIcon,
         child: Center(
-          child: Image.asset(asset, width: size, height: size, fit: BoxFit.contain, excludeFromSemantics: true),
+          child: Image.asset(asset, width: width, height: height, fit: BoxFit.contain, excludeFromSemantics: true),
         ),
       ),
     ),
@@ -663,19 +717,19 @@ class _AreaTab extends StatelessWidget {
 
   final LiveArea area;
   final bool chosen;
-  final VoidCallback onTap;
+  final ValueChanged<BuildContext> onTap;
 
   @override
   Widget build(BuildContext context) => Semantics(
     button: true,
     selected: chosen,
     label: area.name,
-    onTap: onTap,
+    onTap: () => onTap(context),
     excludeSemantics: true,
     child: GestureDetector(
       key: ValueKey('live-area-${area.id}-${area.parentId}'),
       behavior: HitTestBehavior.opaque,
-      onTap: onTap,
+      onTap: () => onTap(context),
       child: Padding(
         padding: const EdgeInsets.only(right: LiveTabTheme.areaGap),
         child: Center(

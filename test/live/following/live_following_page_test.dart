@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:bili_core/api.dart';
 import 'package:bilifast/app/zoom_back_route.dart';
+import 'package:bilifast/home/feed_model.dart' show FeedModel;
 import 'package:bilifast/live/fake_live_api.dart';
 import 'package:bilifast/live/following/live_following_page.dart';
 import 'package:bilifast/live/room/live_room_page.dart';
@@ -106,7 +107,8 @@ void main() {
     await tester.drag(list, const Offset(0, -4000));
     await settle(tester);
     expect(calls.calls, ['following page=1', 'following page=2', 'following page=3']);
-    expect(find.byKey(const ValueKey('live-following-end')), findsOneWidget);
+    expect(find.text(FeedModel.endMessage), findsNothing);
+    expect(find.byKey(const ValueKey('live-following-more')), findsNothing);
 
     await tester.drag(list, const Offset(0, 6000));
     await settle(tester);
