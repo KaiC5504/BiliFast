@@ -1,5 +1,7 @@
 import 'dart:async';
 
+import 'package:flutter/rendering.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:flutter/widgets.dart';
 
 import '../shared/theme.dart';
@@ -9,7 +11,8 @@ import 'comments_model.dart';
 import 'comments_tab.dart';
 
 /// 评论详情 (13): the 评论详情 header with ✕, the root comment in full, a grey band, 相关回复共N条 with its sort, the
-/// replies paging as they near the end, and the 发条评论 bar.
+/// replies paging as they near the end, and the 发条评论 bar. A thread opened with a [ThreadState.focus] brings that
+/// reply into view once.
 class ThreadView extends StatefulWidget {
   const ThreadView({super.key, required this.model, required this.thread, required this.callbacks});
 
@@ -26,6 +29,14 @@ class ThreadView extends StatefulWidget {
 
 class _ThreadViewState extends State<ThreadView> {
   late NearEndPaging _paging = _pagingFor(widget.model);
+  final _scroll = ScrollController();
+  final _focusKey = GlobalKey();
+
+  /// The root whose focus has been brought into view.
+  int? _focusedRoot;
+
+  /// Screens stepped down at most while looking for the focus's row, which the list builds only near the viewport.
+  static const _focusSteps = 20;
 
   @override
   void didUpdateWidget(ThreadView oldWidget) {
@@ -38,7 +49,27 @@ class _ThreadViewState extends State<ThreadView> {
   @override
   void dispose() {
     _paging.dispose();
+    _scroll.dispose();
     super.dispose();
+  }
+
+  /// A row already in sight stays where it is; otherwise it goes to the top.
+  Future<void> _bringFocus() async {
+    for (var step = 0; step < _focusSteps && mounted && _scroll.hasClients; step++) {
+      final position = _scroll.positions.last;
+      if (_focusKey.currentContext?.findRenderObject() case final RenderBox row? when row.attached && row.hasSize) {
+        final viewport = RenderAbstractViewport.of(row);
+        final top = viewport.getOffsetToReveal(row, 0).offset;
+        final bottom = viewport.getOffsetToReveal(row, 1).offset;
+        if (position.pixels > top || position.pixels < bottom) {
+          position.jumpTo(top.clamp(position.minScrollExtent, position.maxScrollExtent));
+        }
+        return;
+      }
+      if (!position.hasContentDimensions || position.pixels >= position.maxScrollExtent) return;
+      position.jumpTo((position.pixels + position.viewportDimension).clamp(0.0, position.maxScrollExtent));
+      await SchedulerBinding.instance.endOfFrame;
+    }
   }
 
   NearEndPaging _pagingFor(CommentsModel model) => NearEndPaging(
@@ -70,6 +101,11 @@ class _ThreadViewState extends State<ThreadView> {
         builder: (context, _) {
           final thread = _shown;
           final root = thread.root;
+          final focus = thread.focus;
+          if (focus != null && _focusedRoot != root.rpid) {
+            _focusedRoot = root.rpid;
+            SchedulerBinding.instance.addPostFrameCallback((_) => unawaited(_bringFocus()));
+          }
           return Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
@@ -78,6 +114,7 @@ class _ThreadViewState extends State<ThreadView> {
                 child: _paging.listen(
                   CustomScrollView(
                     key: ValueKey(root.rpid),
+                    controller: _scroll,
                     primary: false,
                     slivers: [
                       SliverToBoxAdapter(
@@ -106,17 +143,17 @@ class _ThreadViewState extends State<ThreadView> {
                           centre: CommentListTheme.threadSortCentre,
                         ),
                       ),
-                      commentRows(
-                        thread.replies,
-                        (reply) => CommentRow(
-                          key: ValueKey(reply.rpid),
+                      commentRows(thread.replies, (reply) {
+                        final row = CommentRow(
+                          key: reply.rpid == focus ? _focusKey : ValueKey(reply.rpid),
                           comment: reply,
                           model: model,
                           callbacks: callbacks,
                           thread: root,
                           showsReplies: false,
-                        ),
-                      ),
+                        );
+                        return reply.rpid == focus ? KeyedSubtree(key: ValueKey(reply.rpid), child: row) : row;
+                      }),
                       SliverToBoxAdapter(
                         child: CommentListFooter(
                           loading: thread.loading,
