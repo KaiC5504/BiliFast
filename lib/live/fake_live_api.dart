@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:bili_core/api.dart';
 import 'package:bili_core/live.dart';
 
+import 'demo_live_stream.dart';
 import 'live_api.dart';
 
 /// Made-up answers for tests and `--fake-account` on the PC: no call leaves the machine. [calls] lists what was asked,
@@ -27,7 +28,8 @@ class FakeLiveApi implements LiveApi {
   /// The `--fake-account` demo: 205's tab (three big cards, one followed room, eight areas, two pages of 推荐), and
   /// every room answering as one demo room, dated from [now] at each call, its chat fed by [FakeLiveChannel.demo].
   /// Names are 演示…, every text made up, covers, faces and emotes empty so nothing is fetched. On Windows its stream
-  /// is the repo's HLS test clip, which mpv opens straight from disk; elsewhere it has none.
+  /// is the repo's HLS test clip looped as a live stream ([DemoLiveServer], on loopback); elsewhere, and in tests, it
+  /// has none.
   factory FakeLiveApi.demo({DateTime Function()? now}) {
     final clock = now ?? DateTime.now;
     return FakeLiveApi(
@@ -43,7 +45,7 @@ class FakeLiveApi implements LiveApi {
       guardPages: _Demo.guards,
       emotePackages: _Demo.emotes,
       channels: (_) => FakeLiveChannel.demo(now: clock),
-    ).._demoRoom = _DemoRoom(clock, _localClip());
+    ).._demoRoom = _DemoRoom(clock, _demoStream);
   }
 
   final List<LiveFeedPage> feedPages;
@@ -65,14 +67,14 @@ class FakeLiveApi implements LiveApi {
   final failures = <String, Object>{};
   final holds = <String, Completer<void>>{};
 
-  Future<T> _answer<T>(String call, T Function() value) async {
+  Future<T> _answer<T>(String call, FutureOr<T> Function() value) async {
     calls.add(call);
     final name = call.split(' ').first;
     final hold = holds[call] ?? holds[name];
     if (hold != null) await hold.future;
     final failure = failures[call] ?? failures[name];
     if (failure != null) throw failure;
-    return value();
+    return await value();
   }
 
   static T _page<T>(List<T> pages, int page, T empty) => page - 1 < pages.length ? pages[page - 1] : empty;
@@ -92,9 +94,9 @@ class FakeLiveApi implements LiveApi {
       _answer('following page=$page', () => _page(followingPages, page, LiveCardPage(page: page, cards: const [])));
 
   @override
-  Future<LivePlayInfo> playInfo(int roomId, {int? qn}) => _answer('playInfo $roomId qn=${qn ?? '-'}', () {
+  Future<LivePlayInfo> playInfo(int roomId, {int? qn}) => _answer('playInfo $roomId qn=${qn ?? '-'}', () async {
     final play =
-        plays[roomId] ?? _demoRoom?.play() ?? LivePlayInfo(roomId: roomId, uid: 0, status: LiveStatus.offline);
+        plays[roomId] ?? await _demoRoom?.play() ?? LivePlayInfo(roomId: roomId, uid: 0, status: LiveStatus.offline);
     if (qn == null || qn == play.currentQn || !play.qualities.any((quality) => quality.qn == qn)) return play;
     return LivePlayInfo(
       roomId: play.roomId,
@@ -159,22 +161,8 @@ class FakeLiveApi implements LiveApi {
   @override
   Future<void> follow(int mid, {required bool on}) => _answer('follow $mid on=$on', () {});
 
-  /// integration_test/fixtures/hls's master playlist, looked for above the working folder and the app; null off
-  /// Windows or away from the repo.
-  static Uri? _localClip() {
-    if (!Platform.isWindows) return null;
-    const relative = 'integration_test/fixtures/hls/master.m3u8';
-    for (final start in [Directory.current, File(Platform.resolvedExecutable).parent]) {
-      Directory? directory = start.absolute;
-      while (directory != null) {
-        final clip = File('${directory.path}/$relative');
-        if (clip.existsSync()) return clip.uri;
-        final parent = directory.parent;
-        directory = parent.path == directory.path ? null : parent;
-      }
-    }
-    return null;
-  }
+  static Future<Uri?> _demoStream() async =>
+      Platform.isWindows && !Platform.environment.containsKey('FLUTTER_TEST') ? DemoLiveServer.address() : null;
 }
 
 /// A danmaku feed tests drive by hand: [emit] and [setState]; [starts] and [closes] count the calls.
@@ -231,14 +219,14 @@ final class _DemoRoom {
   _DemoRoom(this.now, this.clip);
 
   final DateTime Function() now;
-  final Uri? clip;
+  final Future<Uri?> Function() clip;
 
-  LivePlayInfo play() => LivePlayInfo(
+  Future<LivePlayInfo> play() async => LivePlayInfo(
     roomId: _Demo.roomId,
     uid: _Demo.anchorUid,
     status: LiveStatus.live,
     liveTime: now().subtract(const Duration(hours: 5, minutes: 12, seconds: 37)),
-    url: clip,
+    url: await clip(),
     qualities: const [
       LiveQuality(qn: 10000, name: '1080P 原画 (高帧率)'),
       LiveQuality(qn: 400, name: '1080P 蓝光'),
