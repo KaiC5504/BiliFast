@@ -472,7 +472,27 @@ class NotifyHostApi {
     return pigeonVar_replyValue! as bool;
   }
 
-  /// The notification whose tap launched the app, once; null if none.
+  /// iOS's Background App Refresh for the app (UIApplication.backgroundRefreshStatus): without it no check ever runs.
+  Future<bool> backgroundRefreshAllowed() async {
+    final pigeonVar_channelName = 'dev.flutter.pigeon.bilifast.NotifyHostApi.backgroundRefreshAllowed$pigeonVar_messageChannelSuffix';
+    final pigeonVar_channel = BasicMessageChannel<Object?>(
+      pigeonVar_channelName,
+      pigeonChannelCodec,
+      binaryMessenger: pigeonVar_binaryMessenger,
+    );
+    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(null);
+    final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
+
+    final Object? pigeonVar_replyValue = _extractReplyValueOrThrow(
+        pigeonVar_replyList,
+        pigeonVar_channelName,
+        isNullValid: false,
+    )
+    ;
+    return pigeonVar_replyValue! as bool;
+  }
+
+  /// The latest tap before Dart first asked (the one that launched the app, if any), once; null if none.
   Future<NativeNotifyRoute?> takeLaunchRoute() async {
     final pigeonVar_channelName = 'dev.flutter.pigeon.bilifast.NotifyHostApi.takeLaunchRoute$pigeonVar_messageChannelSuffix';
     final pigeonVar_channel = BasicMessageChannel<Object?>(

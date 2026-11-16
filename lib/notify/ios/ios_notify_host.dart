@@ -49,6 +49,9 @@ class IosNotifyHost implements NotifyHost {
   Future<bool> requestPermission() => _api.requestPermission();
 
   @override
+  Future<bool> backgroundRefreshAllowed() => _api.backgroundRefreshAllowed();
+
+  @override
   Future<NotifyRoute?> takeLaunchRoute() async {
     final route = await _api.takeLaunchRoute();
     return route == null ? null : routeOf(route);

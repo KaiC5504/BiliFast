@@ -457,7 +457,9 @@ protocol NotifyHostApi {
   func permission() async throws -> NativeNotifyPermission
   /// Asks iOS for alert and sound permission, as the sideload reminder does; true when given.
   func requestPermission() async throws -> Bool
-  /// The notification whose tap launched the app, once; null if none.
+  /// iOS's Background App Refresh for the app (UIApplication.backgroundRefreshStatus): without it no check ever runs.
+  func backgroundRefreshAllowed() throws -> Bool
+  /// The latest tap before Dart first asked (the one that launched the app, if any), once; null if none.
   func takeLaunchRoute() throws -> NativeNotifyRoute?
   /// The checks since the last call, oldest first.
   func takeTrips() throws -> [NativeNotifyTrip]
@@ -529,7 +531,21 @@ class NotifyHostApiSetup {
     } else {
       requestPermissionChannel.setMessageHandler(nil)
     }
-    /// The notification whose tap launched the app, once; null if none.
+    /// iOS's Background App Refresh for the app (UIApplication.backgroundRefreshStatus): without it no check ever runs.
+    let backgroundRefreshAllowedChannel = FlutterBasicMessageChannel(name: "dev.flutter.pigeon.bilifast.NotifyHostApi.backgroundRefreshAllowed\(channelSuffix)", binaryMessenger: binaryMessenger, codec: codec)
+    if let api = api {
+      backgroundRefreshAllowedChannel.setMessageHandler { _, reply in
+        do {
+          let result = try api.backgroundRefreshAllowed()
+          reply(wrapResult(result))
+        } catch {
+          reply(wrapError(error))
+        }
+      }
+    } else {
+      backgroundRefreshAllowedChannel.setMessageHandler(nil)
+    }
+    /// The latest tap before Dart first asked (the one that launched the app, if any), once; null if none.
     let takeLaunchRouteChannel = FlutterBasicMessageChannel(name: "dev.flutter.pigeon.bilifast.NotifyHostApi.takeLaunchRoute\(channelSuffix)", binaryMessenger: binaryMessenger, codec: codec)
     if let api = api {
       takeLaunchRouteChannel.setMessageHandler { _, reply in

@@ -250,6 +250,12 @@ class FakeNotifyHost implements NotifyHost {
     return allowed == NotifyPermission.allowed;
   }
 
+  /// iOS's Background App Refresh for the app.
+  bool backgroundRefresh = true;
+
+  @override
+  Future<bool> backgroundRefreshAllowed() async => backgroundRefresh;
+
   @override
   Future<NotifyRoute?> takeLaunchRoute() async => null;
 

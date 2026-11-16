@@ -100,7 +100,10 @@ abstract class NotifyHostApi {
   @async
   bool requestPermission();
 
-  /// The notification whose tap launched the app, once; null if none.
+  /// iOS's Background App Refresh for the app (UIApplication.backgroundRefreshStatus): without it no check ever runs.
+  bool backgroundRefreshAllowed();
+
+  /// The latest tap before Dart first asked (the one that launched the app, if any), once; null if none.
   NativeNotifyRoute? takeLaunchRoute();
 
   /// The checks since the last call, oldest first.

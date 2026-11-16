@@ -103,6 +103,9 @@ abstract class NotifyHost {
 
   Future<bool> requestPermission();
 
+  /// iOS's Background App Refresh for the app; without it no check ever runs.
+  Future<bool> backgroundRefreshAllowed();
+
   Future<NotifyRoute?> takeLaunchRoute();
 
   Future<List<NotifyTrip>> takeTrips();
@@ -113,10 +116,16 @@ abstract class NotifyHost {
 /// Windows and tests: the switches kept in memory, nothing posted. A [launchRoute] stands in for a tapped
 /// notification that launched the app (`--fake-notify-tap`).
 class NoNotifyHost implements NotifyHost {
-  NoNotifyHost({this._kinds = NotifyKinds.none, this.allowed = NotifyPermission.notDetermined, this.launchRoute});
+  NoNotifyHost({
+    this._kinds = NotifyKinds.none,
+    this.allowed = NotifyPermission.notDetermined,
+    this.backgroundRefresh = true,
+    this.launchRoute,
+  });
 
   NotifyKinds _kinds;
   NotifyPermission allowed;
+  bool backgroundRefresh;
   NotifyRoute? launchRoute;
 
   @override
@@ -133,6 +142,9 @@ class NoNotifyHost implements NotifyHost {
 
   @override
   Future<bool> requestPermission() async => allowed == NotifyPermission.allowed;
+
+  @override
+  Future<bool> backgroundRefreshAllowed() async => backgroundRefresh;
 
   @override
   Future<NotifyRoute?> takeLaunchRoute() async {

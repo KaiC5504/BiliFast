@@ -56,6 +56,10 @@ final class NotifyHost: NotifyHostApi, @unchecked Sendable {
     }
   }
 
+  func backgroundRefreshAllowed() throws -> Bool {
+    MainActor.assumeIsolated { UIApplication.shared.backgroundRefreshStatus == .available }
+  }
+
   func takeLaunchRoute() throws -> NativeNotifyRoute? {
     MainActor.assumeIsolated { NotifyTaps.take() }
   }

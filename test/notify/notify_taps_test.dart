@@ -41,6 +41,9 @@ class _Host implements NotifyHost {
   Future<bool> requestPermission() async => true;
 
   @override
+  Future<bool> backgroundRefreshAllowed() async => true;
+
+  @override
   Future<NotifyRoute?> takeLaunchRoute() async {
     launchTakes += 1;
     final route = launch;
