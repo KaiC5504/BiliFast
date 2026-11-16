@@ -1,12 +1,14 @@
 import BackgroundTasks
 import CryptoKit
 import Flutter
+import Intents
 import UIKit
 import UserNotifications
 
 /// 推送设置's notifications without a server: iOS's app refresh wakes the app now and then, the check asks Bilibili's
 /// unread counts with the keychain's login, and anything new is posted as a local notification. It runs natively
-/// because a background launch may bring up no Flutter engine at all. Ids, names and comment text never reach a log.
+/// because a background launch may bring up no Flutter engine at all. Ids, names, faces and comment text never reach
+/// a log.
 final class NotifyHost: NotifyHostApi, @unchecked Sendable {
   static let shared = NotifyHost()
   static let refreshIdentifier = "com.kaichuan.bilifast.notify.refresh"
@@ -461,13 +463,13 @@ final class NotifyCheck {
     guard let kindsNow = await MainActor.run(body: { NotifyStore.keep(state) }) else { return .outOfTime }
     let posts = found.filter { kindsNow.isOn($0.kind) }
     let sent = await Self.post(posts)
-    if let failure { return NotifyResult(outcome: "failed \(failure.reason)", posted: sent.posted) }
+    if let failure { return NotifyResult(outcome: "failed \(failure.reason)\(sent.faces)", posted: sent.posted) }
     if let refused = sent.refused {
       return sent.posted > 0
-        ? NotifyResult(outcome: "posted, \(sent.failed) failed \(refused)", posted: sent.posted)
-        : NotifyResult(outcome: "failed post \(refused)", posted: 0)
+        ? NotifyResult(outcome: "posted, \(sent.failed) failed \(refused)\(sent.faces)", posted: sent.posted)
+        : NotifyResult(outcome: "failed post \(refused)\(sent.faces)", posted: 0)
     }
-    if sent.posted > 0 { return NotifyResult(outcome: "posted", posted: sent.posted) }
+    if sent.posted > 0 { return NotifyResult(outcome: "posted\(sent.faces)", posted: sent.posted) }
     return NotifyResult(outcome: seeded ? "seeded" : "nothing new", posted: 0)
   }
 
@@ -576,10 +578,13 @@ final class NotifyCheck {
   }
 
   /// Runs to the end even once out of time: the cursors are already saved, so a post skipped now would never come,
-  /// and adding a local notification is quick. `refused` is the first failure's domain and code.
-  private static func post(_ posts: [NotifyPost]) async -> (posted: Int, failed: Int, refused: String?) {
+  /// and adding a local notification is quick (out of time, no face is fetched and every post goes out plain).
+  /// `refused` is the first failure's domain and code; `faces` the trip's counts of the senders' faces, or empty.
+  private static func post(_ posts: [NotifyPost]) async -> (posted: Int, failed: Int, refused: String?, faces: String) {
     let center = UNUserNotificationCenter.current()
-    var posted = 0, failed = 0
+    let senders = posts.compactMap(\.sender)
+    let fetched = await NotifyFaces.fetch(senders.map(\.face))
+    var posted = 0, failed = 0, shown = 0, declined = 0
     var refused: String?
     for post in posts {
       let content = UNMutableNotificationContent()
@@ -588,9 +593,18 @@ final class NotifyCheck {
       content.sound = .default
       // No thread of its own: the official app stacks every kind together under the app (234).
       content.userInfo = NotifyRoutes.userInfo(post.route, kind: post.kind)
+      var shownContent: UNNotificationContent = content
+      if let sender = post.sender, let face = fetched.images[sender.face] {
+        if let message = await NotifyFaces.message(content, from: sender, face: face) {
+          shownContent = message
+          shown += 1
+        } else {
+          declined += 1
+        }
+      }
       let identifier = post.identifier ?? "com.kaichuan.bilifast.notify.\(UUID().uuidString)"
       do {
-        try await center.add(UNNotificationRequest(identifier: identifier, content: content, trigger: nil))
+        try await center.add(UNNotificationRequest(identifier: identifier, content: shownContent, trigger: nil))
         posted += 1
       } catch {
         let failure = error as NSError
@@ -598,7 +612,10 @@ final class NotifyCheck {
         refused = refused ?? "\(failure.domain) \(failure.code)"
       }
     }
-    return (posted, failed, refused)
+    var faces = senders.isEmpty ? "" : ", faces \(shown)/\(senders.count)"
+    if fetched.missed > 0 { faces += ", \(fetched.missed) not fetched" }
+    if declined > 0 { faces += ", \(declined) declined" }
+    return (posted, failed, refused, faces)
   }
 }
 
@@ -737,6 +754,23 @@ struct NotifyItem {
   /// The others who liked it too.
   var others: Int64 = 0
   let route: NativeNotifyRoute
+  var sender: NotifySender?
+}
+
+/// Whom a post is from, for the face iOS draws in place of the app icon. In memory only: never in userInfo, a log or
+/// a file.
+struct NotifySender {
+  let mid: Int64
+  /// The face's address as Bilibili gave it.
+  let face: String
+
+  init?(_ person: [String: Any]?, face key: String) {
+    guard let mid = NotifyJSON.int(person?["mid"]), mid > 0, let face = NotifyJSON.nonEmpty(person?[key]) else {
+      return nil
+    }
+    self.mid = mid
+    self.face = face
+  }
 }
 
 enum NotifyItems {
@@ -744,11 +778,13 @@ enum NotifyItems {
   static func comment(_ json: [String: Any], kind: NotifyKind, at timeField: String) -> NotifyItem? {
     guard let id = NotifyJSON.int(json["id"]), let time = NotifyJSON.int(json[timeField]) else { return nil }
     let item = json["item"] as? [String: Any] ?? [:]
+    let user = json["user"] as? [String: Any]
     return NotifyItem(kind: kind, key: "\(id)", time: time,
-                      who: NotifyJSON.text((json["user"] as? [String: Any])?["nickname"]),
+                      who: NotifyJSON.text(user?["nickname"]),
                       text: NotifyJSON.text(item["source_content"]),
                       business: NotifyJSON.text(item["business"]),
-                      route: NotifyRoutes.comment(item, kind: kind))
+                      route: NotifyRoutes.comment(item, kind: kind),
+                      sender: NotifySender(user, face: "avatar"))
   }
 
   /// 赞 opens the app until 消息 is built.
@@ -759,7 +795,8 @@ enum NotifyItems {
     let likers = NotifyJSON.int(json["counts"]) ?? Int64(users.count)
     return NotifyItem(kind: .likes, key: "\(id)@\(time)", time: time, who: NotifyJSON.text(users.first?["nickname"]),
                       text: NotifyJSON.text(item["title"]), business: NotifyJSON.text(item["business"]),
-                      others: max(likers - 1, 0), route: NativeNotifyRoute(target: .likes, toComments: false))
+                      others: max(likers - 1, 0), route: NativeNotifyRoute(target: .likes, toComments: false),
+                      sender: NotifySender(users.first, face: "avatar"))
   }
 
   /// A 视频 card of the polymer feed, as bili_core's dynamic decode reads it (dynamic_models.dart).
@@ -776,7 +813,8 @@ enum NotifyItems {
     }
     return NotifyItem(kind: .uploads, key: id, time: time, who: NotifyJSON.text(author?["name"]),
                       text: NotifyJSON.text(archive["title"]),
-                      route: NativeNotifyRoute(target: .video, bvid: bvid, toComments: false))
+                      route: NativeNotifyRoute(target: .video, bvid: bvid, toComments: false),
+                      sender: NotifySender(author, face: "face"))
   }
 }
 
@@ -788,6 +826,8 @@ struct NotifyPost {
   let route: NativeNotifyRoute
   /// Set where a newer post should replace the one before it.
   var identifier: String?
+  /// Unset for 私信 and the summaries, which show the app icon.
+  var sender: NotifySender?
 }
 
 /// Every word the notifications show, in one place. Only 关注's uploads and 私信 are matched to the official app's
@@ -803,7 +843,7 @@ enum NotifyWording {
     case .messages: "私信"
     }
     let body = item.kind == .uploads ? "发了视频：\(item.text)" : item.text
-    return NotifyPost(kind: item.kind, title: title, body: body, route: item.route)
+    return NotifyPost(kind: item.kind, title: title, body: body, route: item.route, sender: item.sender)
   }
 
   private static func likeTitle(_ who: String, _ item: NotifyItem) -> String {
@@ -831,6 +871,100 @@ enum NotifyWording {
     default: NativeNotifyRoute.app
     }
     return NotifyPost(kind: kind, title: title, body: body, route: route)
+  }
+}
+
+/// A post from someone goes out as a communication notification, as the official app's do (234): their face in place
+/// of the app icon, the icon as its badge. The faces come through their own ephemeral session, never the login's: no
+/// cookies, no cache, nothing kept.
+enum NotifyFaces {
+  private static let timeout: TimeInterval = 4
+  /// The whole lot's: the faces are asked together, so this caps a run's wait for them.
+  private static let budget: UInt64 = 5_000_000_000
+  /// One conversation for every sender. Whether iOS threads communication notifications by conversation is unconfirmed;
+  /// if it does, a conversation each would split them into a stack per person.
+  private static let conversation = "com.kaichuan.bilifast.notify"
+
+  private struct Fetched: Sendable {
+    let face: String
+    let data: Data?
+  }
+
+  /// Each distinct face asked once; one that fails or hasn't come within the budget (or out of time) is missed, and its
+  /// posts go out plain.
+  static func fetch(_ faces: [String]) async -> (images: [String: INImage], missed: Int) {
+    let distinct = Array(Set(faces))
+    guard !distinct.isEmpty else { return ([:], 0) }
+    guard !Task.isCancelled else { return ([:], distinct.count) }
+    let configuration = URLSessionConfiguration.ephemeral
+    configuration.requestCachePolicy = .reloadIgnoringLocalCacheData
+    configuration.urlCache = nil
+    configuration.httpCookieStorage = nil
+    configuration.httpShouldSetCookies = false
+    configuration.timeoutIntervalForRequest = timeout
+    configuration.timeoutIntervalForResource = timeout
+    let session = URLSession(configuration: configuration)
+    defer { session.invalidateAndCancel() }
+    let found = await withTaskGroup(of: Fetched?.self, returning: [String: Data].self) { group in
+      for face in distinct {
+        group.addTask { await Fetched(face: face, data: Self.load(face, in: session)) }
+      }
+      group.addTask {
+        try? await Task.sleep(nanoseconds: Self.budget)
+        return nil
+      }
+      var found: [String: Data] = [:]
+      var left = distinct.count
+      while left > 0, let next = await group.next() {
+        guard let fetched = next else { break }
+        left -= 1
+        if let data = fetched.data { found[fetched.face] = data }
+      }
+      group.cancelAll()
+      return found
+    }
+    return (found.mapValues { INImage(imageData: $0) }, distinct.count - found.count)
+  }
+
+  private static func load(_ face: String, in session: URLSession) async -> Data? {
+    guard let url = address(face), let answer = try? await session.data(from: url),
+          (answer.1 as? HTTPURLResponse)?.statusCode == 200, UIImage(data: answer.0) != nil else { return nil }
+    return answer.0
+  }
+
+  /// A small JPEG from Bilibili's image service, its i0 and i2 asked from i1 as every picture is (remote_image.dart's
+  /// secureImageUrl); nil off Bilibili's image hosts.
+  static func address(_ face: String) -> URL? {
+    var secure = face.hasPrefix("//") ? "https:" + face : face
+    if secure.hasPrefix("http://") { secure = "https://" + String(secure.dropFirst("http://".count)) }
+    for mirror in ["https://i0.hdslb.com/", "https://i2.hdslb.com/"] where secure.hasPrefix(mirror) {
+      secure = "https://i1.hdslb.com/" + String(secure.dropFirst(mirror.count))
+    }
+    guard let url = URL(string: secure), url.scheme == "https", url.host?.hasSuffix("hdslb.com") == true else {
+      return nil
+    }
+    // The face shows at about 38 pt (234), so 3x.
+    return url.query != nil || url.path.contains("@") ? url : URL(string: secure + "@120w_120h_1c.jpg")
+  }
+
+  /// `content` as a message from `sender`; nil, for the plain post, if the donation or the update fails.
+  static func message(_ content: UNNotificationContent, from sender: NotifySender, face: INImage) async
+    -> UNNotificationContent? {
+    let id = String(sender.mid)
+    // iOS shows the sender's name as the bold line in place of the title, so the name is the title as worded.
+    let person = INPerson(personHandle: INPersonHandle(value: id, type: .unknown), nameComponents: nil,
+                          displayName: content.title, image: face, contactIdentifier: nil, customIdentifier: id)
+    let intent = INSendMessageIntent(recipients: nil, outgoingMessageType: .outgoingMessageText, content: content.body,
+                                     speakableGroupName: nil, conversationIdentifier: conversation, serviceName: nil,
+                                     sender: person, attachments: nil)
+    let interaction = INInteraction(intent: intent, response: nil)
+    interaction.direction = .incoming
+    do {
+      try await interaction.donate()
+      return try content.updating(from: intent)
+    } catch {
+      return nil
+    }
   }
 }
 
