@@ -209,8 +209,9 @@ class SettingsWorld {
 
 const sampleRecent = RecentVideo(bvid: 'BV1GJ411x7h7', cid: 1, title: '一个视频', part: '', page: 1, pageCount: 1);
 
-/// The phone's notifications without a phone: [kinds] answers [stored], [setKinds] records each save in [saved], and
-/// [requestPermission] counts in [requests] and moves [allowed] to [answer]'s outcome. [available] as on the phone.
+/// The phone's notifications without a phone: [kinds] answers [stored] (the first [kindsFailures] reads throw),
+/// [setKinds] records each save in [saved] (or throws [saveError], keeping [stored]), and [requestPermission] counts in
+/// [requests] and moves [allowed] to [answer]'s outcome. [available] as on the phone.
 class FakeNotifyHost implements NotifyHost {
   FakeNotifyHost({this.stored = NotifyKinds.none, this.allowed = NotifyPermission.notDetermined, this.answer = true});
 
@@ -222,15 +223,26 @@ class FakeNotifyHost implements NotifyHost {
   final saved = <NotifyKinds>[];
   int requests = 0;
   int permissionReads = 0;
+  int kindsReads = 0;
+  int kindsFailures = 0;
+  Object? saveError;
 
   @override
   bool available = true;
 
   @override
-  Future<NotifyKinds> kinds() async => stored;
+  Future<NotifyKinds> kinds() async {
+    kindsReads += 1;
+    if (kindsFailures > 0) {
+      kindsFailures -= 1;
+      throw StateError('kinds unreadable');
+    }
+    return stored;
+  }
 
   @override
   Future<void> setKinds(NotifyKinds kinds) async {
+    if (saveError case final error?) throw error;
     saved.add(kinds);
     stored = kinds;
   }

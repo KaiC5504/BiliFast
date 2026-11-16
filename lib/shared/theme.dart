@@ -8133,4 +8133,9 @@ abstract final class SettingsListTheme {
   static const pushTop = 35 / 3;
   static const pushStateGap = 17 / 3;
   static const pushStateDrop = 3.0;
+
+  /// White under a labelled group's last hairline: 189 and 190's groups each end 1 px lower than their rows add up
+  /// to, 订阅/预约通知 2 (one is between its second and third rows; ours goes at the end), 关注通知, 其他通知 and the
+  /// last none.
+  static const pushGroupEnd = 1 / 3;
 }
