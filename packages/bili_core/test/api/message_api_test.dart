@@ -213,9 +213,9 @@ void main() {
       expect(request.headers['Referer'], 'https://message.bilibili.com/');
     });
 
-    test('私信 unread is followed plus unfollowed, from api.vc with the login cookies', () async {
+    test('私信 unread is followed, unfollowed and notice cards, from api.vc with the login cookies', () async {
       http.routes[_singleUnreadPath] = (200, _singleUnread);
-      expect(await client.chatUnread(), 7);
+      expect(await client.chatUnread(), 16);
       final request = http.requestsTo(_singleUnreadPath).single;
       expect((request.method, request.url.host), ('GET', _vc));
       expect(http.query(request), {'unread_type': '0', ..._web});
@@ -755,7 +755,7 @@ void main() {
       );
 
       http.routes[_singleUnreadPath] = (200, _singleUnread);
-      expect(await api.chatUnread(), 7);
+      expect(await api.chatUnread(), 16);
     });
   });
 }

@@ -453,12 +453,15 @@ abstract final class MessageDecode {
     );
   }
 
-  /// `single_unread`: people's messages, followed and not. Left out: `biz_msg_follow_unread` and
-  /// `biz_msg_unfollow_unread` (official notice cards), `custom_unread` (客服), `unfollow_push_msg` and the
-  /// intercepted `dustbin_unread` and `dustbin_push_msg`.
+  /// `single_unread`: people's messages, followed and not, and the official notice cards (`biz_msg_*`: 196 lists
+  /// 服务通知 among the sessions, so its unread counts toward 消息's badge). Left out: `custom_unread` (客服),
+  /// `unfollow_push_msg` and the intercepted `dustbin_unread` and `dustbin_push_msg`.
   static int chatUnread(Object? json) {
     final data = JsonObject.from(json, 'single unread');
-    return data.count('follow_unread') + data.count('unfollow_unread');
+    return data.count('follow_unread') +
+        data.count('unfollow_unread') +
+        data.count('biz_msg_follow_unread') +
+        data.count('biz_msg_unfollow_unread');
   }
 
   /// `/x/msgfeed/reply` or `/x/msgfeed/at`.

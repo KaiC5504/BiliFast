@@ -32,7 +32,17 @@ void main() {
       expect(MessageDecode.feedUnread(<String, Object?>{}), (reply: 0, at: 0, like: 0, system: 0));
       expect(MessageDecode.feedUnread({'recv_like': 4}).like, 4);
       expect(MessageDecode.chatUnread(<String, Object?>{}), 0);
-      expect(MessageDecode.chatUnread({'follow_unread': 2, 'custom_unread': 9, 'biz_msg_follow_unread': 9}), 2);
+      expect(
+        MessageDecode.chatUnread({
+          'follow_unread': 2,
+          'unfollow_unread': 1,
+          'biz_msg_follow_unread': 3,
+          'biz_msg_unfollow_unread': 4,
+          'custom_unread': 9,
+          'dustbin_unread': 9,
+        }),
+        10,
+      );
     });
   });
 
