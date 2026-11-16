@@ -491,15 +491,15 @@ void main() {
       }
     });
 
-    testWidgets('直播, 动画 and 影视 say 暂未开放 and change nothing', (tester) async {
+    testWidgets('动画 and 影视 say 暂未开放 and change nothing', (tester) async {
       await show(tester);
       final asked = List.of(http.asked);
-      for (final tab in [HomeTopTab.live, HomeTopTab.anime, HomeTopTab.film]) {
+      for (final tab in [HomeTopTab.anime, HomeTopTab.film]) {
         await tester.tap(label(tab));
         await tester.pump();
         expect(find.text('暂未开放'), findsOneWidget, reason: tab.label);
         await settle(tester, 60);
-        expect(page(tester), 0);
+        expect(page(tester), 1);
         expect(style(tester, HomeTopTab.recommend).color, BiliColors.pink);
       }
       expect(http.asked, asked);
@@ -512,11 +512,11 @@ void main() {
       await tester.tap(label(HomeTopTab.hot));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 150));
-      final half = page(tester);
+      final half = page(tester) - 1;
       expect(half, moreOrLessEquals(HomeTabRowTheme.pageCurve.transform(0.5), epsilon: 0.05));
       expect(indicator(tester).center.dx, moreOrLessEquals(slot(HomeTopTab.recommend) + half * 57));
       await settle(tester);
-      expect(page(tester), 1);
+      expect(page(tester), 2);
       expect(indicator(tester).center.dx, moreOrLessEquals(slot(HomeTopTab.hot)));
       expect(style(tester, HomeTopTab.hot).color, BiliColors.pink);
       expect(style(tester, HomeTopTab.hot).fontWeight, FontWeight.w600);
@@ -525,7 +525,7 @@ void main() {
 
       await tester.tap(label(HomeTopTab.recommend));
       await settle(tester);
-      expect(page(tester), 0);
+      expect(page(tester), 1);
       expect(indicator(tester).center.dx, moreOrLessEquals(slot(HomeTopTab.recommend)));
     });
 
@@ -533,7 +533,7 @@ void main() {
       await show(tester, still: true);
       await tester.tap(label(HomeTopTab.hot));
       await tester.pump();
-      expect(page(tester), 1);
+      expect(page(tester), 2);
       expect(indicator(tester).center.dx, moreOrLessEquals(slot(HomeTopTab.hot)));
     });
 
@@ -545,7 +545,7 @@ void main() {
       await finger.moveBy(const Offset(-20, 0));
       await finger.moveBy(const Offset(-200, 0));
       await tester.pump();
-      final at = page(tester);
+      final at = page(tester) - 1;
       expect(at, inExclusiveRange(0.3, 0.6));
       expect(indicator(tester).center.dx, moreOrLessEquals(slot(HomeTopTab.recommend) + at * 57));
       for (final (tab, share) in [(HomeTopTab.recommend, 1 - at), (HomeTopTab.hot, at)]) {
@@ -561,11 +561,11 @@ void main() {
       await finger.moveBy(const Offset(-40, 0));
       await finger.up();
       await settle(tester);
-      expect(page(tester), 1);
+      expect(page(tester), 2);
 
       await tester.fling(pagesView, const Offset(300, 0), 1000);
       await settle(tester);
-      expect(page(tester), 0);
+      expect(page(tester), 1);
       expect(indicator(tester).center.dx, moreOrLessEquals(slot(HomeTopTab.recommend)));
     });
 

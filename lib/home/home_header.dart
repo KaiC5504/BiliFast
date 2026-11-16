@@ -15,7 +15,7 @@ import '../shared/toast.dart';
 import '../skin/skin.dart';
 import 'tab_bar_icons.dart' show SkinDecodeGate;
 
-/// 首页's tabs (204) in the row's order. Only 推荐 and 热门 have pages; the others say 暂未开放.
+/// 首页's tabs (204) in the row's order. 直播, 推荐 and 热门 have pages; the others say 暂未开放.
 enum HomeTopTab {
   live('直播', 'home-tab-live'),
   recommend('推荐', 'home-tab-recommend'),
@@ -28,11 +28,12 @@ enum HomeTopTab {
   final String label;
   final String keyName;
 
-  /// Its page under the row: 推荐 0, 热门 1.
+  /// Its page under the row: 直播 0, 推荐 1, 热门 2.
   int? get page => switch (this) {
-    recommend => 0,
-    hot => 1,
-    live || anime || film => null,
+    live => 0,
+    recommend => 1,
+    hot => 2,
+    anime || film => null,
   };
 }
 
@@ -61,10 +62,10 @@ class HomeHeader extends StatefulWidget {
   final String? searchWord;
   final ValueListenable<double> feedOffset;
 
-  /// How far the pages have slid from 推荐 (0) towards 热门 (1): the labels and the indicator follow it.
+  /// Where the pages stand, from 直播 (0) through 推荐 (1) to 热门 (2): the labels and the indicator follow it.
   final ValueListenable<double> page;
 
-  /// A tap on 推荐 or 热门, with its [HomeTopTab.page].
+  /// A tap on 直播, 推荐 or 热门, with its [HomeTopTab.page].
   final ValueChanged<int> onPage;
   final VoidCallback onAvatar;
   final VoidCallback onSearch;
@@ -641,8 +642,8 @@ class _SearchFieldState extends State<_SearchField> {
 }
 
 /// 204's tab row: 直播 推荐 热门 动画 影视 centred on the screen, the chosen one larger and semibold in [chosen] over the
-/// indicator, the others in [ink]. While the pages slide, the indicator moves between 推荐 and 热门 with them and the
-/// two labels trade size, weight and colour.
+/// indicator, the others in [ink]. While the pages slide, the indicator moves between 直播, 推荐 and 热门 with them and
+/// the labels it passes trade size, weight and colour.
 class _TabRow extends StatelessWidget {
   const _TabRow({
     required this.page,
@@ -662,7 +663,7 @@ class _TabRow extends StatelessWidget {
   Widget build(BuildContext context) => ValueListenableBuilder<double>(
     valueListenable: page,
     builder: (context, page, _) {
-      final at = HomeTopTab.recommend.index + page.clamp(0.0, 1.0);
+      final at = HomeTopTab.live.index + page.clamp(0.0, 2.0);
       return Stack(
         children: [
           Row(

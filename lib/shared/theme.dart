@@ -8973,7 +8973,231 @@ abstract final class MessageSettingsTheme {
 }
 
 /// 首页's 直播 page (205) and 206.
-abstract final class LiveTabTheme {}
+abstract final class LiveTabTheme {
+  static const page = BiliColors.pageGrey;
+  static const card = BiliColors.card;
+  static const radius = 4.0;
+  static const coverPlaceholder = BiliColors.pageGrey;
+  static const text = BiliColors.text;
+  static const secondary = BiliColors.secondaryText;
+  static const onCover = BiliColors.onCover;
+
+  /// The carousel (205, 225): 5.33 under the header, each card 28 in from the screen's sides (384 on the phone), a
+  /// 216 tall 16:9 video over a 38 band. Its neighbours peek 9.33 beyond it at 90%, scaled about their middles.
+  static const carouselTop = 16 / 3;
+  static const carouselSide = 28.0;
+  static const carouselGap = 28 / 3;
+  static const neighbourScale = 0.9;
+  static const carouselBand = 38.0;
+  static const carouselTurn = Duration(milliseconds: 300);
+
+  /// The anchor over the video's top left: a 30 face in a 1 white ring 9 in and 8.67 down, the 12 pt white name 8.33
+  /// after it.
+  static const faceLeft = 9.0;
+  static const faceTop = 26 / 3;
+  static const face = 30.0;
+  static const faceRing = 1.0;
+  static const faceRingInk = Color(0xFFFFFFFF);
+  static const nameGap = 25 / 3;
+  static const nameText = 12.0;
+
+  /// The name stops short of 直播中.
+  static const anchorRight = 72.0;
+
+  /// 直播中 at the top right, 8 in and 8.67 down: an 18 tall #FF6699 tag with 3 corners, the white bars (the APK's
+  /// gif, its 16 square box) 4 in, then 10 pt words.
+  static const liveTagRight = 8.0;
+  static const liveTagTop = 26 / 3;
+  static const liveTagHeight = 18.0;
+  static const liveTagRadius = 3.0;
+  static const liveTagFill = BiliColors.pink;
+  static const liveTagText = 10.0;
+  static const liveTagBarsLead = 4.0;
+  static const liveTagBarsBox = 16.0;
+
+  /// The bars' ink starts this far into their box.
+  static const barsInk = 3.0;
+  static const liveTagTextLead = 1.0;
+  static const liveTagTrail = 5.0;
+
+  /// 弹 and the speaker as 推荐's big card's, centred 69.33 and 21.17 from the video's right and 19.5 over its bottom.
+  static const danmakuRight = 208 / 3;
+  static const speakerRight = 63.5 / 3;
+  static const buttonCentre = 19.5;
+  static const buttonTarget = 40.0;
+  static const speakerSize = 22.0;
+
+  /// The band: the 14 pt title 10 in, its middle on the band's; 更多直播 / 查看榜单 a 72 × 24 stadium with a 1 #FF6699
+  /// rim and 13 pt words, 10 from the right. With a rank, the chip (18 tall, 101 for 人气榜TOP·2: bold 12 pt #5B7086
+  /// on #E2E7F0 in a 1/3 #A7BBD2 rim, laurels at both ends) then the 12 pt grey value 9 after it.
+  static const bandInset = 10.0;
+  static const titleText = 14.0;
+  static const bandButtonWidth = 72.0;
+  static const bandButtonHeight = 24.0;
+  static const bandButtonRim = 1.0;
+  static const bandButtonText = 13.0;
+  static const bandButtonInk = BiliColors.pink;
+  static const rankChipHeight = 18.0;
+  static const rankChipRadius = 4.0;
+  static const rankChipPad = 8.0;
+  static const rankChipFill = Color(0xFFE2E7F0);
+  static const rankChipRim = Color(0xFFA7BBD2);
+  static const rankChipInk = Color(0xFF5B7086);
+  static const rankChipText = 12.0;
+  static const rankLeaf = 4.0;
+  static const rankValueGap = 9.0;
+  static const rankValueText = 12.0;
+
+  /// 我的关注 (205): a white box 5 under the carousel, 5 in, 139 tall with 4 corners. Its line: 我的关注 14 pt semibold 12
+  /// in, ink centred 18.33 down; N in #FB7299 and 人正在直播 12 pt grey 5 after; the grey bars 7 after; 查看全部 12 pt
+  /// grey and a 4.67 × 9 ›, 6 apart, 12 from the right.
+  static const sectionGap = 5.0;
+  static const sectionSide = 5.0;
+  static const sectionInset = 12.0;
+  static const sectionLineCentre = 55 / 3;
+  static const sectionTitleText = 14.0;
+  static const sectionTitleWeight = FontWeight.w600;
+  static const sectionCountText = 12.0;
+  static const sectionCount = Color(0xFFFB7299);
+  static const sectionCountGap = 5.0;
+  static const sectionBarsGap = 7.0;
+  static const sectionBars = Color(0xFF999999);
+  static const sectionAllText = 12.0;
+  static const chevronWidth = 14 / 3;
+  static const chevronHeight = 9.0;
+  static const chevronStroke = 1.2;
+  static const chevronGap = 6.0;
+  static const chevronInk = Color(0xFF999999);
+
+  /// Its room: a box 39 down, 12 in, 88 tall under a 1/3 #E3E5E7 rim: the 156 wide cover at its left, a 36 face 18.33
+  /// after the cover, then 12.33 on the 14 pt name over the 12 pt grey title.
+  static const stripTop = 39.0;
+  static const stripHeight = 88.0;
+  static const stripBottom = 12.0;
+  static const stripRim = 1 / 3;
+  static const stripRimInk = BiliColors.divider;
+  static const stripCoverWidth = 156.0;
+  static const stripFace = 36.0;
+  static const stripFaceLead = 55 / 3;
+  static const stripTextLead = 37 / 3;
+  static const stripNameText = 14.0;
+  static const stripTitleText = 12.0;
+  static const stripLineGap = 4.0;
+
+  /// The area tabs: a 42 row, 14 pt words, the first 9.5 in and the rest 24.67 apart, 推荐 semibold in the page's ink,
+  /// the others grey. From 336 the page's grey covers them at 85% to 95%, under the picture (16.33) and ⊞ (16) icons in
+  /// #61666D centred 31 apart, the last 25 from the right.
+  static const areaRow = 42.0;
+  static const areaText = 14.0;
+  static const areaLead = 9.5;
+  static const areaGap = 74 / 3;
+  static const areaChosenWeight = FontWeight.w600;
+  static const areaFadeFrom = 336.0;
+  static const areaFadeEdge = 10.0;
+  static const areaFadeNear = 0.85;
+  static const areaFadeFar = 0.95;
+  static const areaIconInk = Color(0xFF61666D);
+  static const areaCoverIcon = 49 / 3;
+  static const areaGridIcon = 16.0;
+  static const areaGridRight = 25.0;
+  static const areaIconPitch = 31.0;
+  static const areaIconTarget = 30.0;
+
+  /// The two-column cards: 5 from the left, 5 apart and 6 from the right (212 wide on the phone), 4 corners; a 4:3 cover over a 50 band. On the cover a tag at the top left,
+  /// the corner picture 20 tall at the top right, and 13.33 over its bottom the 10 pt 👁 (14 wide) and 👍 (13.33) counts
+  /// 9 in, 5.67 after each icon, 10.67 between, the area 9 from the right. In the band a 32 face 8 in and centred, the
+  /// 14 pt title and the 12 pt name 44 in, ⋮ (#C4C4C4, 2.67 dots 3.33 apart) 10 from the right on the name's line.
+  static const gridSide = 5.0;
+  static const gridSideRight = 6.0;
+  static const gridGap = 5.0;
+  static const gridCoverAspect = 4 / 3;
+  static const gridBand = 50.0;
+  static const cornerHeight = 20.0;
+  static const statCentre = 40 / 3;
+  static const statLead = 9.0;
+  static const statText = 10.0;
+  static const statIconGap = 17 / 3;
+  static const statGap = 32 / 3;
+  static const statTrail = 9.0;
+  static const watchedIcon = 14.0;
+  static const likedIcon = 40 / 3;
+  static const gridFace = 32.0;
+  static const gridFaceLead = 8.0;
+  static const gridTextLead = 44.0;
+  static const gridTextTrail = 24.0;
+  static const gridTitleText = 14.0;
+  static const gridNameText = 12.0;
+  static const gridLineGap = 3.0;
+  static const moreRight = 10.0;
+  static const moreDot = 8 / 3;
+  static const morePitch = 10 / 3;
+  static const moreInk = Color(0xFFC4C4C4);
+  static const moreTarget = 32.0;
+
+  /// The shade under the cover's counts.
+  static const shadeHeight = BiliMetrics.coverShadeHeight;
+
+  /// The verify bolt: 12 on a 32 face (11.67 on 206's 36), its ring white, at the face's bottom right.
+  static const gridBadge = 12.0;
+  static const stripBadge = 38 / 3;
+  static const badgeRing = 1.0;
+
+  /// A cover's tag: 20 tall, 6 at its bottom right, the picture (24 × 21) poking 1 out of the cover's top left, the
+  /// 12 pt white words 4 after it and 9 before the end, on the answer's colours or #FB7299 → #B0306A.
+  static const tagHeight = 20.0;
+  static const tagRadius = 6.0;
+  static const tagIconWidth = 24.0;
+  static const tagIconHeight = 21.0;
+  static const tagText = 12.0;
+  static const tagTextLead = 4.0;
+  static const tagTextTrail = 9.0;
+  static const tagFill = [Color(0xFFFB7299), Color(0xFFB0306A)];
+
+  /// The following room's cover counts: 12 pt, the area 8.67 in, 👁 (16.33 wide) and its count 12 from the right.
+  static const coverStatText = 12.0;
+  static const coverStatLead = 26 / 3;
+  static const coverStatTrail = 12.0;
+  static const coverWatchedIcon = 49 / 3;
+  static const coverStatCentre = 12.0;
+
+  /// 206: the following bar's look, the 16 pt title and the 14 pt 全…注 20.67 from the right, ‹ (8.33 × 15.33, 1.5
+  /// strokes) centred 22.33 in; then the cards straight under the bar, 5.33 in, 207.67 wide, the cover 129 over a
+  /// 58.67 band: a 36 face 8.67 in and centred, the 14 pt name and the 12 pt grey title 52 in.
+  static const followingPage = Color(0xFFF4F4F4);
+  static const followingTitleText = 16.0;
+  static const followingActionText = 14.0;
+  static const followingActionRight = 62 / 3;
+  static const followingBackCentre = 67 / 3;
+  static const followingBackWidth = 25 / 3;
+  static const followingBackHeight = 46 / 3;
+  static const followingBackStroke = 1.5;
+  static const followingBackTarget = 44.0;
+  static const followingSide = 16 / 3;
+  static const followingGap = 14.0;
+  static const followingCoverAspect = 623 / 387;
+  static const followingBand = 176 / 3;
+  static const followingFace = 36.0;
+  static const followingFaceLead = 26 / 3;
+  static const followingTextLead = 52.0;
+
+  /// Rows this close to the end ask for the next page; the footer and states as 热门's.
+  static const loadAhead = 600.0;
+  static const footerPad = 16.0;
+  static const footerLine = 20.0;
+  static const spinnerRadius = 10.0;
+  static const stateText = 14.0;
+  static const stateGap = 16.0;
+  static const retryText = HotListTheme.retryText;
+  static const retryHeight = HotListTheme.retryHeight;
+  static const retryPadX = HotListTheme.retryPadX;
+  static const retryRim = HotListTheme.retryRim;
+  static const reloadScroll = HomeTabBarTheme.reloadScroll;
+  static const reloadHeader = HomeTabBarTheme.reloadHeader;
+  static const reloadCollapse = HomeTabBarTheme.reloadCollapse;
+
+  /// A paused card's stream is loaded again on return after this, so it plays live rather than from where it stopped.
+  static const resumeReloadAfter = Duration(seconds: 10);
+}
 
 /// A room's header, chat, bottom bar, 醒目留言 and sheets in portrait (207, 208, 221, 224, 228, 229), measured in
 /// px / 3. Heights count from the safe area's top (62 on the Pro Max) unless they say otherwise.
