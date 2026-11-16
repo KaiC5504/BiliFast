@@ -202,7 +202,8 @@ void main() {
 {"card_goto":"inline_av_v2","param":"90000012","can_play":1,"player_args":{"aid":90000012},
  "like_button":{"count":0,"show_count":0,"selected":true}},
 {"card_goto":"av","param":"90000013","can_play":1,"player_args":{"aid":90000013}},
-{"card_goto":"inline_av_v2","param":"90000014","can_play":1,"player_args":{"aid":90000014},"ad_info":{}},
+{"card_goto":"inline_av_v2","param":"90000014","can_play":1,"player_args":{"aid":90000014},
+ "ad_info":{"is_ad":true,"creative_id":1,"is_ad_loc":true}},
 {"card_goto":"inline_av_v2","param":"90000015","can_play":1,"player_args":{"aid":90000015}}
 ]}}''');
     final cards = await client.officialFeed(index: 1);
@@ -210,6 +211,21 @@ void main() {
     expect(cards[0].big, const FeedBig(likes: 0, showLikes: false, liked: true), reason: 'selected as a bool');
     expect(cards[1].big, const FeedBig(likes: 0, showLikes: false), reason: 'a big card without like_button');
     expect(cards[2].big, isNull);
+  });
+
+  test("a big card in an ad slot (only the slot's ad_info) is an ordinary video; a small one is still dropped",
+      () async {
+    http.routes[feedPath] = (200, r'''
+{"code":0,"message":"0","ttl":1,"data":{"items":[
+{"card_goto":"inline_av_v2","param":"90000021","can_play":1,"player_args":{"aid":90000021},
+ "ad_info":{"resource":1,"source":2,"request_id":"r","is_ad_loc":true,"card_index":1,"client_ip":"x"}},
+{"card_goto":"av","param":"90000022","can_play":1,"player_args":{"aid":90000022},
+ "ad_info":{"resource":1,"is_ad_loc":true}},
+{"card_goto":"av","param":"90000023","can_play":1,"player_args":{"aid":90000023}}
+]}}''');
+    final cards = await client.officialFeed(index: 0);
+    expect(cards.map((card) => card.aid), [90000021, 90000023]);
+    expect(cards.first.big, isNotNull);
   });
 
   test('a card decodes ids, counts as shown, owner, reason and shape', () async {

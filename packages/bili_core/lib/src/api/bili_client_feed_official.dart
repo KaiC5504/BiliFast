@@ -131,16 +131,26 @@ const _officialFeedHeaders = {
   'bili-http-engine': 'cronet',
 };
 
-/// Only playable video cards, the big inline one included: ads (`ad_av`, `ad_web_s`, or any card with `ad_info`),
-/// live rooms, 番剧, banners and the rest are dropped, as PiliPlus's `_filterAppRcmd` does.
+/// Only playable video cards, the big inline one included: ads (`ad_av`, `ad_web_s`, any card [_isAd] names), live
+/// rooms, 番剧, banners and the rest are dropped.
 FeedCard? _officialFeedItem(Object? json) {
   if (json is! Map<String, Object?>) return null;
   final object = JsonObject(json);
   final goto = object.text('card_goto') ?? object.text('goto');
-  if (!const {'av', 'inline_av_v2'}.contains(goto) || json['ad_info'] != null || asInt(json['can_play']) != 1) {
+  if (!const {'av', 'inline_av_v2'}.contains(goto) || _isAd(json, goto) || asInt(json['can_play']) != 1) {
     return null;
   }
   return attempt(() => FeedCard.fromOfficial(json));
+}
+
+/// An ad's `ad_info` names it (`is_ad`, a creative). A big card placed in an ad slot carries only the slot's fields
+/// (`is_ad_loc`, as the banner does) and is an ordinary video, which the official app shows unlabelled on top; a small
+/// card with any `ad_info` is still dropped, since a promoted one (创作推广) would need its label drawn.
+bool _isAd(Map<String, Object?> json, String? goto) {
+  final info = json['ad_info'];
+  if (info == null) return false;
+  if (goto != 'inline_av_v2' || info is! Map) return true;
+  return info['is_ad'] == true || info['creative_id'] != null || info['creative_content'] != null;
 }
 
 /// Android lists a page's big card last; the iPhone app shows it first (recording 122), as its own feed lists it.
@@ -159,8 +169,17 @@ List<String> _feedCardTypes(Object? json) {
     for (final item in items)
       if (item is Map<String, Object?>)
         '${item['card_goto'] ?? item['goto'] ?? '?'}/${item['card_type'] ?? '?'}'
-            '${item['ad_info'] != null ? '/ad' : ''}',
+            '${_adMark(item)}',
   ];
+}
+
+/// `/ad` for an ad, `/slot` for a card with only an ad slot's `ad_info`.
+String _adMark(Map<String, Object?> item) {
+  final info = item['ad_info'];
+  if (info == null) return '';
+  return info is Map && info['is_ad'] != true && info['creative_id'] == null && info['creative_content'] == null
+      ? '/slot'
+      : '/ad';
 }
 
 /// 推荐 from the official app's feed (`/x/v2/feed/index`), personalised by the app token. Only videos come back:
