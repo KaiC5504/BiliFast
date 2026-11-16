@@ -56,6 +56,34 @@ void main() {
     expect(opened, isEmpty);
   });
 
+  testWidgets("the space gets the row's face, and none for a row without one", (tester) async {
+    const face = 'https://i1.hdslb.com/bfs/face/made-up-face.jpg';
+    final base = video(1, author: '测试作者');
+    final withFace = SearchVideo(
+      aid: base.aid,
+      bvid: base.bvid,
+      title: base.title,
+      author: base.author,
+      mid: base.mid,
+      face: face,
+      cover: base.cover,
+      play: base.play,
+      danmaku: base.danmaku,
+      duration: base.duration,
+      published: base.published,
+    );
+    await pumpRow(tester, withFace);
+    await tester.tap(name);
+    await pumpRoute(tester);
+    expect(openSpaces(tester).single.face, face);
+
+    await closeSpace(tester);
+    await pumpRow(tester, base);
+    await tester.tap(name);
+    await pumpRoute(tester);
+    expect(openSpaces(tester).single.face, isNull);
+  });
+
   testWidgets("a press on the name doesn't light the row", (tester) async {
     await pumpRow(tester, video(1));
     final gesture = await tester.startGesture(tester.getCenter(name));

@@ -101,6 +101,19 @@ void main() {
       expect(cover(null), '');
     });
 
+    test("reads upic as the uploader's face, made https", () {
+      expect(
+        SearchVideo.fromJson(videoRow({'upic': '//i1.hdslb.com/bfs/face/f.jpg'})).face,
+        'https://i1.hdslb.com/bfs/face/f.jpg',
+      );
+      expect(
+        SearchVideo.fromJson(videoRow({'upic': 'https://i1.hdslb.com/bfs/face/f.jpg'})).face,
+        'https://i1.hdslb.com/bfs/face/f.jpg',
+      );
+      expect(SearchVideo.fromJson(videoRow({})).face, '');
+      expect(SearchVideo.fromJson(videoRow({'upic': null})).face, '');
+    });
+
     test('reads pubdate as local time, 0 or missing as none', () {
       DateTime? published(Object? pubdate) => SearchVideo.fromJson(videoRow({'pubdate': pubdate})).published;
       final date = published(1760000000)!;

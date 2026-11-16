@@ -359,6 +359,8 @@ final class HistoryItem {
     required this.title,
     required this.cover,
     required this.ownerName,
+    this.ownerMid = 0,
+    this.ownerFace = '',
     required this.progress,
     required this.duration,
     required this.viewAt,
@@ -385,6 +387,8 @@ final class HistoryItem {
       title: object.string('title') ?? '',
       cover: object.string('cover') ?? '',
       ownerName: object.string('author_name') ?? '',
+      ownerMid: object.integer('author_mid') ?? 0,
+      ownerFace: object.string('author_face') ?? '',
       progress: object.integer('progress') ?? 0,
       duration: object.integer('duration') ?? 0,
       viewAt: object.integer('view_at') ?? 0,
@@ -399,6 +403,8 @@ final class HistoryItem {
   final String title;
   final String cover;
   final String ownerName;
+  final int ownerMid;
+  final String ownerFace;
 
   /// Seconds watched; -1 means watched to the end.
   final int progress;
@@ -427,6 +433,8 @@ final class HistoryItem {
       other.title == title &&
       other.cover == cover &&
       other.ownerName == ownerName &&
+      other.ownerMid == ownerMid &&
+      other.ownerFace == ownerFace &&
       other.progress == progress &&
       other.duration == duration &&
       other.viewAt == viewAt &&
@@ -434,8 +442,8 @@ final class HistoryItem {
       other.part == part;
 
   @override
-  int get hashCode =>
-      Object.hash(aid, bvid, cid, title, cover, ownerName, progress, duration, viewAt, device, part);
+  int get hashCode => Object.hash(
+      aid, bvid, cid, title, cover, ownerName, ownerMid, ownerFace, progress, duration, viewAt, device, part);
 }
 
 /// Where the next page of history starts: the last row's target id and view time.

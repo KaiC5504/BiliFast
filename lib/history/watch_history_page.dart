@@ -18,6 +18,7 @@ import '../shared/release_refresh.dart';
 import '../shared/remote_image.dart';
 import '../shared/theme.dart';
 import '../shared/toast.dart';
+import '../space/uploader_tap.dart';
 import '../video/video_route.dart';
 import 'history_glyphs.dart';
 import 'history_model.dart';
@@ -335,6 +336,7 @@ class _HistoryRow extends StatelessWidget {
     const textLeft = HistoryTheme.gutter + HistoryTheme.coverWidth + HistoryTheme.textGap;
     const coverBottom = HistoryTheme.rowPadTop + HistoryTheme.coverHeight;
     const metaRoom = HistoryTheme.moreCentreRight + HistoryTheme.moreTarget / 2;
+    const metaTop = coverBottom + HistoryTheme.metaBottom - HistoryTheme.metaLine * 2 - HistoryTheme.metaGap;
     final titleStyle = _style(
       HistoryTheme.rowTitleText,
       HistoryTheme.rowTitle,
@@ -377,7 +379,7 @@ class _HistoryRow extends StatelessWidget {
           Positioned(
             left: textLeft,
             right: metaRoom,
-            top: coverBottom + HistoryTheme.metaBottom - HistoryTheme.metaLine * 2 - HistoryTheme.metaGap,
+            top: metaTop,
             child: IgnorePointer(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -389,6 +391,17 @@ class _HistoryRow extends StatelessWidget {
               ),
             ),
           ),
+          if (item.ownerMid > 0)
+            Positioned(
+              left: textLeft,
+              right: metaRoom,
+              top: metaTop - _nameSlopAbove,
+              height: _nameSlopAbove + HistoryTheme.metaLine + _nameSlopBelow,
+              child: Align(
+                alignment: Alignment.topLeft,
+                child: _UploaderName(item: item),
+              ),
+            ),
           Positioned(
             right: HistoryTheme.moreCentreRight - HistoryTheme.moreTarget / 2,
             width: HistoryTheme.moreTarget,
@@ -416,6 +429,63 @@ class _HistoryRow extends StatelessWidget {
               child: ColoredBox(color: HistoryTheme.divider),
             ),
         ],
+      ),
+    );
+  }
+}
+
+const _nameSlopAbove = 6.0;
+
+// Half the gap, so the time line under it stays the row's.
+const _nameSlopBelow = HistoryTheme.metaGap / 2;
+
+/// The uploader's UP glyph and name as one target over the drawn line, as wide as the name: the uploader's space.
+class _UploaderName extends StatelessWidget {
+  const _UploaderName({required this.item});
+
+  final HistoryItem item;
+
+  static const _lead = HistoryTheme.glyphBox + HistoryTheme.glyphGap;
+
+  /// The width [_MetaLine] gives the name, measured the way its Text lays it out.
+  double _nameWidth(BuildContext context, double room) {
+    final style = DefaultTextStyle.of(context).style
+        .merge(_style(HistoryTheme.metaText, HistoryTheme.meta, height: HistoryTheme.metaLine / HistoryTheme.metaText));
+    final painter = TextPainter(
+      text: TextSpan(text: item.ownerName, style: style),
+      textDirection: Directionality.of(context),
+      textScaler: MediaQuery.textScalerOf(context),
+      locale: Localizations.maybeLocaleOf(context),
+      strutStyle: BiliFonts.strut(style),
+      maxLines: 1,
+      ellipsis: '…',
+    )..layout(maxWidth: room);
+    final width = painter.width;
+    painter.dispose();
+    return width;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    void open() => openUploader(
+      context,
+      UploaderRef(mid: item.ownerMid, name: item.ownerName, face: item.ownerFace.isEmpty ? null : item.ownerFace),
+    );
+    return LayoutBuilder(
+      builder: (context, constraints) => Semantics(
+        button: true,
+        label: item.ownerName,
+        onTap: open,
+        excludeSemantics: true,
+        child: GestureDetector(
+          key: ValueKey('history-uploader-${item.id}'),
+          behavior: HitTestBehavior.opaque,
+          onTap: open,
+          child: SizedBox(
+            width: _lead + _nameWidth(context, math.max(0, constraints.maxWidth - _lead)),
+            height: _nameSlopAbove + HistoryTheme.metaLine + _nameSlopBelow,
+          ),
+        ),
       ),
     );
   }
