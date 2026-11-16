@@ -169,7 +169,7 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
   bool _played = false;
 
   /// 详情页直接全屏播放: full screen once the video's shape is known, once, for a page opened rather than brought back
-  /// by the small window.
+  /// by the small window, and not under a reply notification's thread, which full screen would hide.
   bool _fullScreenOnOpen = false;
 
   /// The playback's session, once the page has built its player around it.
@@ -787,7 +787,7 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
             autoplay: brought != null || _opensPlaying(route),
             storyFeed: createStory,
           );
-    _fullScreenOnOpen = !restored && PlayerPrefs.shared.detailFullScreen;
+    _fullScreenOnOpen = !restored && route.comment == null && PlayerPrefs.shared.detailFullScreen;
     _playback = playback;
     // A card that was playing when tapped plays on; one its rule had paused opens as a page opened afresh would.
     final resumeHeld = !playback.heldOnCard || _opensPlaying(route);
@@ -2509,7 +2509,11 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
             model: comments,
             callbacks: _commentCallbacks,
           ),
-          null => const CommentsSlot(),
+          // A video that failed to load never brings the aid 评论 waits for.
+          null => switch ((_failure(_controller, _controller != null && _attached), _retry)) {
+            (final error?, final retry?) => CommentsSlot.failed(error: error, onRetry: retry),
+            _ => const CommentsSlot(),
+          },
         },
       ),
     );

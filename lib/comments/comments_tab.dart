@@ -793,9 +793,15 @@ class _BackToTopPainter extends CustomPainter {
 
 /// 评论 before the video's aid is known: the loading TV under the reserve, centred in a box as tall as the list, as 64
 /// has it before its write bar comes (lower than [CommentsTab]'s first load). It doesn't scroll: the box runs past the
-/// screen's bottom, and a drag would carry the collapsing player with it.
+/// screen's bottom, and a drag would carry the collapsing player with it. [CommentsSlot.failed] is for a video that
+/// failed to load, whose aid never comes: the list's own failure footer under the reserve, [onRetry] retrying the video.
 class CommentsSlot extends StatelessWidget {
-  const CommentsSlot({super.key});
+  const CommentsSlot({super.key}) : error = null, onRetry = null;
+
+  const CommentsSlot.failed({super.key, required String this.error, required VoidCallback this.onRetry});
+
+  final String? error;
+  final VoidCallback? onRetry;
 
   @override
   Widget build(BuildContext context) => ColoredBox(
@@ -807,14 +813,19 @@ class CommentsSlot extends StatelessWidget {
         SliverToBoxAdapter(
           child: Builder(builder: (context) => SizedBox(height: PlayerReserve.of(context))),
         ),
-        SliverLayoutBuilder(
-          builder: (context, constraints) => SliverToBoxAdapter(
-            child: SizedBox(
-              height: constraints.viewportMainAxisExtent,
-              child: const Center(child: LoadingTvState(key: ValueKey('comments-slot-loading'))),
+        switch ((error, onRetry)) {
+          (final error?, final onRetry?) => SliverToBoxAdapter(
+            child: CommentListFooter(loading: false, error: error, isEnd: false, isEmpty: true, onRetry: onRetry),
+          ),
+          _ => SliverLayoutBuilder(
+            builder: (context, constraints) => SliverToBoxAdapter(
+              child: SizedBox(
+                height: constraints.viewportMainAxisExtent,
+                child: const Center(child: LoadingTvState(key: ValueKey('comments-slot-loading'))),
+              ),
             ),
           ),
-        ),
+        },
       ],
     ),
   );
