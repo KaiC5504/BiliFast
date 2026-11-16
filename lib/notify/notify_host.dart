@@ -110,12 +110,14 @@ abstract class NotifyHost {
   set onTap(void Function(NotifyRoute route)? callback);
 }
 
-/// Windows and tests: the switches kept in memory, nothing posted.
+/// Windows and tests: the switches kept in memory, nothing posted. A [launchRoute] stands in for a tapped
+/// notification that launched the app (`--fake-notify-tap`).
 class NoNotifyHost implements NotifyHost {
-  NoNotifyHost({this._kinds = NotifyKinds.none, this.allowed = NotifyPermission.notDetermined});
+  NoNotifyHost({this._kinds = NotifyKinds.none, this.allowed = NotifyPermission.notDetermined, this.launchRoute});
 
   NotifyKinds _kinds;
   NotifyPermission allowed;
+  NotifyRoute? launchRoute;
 
   @override
   bool get available => false;
@@ -133,7 +135,11 @@ class NoNotifyHost implements NotifyHost {
   Future<bool> requestPermission() async => allowed == NotifyPermission.allowed;
 
   @override
-  Future<NotifyRoute?> takeLaunchRoute() async => null;
+  Future<NotifyRoute?> takeLaunchRoute() async {
+    final route = launchRoute;
+    launchRoute = null;
+    return route;
+  }
 
   @override
   Future<List<NotifyTrip>> takeTrips() async => const [];

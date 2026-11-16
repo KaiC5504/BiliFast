@@ -33,6 +33,7 @@ import 'me/fake_me_api.dart';
 import 'me/me_profile_store.dart';
 import 'notify/ios/ios_notify_host.dart';
 import 'notify/notify_taps.dart';
+import 'notify/notify_host.dart';
 import 'offline/fake_offline_library.dart';
 import 'offline/ios/ios_offline_host.dart';
 import 'offline/offline_host.dart';
@@ -180,7 +181,18 @@ Future<void> main(List<String> args) async {
     offline: offline,
     sideload: sideload,
     appIcons: Platform.isIOS ? IosAppIconHost() : null,
-    notify: Platform.isIOS ? IosNotifyHost() : null,
+    notify: Platform.isIOS
+        ? IosNotifyHost()
+        : fakeAccount && args.contains('--fake-notify-tap')
+            // A reply notification's tap, on a real video (one live open) with the demo thread.
+            ? NoNotifyHost(
+                launchRoute: const NotifyVideo(
+                  bvid: 'BV1GJ411x7h7',
+                  commentRoot: FakePageApi.demoFocusRoot,
+                  comment: FakePageApi.demoFocusReply,
+                ),
+              )
+            : null,
     historyOutbox: historyOutbox,
     logFiles: logFiles,
     logs: logs,
