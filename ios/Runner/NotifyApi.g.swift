@@ -333,7 +333,8 @@ struct NativeNotifyRoute: Hashable, CustomStringConvertible {
 /// Generated class from Pigeon that represents data sent in messages.
 struct NativeNotifyTrip: Hashable, CustomStringConvertible {
   var atMs: Int64
-  /// `posted`, `nothing new`, `seeded`, `logged out`, `all off`, `not allowed`, `expired` or `failed <reason>`.
+  /// `posted` (or `posted, N failed <domain> <code>`), `nothing new`, `seeded`, `logged out`, `all off`, `not allowed`,
+  /// `expired`, or `failed <reason>` (a scheduling refusal too: `failed not scheduled <code>`, `failed not registered`).
   var outcome: String
   var calls: Int64
   var posted: Int64

@@ -78,7 +78,8 @@ class NativeNotifyTrip {
 
   int atMs;
 
-  /// `posted`, `nothing new`, `seeded`, `logged out`, `all off`, `not allowed`, `expired` or `failed <reason>`.
+  /// `posted` (or `posted, N failed <domain> <code>`), `nothing new`, `seeded`, `logged out`, `all off`, `not allowed`,
+  /// `expired`, or `failed <reason>` (a scheduling refusal too: `failed not scheduled <code>`, `failed not registered`).
   String outcome;
   int calls;
   int posted;
