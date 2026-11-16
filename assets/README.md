@@ -38,10 +38,10 @@ Taken unchanged:
 | `images/home/hot_share_wechat.png`, `hot_share_moments.png` | `bili_socialize_wx_chat`, `bili_socialize_wx_moment` |
 | `images/home/hot_share_qq.png`, `hot_share_download.png` | `bili_socialize_qq_chat`, `bili_socialize_download` |
 | `images/home/hot_share_watch_later.png` | `ic_hot_share_menu_watch_later` |
+| `images/message/tab_box_system.png`, `tab_box_creator.png` | `ic_im_system_notice`, `ic_im_up_assistant` |
 
 Bitmaps changed slightly: `images/dynamic/follow_pointer.png` is `dy_ic_indicator_triangle` cropped to its ink, and
-`images/player/pad_end_replay.png` is `ic_endpage_replay_small` at full opacity. `images/message/tab_box_system.png` and
-`tab_box_creator.png` are `ic_im_system_notice` and `ic_im_up_assistant` with only their white glyph kept.
+`images/player/pad_end_replay.png` is `ic_endpage_replay_small` at full opacity.
 
 Vector drawables, drawn white as PNGs (by `tools/apk_asset.py`) for tinting:
 
