@@ -30,13 +30,16 @@ draw one; extract them into the shared pieces. Show one screen:
    from the official app before the build starts; never fill a gap from PiliPlus or the Swift app.
 7. **Decisions for KaiC:** anything only he can settle (a spec rule that clashes with CLAUDE.md, a product choice),
    each with your recommendation. He answers them with the go.
-8. **Build number:** the next one (the last shipped, from the status section or the last run, plus one).
+8. **Release:** held on main for the next release, unless KaiC says ship (then the build number: the last shipped plus
+   one).
 
 Size the table by files, not features: one agent per set of files that can change without the others. A file every
 piece needs (such as `playback_controller.dart`) gets one owner; the others build against its new signatures, stubbed
 in the contracts commit. Up to about 8 builders.
 
-Wait for his go. After it, run straight through to TestFlight; ask him only for a decision that is truly his.
+Wait for his go. After it, run straight through to the phone dev build (step 7); ask him only for a decision that is
+truly his. TestFlight and the public IPA wait for his word to ship (2026-11-16: people download every release, so each
+gathers several features).
 
 ## 2. Shared pieces (the contracts commit)
 
@@ -118,17 +121,20 @@ Then, in parallel, run:
 
 Fix small findings directly.
 
-## 7. Ship
+## 7. Phone, then ship only on KaiC's word
 
-1. A dev build on KaiC's phone first, when he's on the Mac's Wi-Fi: `python scripts/mac.py phone` (about 3 minutes,
+1. A dev build on KaiC's phone, when he's on the Mac's Wi-Fi: `python scripts/mac.py phone` (about 3 minutes,
    his login kept), then his numbered steps. If his phone can't be reached, stop and tell him.
-2. Add the CLAUDE.md status entry, and update the layout section for any new folders.
+2. Update the layout section for any new folders. Remove the slice's worktrees and branches (step 6 below). Held (the
+   default): list the slice under CLAUDE.md's Next as on main, not released, push main, report and stop here.
+   The rest of this section runs only when KaiC says ship; the CLAUDE.md status entry is written then, covering every
+   held slice, as is `docs/release-notes.md`.
 3. Run `python scripts/gate.py` on the committed tree.
 4. Push main, then `python scripts/testflight.py start`.
 5. Track the run in the background: one `gh run view <id> --json status` every 90 s until it completes, then
    `python scripts/testflight.py status` once; on a failure, `gh run view <id> --log-failed` at once. No fixed sleep,
    nothing faster than 90 s, no `gh run watch`.
-6. Once the run is green, remove the slice's worktrees and branches (each agent leaves a worktree of ~200 MB):
+6. Once the slice is merged (held or shipped), remove its worktrees and branches (each agent leaves a worktree of ~200 MB):
    `git worktree remove -f -f` each one under `.claude/worktrees/`, `git worktree prune`, then `git branch -D` every
    `worktree-agent-*` branch. Check first that each branch is merged into main (`git branch --no-merged main`); one
    that isn't, ask KaiC before deleting it.
