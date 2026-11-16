@@ -5666,7 +5666,7 @@ abstract final class HomeHeaderTheme {
   /// The tab row's magnifier, folded: ink 17 pt square from x 412 and y 71 (9 pt under the tab row's top). Its stroke
   /// is 1.83 pt; the search glyph scaled to this size draws 2.1. It rides in from [searchSlide] to the right with the
   /// fold, unfaded, in a [searchTarget] wide tap box at the row's end. The other tabs' grey on white (01's #61666D);
-  /// over a 装扮's picture its colour at the other tabs' 72% (121: #393F35 over #D1E1CA under a black 推荐).
+  /// over a 装扮's picture its colour at 72% (121: #393F35 over #D1E1CA under a black 推荐).
   static const searchSize = 52 / 3;
   static const searchRight = 11.0;
   static const searchTop = 26 / 3;
