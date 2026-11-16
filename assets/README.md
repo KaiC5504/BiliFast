@@ -35,9 +35,13 @@ Taken unchanged:
 | `images/space/banner_sound.webp`, `banner_sound_off.webp` | the digital collection's sound disc |
 | `images/space/banner_collectible.png` | `ic_space_nft_header` |
 | `images/space/banner_region.png` | `ic_nft_icon_ex` |
+| `images/home/hot_share_wechat.png`, `hot_share_moments.png` | `bili_socialize_wx_chat`, `bili_socialize_wx_moment` |
+| `images/home/hot_share_qq.png`, `hot_share_download.png` | `bili_socialize_qq_chat`, `bili_socialize_download` |
+| `images/home/hot_share_watch_later.png` | `ic_hot_share_menu_watch_later` |
 
 Bitmaps changed slightly: `images/dynamic/follow_pointer.png` is `dy_ic_indicator_triangle` cropped to its ink, and
-`images/player/pad_end_replay.png` is `ic_endpage_replay_small` at full opacity.
+`images/player/pad_end_replay.png` is `ic_endpage_replay_small` at full opacity. `images/message/tab_box_system.png` and
+`tab_box_creator.png` are `ic_im_system_notice` and `ic_im_up_assistant` with only their white glyph kept.
 
 Vector drawables, drawn white as PNGs (by `tools/apk_asset.py`) for tinting:
 
@@ -53,6 +57,11 @@ Vector drawables, drawn white as PNGs (by `tools/apk_asset.py`) for tinting:
 | `images/dynamic/dy_ic_*.png` | the drawables of the same names |
 | `images/dynamic/follow_write.png` | `dy_ic_write` |
 | `images/home/pad_tab_*.png` | `ic_vector_tab_bar_{home,partition,moments,mine}_default` and `_selected` |
+| `images/home/hot_play_counts.png` | `ic_info_play_counts` |
+| `images/message/feed_reply.png` | `ic_bubble_comment_line_v2` |
+| `images/message/feed_like.png`, `feed_liked.png` | `ic_vector_like`, `ic_vector_liked` |
+| `images/message/feed_gear.png` | `vc_mine_login_settings` |
+| `images/message/feed_delete.png` | `biligame_vector_trash_delete_line` |
 
 Glyphs of the app's icon font (`composeResources/.../font/iconfont.ttf`), drawn white as PNGs:
 
@@ -67,3 +76,8 @@ Glyphs of the app's icon font (`composeResources/.../font/iconfont.ttf`), drawn 
 | `images/offline/sheet_cast.png` | `tv_airplay_line` |
 | `images/offline/sheet_share.png` | `arrow_share_line` |
 | `images/offline/sheet_done.png` | `checkmark_circle_fill` |
+| `images/message/tab_broom.png` | `brush_clear_line` |
+| `images/message/tab_entry_reply.png`, `tab_entry_like.png` | `bubble_comment_fill_500`, `hand_thumbsup_fill_500` |
+| `images/message/tab_sheet_settings.png`, `tab_sheet_contacts.png` | `nut_setting_line_500`, `person_address_book_line_500` |
+| `images/message/tab_sheet_fan_club.png`, `tab_sheet_system.png` | `person_hot_line_500`, `speaker_sound_on_line_500` |
+| `images/message/tab_sheet_creator.png` | `brandtv_normal_line_500` |
