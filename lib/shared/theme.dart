@@ -9562,12 +9562,12 @@ abstract final class LivePlayerTheme {
   /// third of the way down from the video behind). White tints vanished over a bright picture.
   static const capsuleFill = Color(0x99404040);
 
-  /// While the controls show, black shades the top and bottom edges: 50% at the top fading out 100 pt down, 60% at
-  /// the bottom fading out 120 pt up (235 and 209 against the same streams without them).
-  static const topShade = 100.0;
-  static const topShadeInk = Color(0x80000000);
-  static const bottomShade = 120.0;
-  static const bottomShadeInk = Color(0x99000000);
+  /// While the controls show, black shades the top and bottom edges: 72% at the top fading out 170 pt down, 70% at
+  /// the bottom fading out 130 pt up (KaiC's pair of one stream with the controls and without, its HUD measured).
+  static const topShade = 170.0;
+  static const topShadeInk = Color(0xB8000000);
+  static const bottomShade = 130.0;
+  static const bottomShadeInk = Color(0xB3000000);
 
   /// The 在线榜's three faces 23.33 across, each 20 after the one before and over the next, ringed 1 pt in gold, silver
   /// and bronze; the count after them on a capsule that starts under the last face, 11 pt.
