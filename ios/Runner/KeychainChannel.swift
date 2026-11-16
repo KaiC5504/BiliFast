@@ -83,6 +83,15 @@ enum KeychainChannel {
     return ["status": "cookies", "cookies": cookies]
   }
 
+  /// The web login for native callers (NotifyHost's background check): empty when there is none, nil when the
+  /// keychain can't be read now (before the first unlock) or the item doesn't decode.
+  static func storedCookies() -> [String: String]? {
+    let (status, data) = load(cookieService)
+    if status == errSecItemNotFound { return [:] }
+    guard status == errSecSuccess, let data else { return nil }
+    return try? JSONDecoder().decode([String: String].self, from: data)
+  }
+
   private static func saveCookies(_ cookies: [String: String]) -> [String: Any] {
     if cookies.isEmpty {
       let status = delete(cookieService)
