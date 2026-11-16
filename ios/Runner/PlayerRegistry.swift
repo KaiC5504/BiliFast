@@ -281,11 +281,15 @@ final class NativePlayer {
   }
 
   func setForwardBuffer(_ seconds: Double) {
-    forwardBuffer = max(seconds, 0)
+    // 0 means "automatic" to AVFoundation, not "none".
+    forwardBuffer = max(seconds, 0.1)
     item?.preferredForwardBufferDuration = forwardBuffer
   }
 
   func startPiP() {
+    // Between an unload and its deferred release the old item can still make picture in picture possible; the window
+    // it opened would go black when the release lands.
+    guard item != nil else { return }
     host.startPiP()
   }
 
