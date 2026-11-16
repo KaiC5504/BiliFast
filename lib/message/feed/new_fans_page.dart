@@ -10,7 +10,6 @@ import '../../friends/friends_rows.dart' show FriendsRow, RelationPillKind;
 import '../../shared/loading_tv.dart';
 import '../../shared/theme.dart';
 import '../../space/uploader_tap.dart';
-import '../message_routes.dart';
 import 'feed_bar.dart';
 import 'feed_lane.dart';
 import 'feed_list.dart';
@@ -18,8 +17,8 @@ import 'feed_page_state.dart';
 import 'feed_parts.dart';
 import 'feed_targets.dart';
 
-/// 新增粉丝 (199): the account's fans, newest first, as 我的好友's 粉丝 rows (no screenshot of a row yet); 回关 follows
-/// back. Empty, the APK's picture under the plain bar.
+/// 新增粉丝 (199): the account's fans, newest first, as 我的好友's 粉丝 rows (199 shows no row); 回关 follows back.
+/// Empty, the APK's picture under the plain bar.
 class NewFansPage extends StatefulWidget {
   const NewFansPage({super.key, @visibleForTesting this.opens = const FeedOpeners()});
 
@@ -76,7 +75,7 @@ class _NewFansPageState extends State<NewFansPage> with SkinRefreshRoom, FeedPag
 
   Future<void> _followBack(RelationUser user) async {
     final mid = user.mid;
-    if (_following(user) || _pending.containsKey(mid)) return;
+    if (_following(user) || _pending.containsKey(mid) || !canAct()) return;
     setState(() => _pending[mid] = true);
     try {
       await services.messageApi.follow(mid, on: true);
@@ -109,7 +108,7 @@ class _NewFansPageState extends State<NewFansPage> with SkinRefreshRoom, FeedPag
         FeedPlainBar(
           title: '新增粉丝',
           onBack: () => unawaited(Navigator.of(context).maybePop()),
-          onGear: () => unawaited(openNoticePicker(context, NoticeSettingKind.fans)),
+          onGear: () => openSettings(NoticeSettingKind.fans),
         ),
         Expanded(
           child: MediaQuery.removePadding(

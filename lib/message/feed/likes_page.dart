@@ -11,7 +11,6 @@ import '../../shared/loading_tv.dart';
 import '../../shared/theme.dart';
 import '../../skin/skin.dart';
 import '../../space/uploader_tap.dart';
-import '../message_routes.dart';
 import 'feed_bar.dart';
 import 'feed_lane.dart';
 import 'feed_list.dart';
@@ -68,7 +67,7 @@ class _LikesPageState extends State<LikesPage> with SkinRefreshRoom, FeedPageSta
   }
 
   @override
-  void servicesReady() => services.messages.feedOpened(NoticeFeed.like);
+  NoticeFeed get openedFeed => NoticeFeed.like;
 
   @override
   void startLists() => unawaited(_lane.start());
@@ -122,7 +121,7 @@ class _LikesPageState extends State<LikesPage> with SkinRefreshRoom, FeedPageSta
                   title: '收到喜欢',
                   look: look,
                   onBack: () => unawaited(Navigator.of(context).maybePop()),
-                  onGear: () => unawaited(openNoticePicker(context, NoticeSettingKind.likes)),
+                  onGear: () => openSettings(NoticeSettingKind.likes),
                 ),
                 Expanded(
                   child: MediaQuery.removePadding(

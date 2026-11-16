@@ -15,7 +15,6 @@ import '../../shared/loading_tv.dart';
 import '../../shared/theme.dart';
 import '../../skin/skin.dart';
 import '../../space/uploader_tap.dart';
-import '../message_routes.dart';
 import 'feed_bar.dart';
 import 'feed_lane.dart';
 import 'feed_list.dart';
@@ -106,7 +105,7 @@ class _RepliesPageState extends State<RepliesPage> with SkinRefreshRoom, FeedPag
   }
 
   @override
-  void servicesReady() => services.messages.feedOpened(NoticeFeed.reply);
+  NoticeFeed get openedFeed => NoticeFeed.reply;
 
   @override
   void startLists() => unawaited(_shown.start());
@@ -150,10 +149,7 @@ class _RepliesPageState extends State<RepliesPage> with SkinRefreshRoom, FeedPag
 
   /// 回复: the composer answers the reply in its thread, as the comment section's 回复 does.
   void _reply(ReplyNotice notice) {
-    if (!_loggedIn) {
-      unawaited(login());
-      return;
-    }
+    if (!canAct()) return;
     final comments = _commentsFor(notice);
     final member = CommentMember(mid: notice.user.mid, name: notice.user.name, face: notice.user.face);
     final reply = Comment(
@@ -207,10 +203,7 @@ class _RepliesPageState extends State<RepliesPage> with SkinRefreshRoom, FeedPag
 
   /// 点赞: pink at once; back as it was, with Bilibili's reason, if refused.
   Future<void> _like(ReplyNotice notice) async {
-    if (!_loggedIn) {
-      unawaited(login());
-      return;
-    }
+    if (!canAct()) return;
     if (!_liking.add(notice.id)) return;
     final lane = _laneOf(notice.feed);
     final on = !notice.liked;
@@ -270,7 +263,7 @@ class _RepliesPageState extends State<RepliesPage> with SkinRefreshRoom, FeedPag
                   title: '回复与@',
                   look: look,
                   onBack: () => unawaited(Navigator.of(context).maybePop()),
-                  onGear: () => unawaited(openNoticePicker(context, NoticeSettingKind.replies)),
+                  onGear: () => openSettings(NoticeSettingKind.replies),
                 ),
                 _Chips(mentions: _mentions, onChoose: _choose),
                 Expanded(

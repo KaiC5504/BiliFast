@@ -5,6 +5,7 @@ import 'package:bilifast/message/settings/notice_picker_page.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import '../../home/fake_login_gate.dart';
 import 'feed_support.dart';
 
 void main() {
@@ -12,8 +13,13 @@ void main() {
 
   setUp(() => opens = RecordingOpeners());
 
-  Future<RecordingMessages> open(WidgetTester tester, FakeMessageApi api) async {
-    final services = await feedServices(api);
+  Future<RecordingMessages> open(
+    WidgetTester tester,
+    FakeMessageApi api, {
+    bool loggedIn = true,
+    FakeLoginGate? gate,
+  }) async {
+    final services = await feedServices(api, loggedIn: loggedIn, loginGate: gate);
     await pumpFeed(tester, services, LikesPage(opens: opens));
     return services.messages as RecordingMessages;
   }
@@ -174,5 +180,17 @@ void main() {
     await tester.tap(byKey('feed-gear'));
     await settle(tester);
     expect(tester.widget<NoticePickerPage>(find.byType(NoticePickerPage)).kind, NoticeSettingKind.likes);
+  });
+
+  testWidgets('logged out, the gear asks for the login before 消息提醒', (tester) async {
+    final gate = FakeLoginGate();
+    final api = FakeMessageApi(likeList: [like(1)]);
+    await open(tester, api, loggedIn: false, gate: gate);
+    expect(byKey('feed-logged-out'), findsOneWidget);
+    await tester.tap(byKey('feed-gear'));
+    await settle(tester);
+    expect(gate.requests, 1);
+    expect(find.byType(NoticePickerPage), findsNothing);
+    expect(api.calls, isEmpty);
   });
 }
