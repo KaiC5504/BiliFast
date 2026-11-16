@@ -1002,6 +1002,44 @@ void main() {
         expect(host.warmDrops, 0);
       });
 
+      Future<StoryList> onSecondSwipedTo() async {
+        host.loaded[entered] = [card('BV1r1'), card('BV1r2'), card('BV1r3')];
+        final feed = make(useOfficial: false, ahead: true, warms: true);
+        await answerDetail(0, details('BV1r1'));
+        feed.moveNext();
+        await answerDetail(1, details('BV1r2'));
+        feed.moveNext();
+        await answerDetail(2, details('BV1r3'));
+        expect(host.warms, isEmpty);
+        return feed;
+      }
+
+      test('towards the video before, not while the next one is loaded ahead: springing back keeps that', () async {
+        final feed = await onSecondSwipedTo();
+        plays('BV1r2');
+        expect(warmed(), ['BV1r3']);
+        feed.settling(feed.previous);
+        expect(warmed(), ['BV1r3'], reason: "the page's one warm stays the next video's");
+        feed.settling(null);
+        host.changed();
+        expect(warmed(), ['BV1r3']);
+        expect(host.warmDrops, 0);
+      });
+
+      test('towards the video before, springing back once the warm is due loads the next one at once', () async {
+        final feed = await onSecondSwipedTo();
+        feed.settling(feed.previous);
+        expect(warmed(), ['BV1r1']);
+        plays('BV1r2');
+        expect(warmed(), ['BV1r1'], reason: 'the release holds the slot while the page settles');
+        feed.settling(null);
+        expect(host.warmDrops, 1);
+        expect(warmed(), ['BV1r1', 'BV1r3']);
+        host.changed();
+        feed.settling(null);
+        expect(warmed(), ['BV1r1', 'BV1r3'], reason: 'still once for the video settled on');
+      });
+
       test('none while halted, or when the page cannot start one', () async {
         host.loaded[entered] = [card('BV1r1')];
         final feed = make(useOfficial: false, ahead: true, warms: true);
