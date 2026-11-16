@@ -153,9 +153,9 @@ class RoomSuperChatCard extends StatelessWidget {
     final sc = superChat;
     final header = liveColor(sc.background, LiveRoomTheme.superChatHeaderFallback);
     final body = liveColor(sc.backgroundBottom, LiveRoomTheme.superChatFallback);
-    const inner = Radius.circular(LiveRoomTheme.cardCorner - LiveRoomTheme.scRowBorder);
+    const shape = BorderRadius.all(Radius.circular(LiveRoomTheme.cardCorner));
     Widget line(String text, Color colour, double centre, {Key? key}) => Positioned(
-      left: LiveRoomTheme.cardNameX,
+      left: LiveRoomTheme.cardNameX - LiveRoomTheme.cardSide,
       right: LiveRoomTheme.cardMoreRight + LiveRoomTheme.cardMore,
       top: centre - LiveRoomTheme.rowLine / 2,
       height: LiveRoomTheme.rowLine,
@@ -167,29 +167,28 @@ class RoomSuperChatCard extends StatelessWidget {
         style: liveStyle(LiveRoomTheme.rowText, colour, line: LiveRoomTheme.rowLine),
       ),
     );
+    // Each band carries its own translucency, so the header isn't laid over the body's colour too.
     return Container(
       key: ValueKey('live-sc-card-${sc.id}'),
-      decoration: BoxDecoration(
-        color: body.withValues(alpha: LiveRoomTheme.cardAlpha),
+      clipBehavior: Clip.antiAlias,
+      decoration: const BoxDecoration(borderRadius: shape),
+      foregroundDecoration: BoxDecoration(
         border: Border.all(color: body, width: LiveRoomTheme.scRowBorder),
-        borderRadius: BorderRadius.circular(LiveRoomTheme.cardCorner),
+        borderRadius: shape,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         mainAxisSize: MainAxisSize.min,
         children: [
           Container(
-            height: LiveRoomTheme.cardHeader - LiveRoomTheme.scRowBorder,
-            decoration: BoxDecoration(
-              color: header.withValues(alpha: LiveRoomTheme.cardAlpha),
-              borderRadius: const BorderRadius.only(topLeft: inner, topRight: inner),
-            ),
+            height: LiveRoomTheme.cardHeader,
+            color: header.withValues(alpha: LiveRoomTheme.cardAlpha),
             child: Stack(
               clipBehavior: Clip.none,
               children: [
                 Positioned(
-                  left: LiveRoomTheme.cardFaceX - LiveRoomTheme.cardFace / 2 - LiveRoomTheme.scRowBorder,
-                  top: LiveRoomTheme.cardFaceY - LiveRoomTheme.cardFace / 2 - LiveRoomTheme.scRowBorder,
+                  left: LiveRoomTheme.cardFaceX - LiveRoomTheme.cardFace / 2,
+                  top: LiveRoomTheme.cardFaceY - LiveRoomTheme.cardFace / 2,
                   child: LiveFace(
                     url: sc.user.face,
                     size: LiveRoomTheme.cardFace,
@@ -200,17 +199,17 @@ class RoomSuperChatCard extends StatelessWidget {
                 line(
                   sc.user.name,
                   liveColor(sc.user.nameColor, LiveRoomTheme.scHeaderInk),
-                  LiveRoomTheme.cardNameCentre - LiveRoomTheme.scRowBorder,
+                  LiveRoomTheme.cardNameCentre,
                 ),
                 line(
                   '${sc.batteries} 电池',
                   LiveRoomTheme.scHeaderInk,
-                  LiveRoomTheme.cardPriceCentre - LiveRoomTheme.scRowBorder,
+                  LiveRoomTheme.cardPriceCentre,
                   key: const ValueKey('live-sc-card-price'),
                 ),
                 Positioned(
                   right: LiveRoomTheme.cardMoreRight - LiveRoomTheme.cardMore / 2,
-                  top: LiveRoomTheme.cardMoreCentre - LiveRoomTheme.cardMore / 2 - LiveRoomTheme.scRowBorder,
+                  top: LiveRoomTheme.cardMoreCentre - LiveRoomTheme.cardMore / 2,
                   width: LiveRoomTheme.cardMore,
                   height: LiveRoomTheme.cardMore,
                   child: Semantics(
@@ -222,23 +221,26 @@ class RoomSuperChatCard extends StatelessWidget {
                       key: const ValueKey('live-sc-card-more'),
                       behavior: HitTestBehavior.opaque,
                       onTap: onMore,
-                      child: Image.asset('assets/images/live/room_sc_more.png', excludeFromSemantics: true),
+                      child: const CustomPaint(painter: RoomCardMorePainter()),
                     ),
                   ),
                 ),
               ],
             ),
           ),
-          ConstrainedBox(
-            constraints: const BoxConstraints(minHeight: LiveRoomTheme.cardBody - LiveRoomTheme.scRowBorder),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(
-                horizontal: LiveRoomTheme.cardBodyPad - LiveRoomTheme.scRowBorder,
-                vertical: (LiveRoomTheme.cardBody - LiveRoomTheme.rowLine) / 2 - LiveRoomTheme.scRowBorder,
-              ),
-              child: Text(
-                sc.message,
-                style: liveStyle(LiveRoomTheme.rowText, LiveRoomTheme.ink, line: LiveRoomTheme.rowLine),
+          ColoredBox(
+            color: body.withValues(alpha: LiveRoomTheme.cardAlpha),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(minHeight: LiveRoomTheme.cardBody),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: LiveRoomTheme.cardBodyPad,
+                  vertical: (LiveRoomTheme.cardBody - LiveRoomTheme.rowLine) / 2,
+                ),
+                child: Text(
+                  sc.message,
+                  style: liveStyle(LiveRoomTheme.rowText, LiveRoomTheme.ink, line: LiveRoomTheme.rowLine),
+                ),
               ),
             ),
           ),

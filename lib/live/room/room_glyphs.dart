@@ -68,6 +68,23 @@ class RoomDotsPainter extends CustomPainter {
   bool shouldRepaint(RoomDotsPainter oldDelegate) => false;
 }
 
+/// 醒目留言's card ⋮, centred.
+class RoomCardMorePainter extends CustomPainter {
+  const RoomCardMorePainter();
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final centre = size.center(Offset.zero);
+    final paint = Paint()..color = LiveRoomTheme.cardMoreInk;
+    for (var i = -1; i <= 1; i++) {
+      canvas.drawCircle(centre.translate(0, i * LiveRoomTheme.cardMoreStep), LiveRoomTheme.cardMoreDot / 2, paint);
+    }
+  }
+
+  @override
+  bool shouldRepaint(RoomCardMorePainter oldDelegate) => false;
+}
+
 /// The input's emote button (207): a grey disc with a winking face. The APK carries no such picture.
 class RoomWinkPainter extends CustomPainter {
   const RoomWinkPainter();
@@ -130,7 +147,6 @@ class RoomBatteryPainter extends CustomPainter {
   bool shouldRepaint(RoomBatteryPainter oldDelegate) => false;
 }
 
-/// The bottom bar's +.
 class RoomPlusPainter extends CustomPainter {
   const RoomPlusPainter();
 
@@ -163,7 +179,7 @@ class RoomLineIconPainter extends CustomPainter {
       ..save()
       ..translate((size.width - 26 * unit) / 2, (size.height - 26 * unit) / 2)
       ..scale(unit);
-    final paint = _stroke(LiveRoomTheme.ink, LiveRoomTheme.glyphStroke * 1.2);
+    final paint = _stroke(LiveRoomTheme.ink, LiveRoomTheme.glyphStroke);
     if (eye) {
       canvas
         ..drawPath(
