@@ -63,9 +63,14 @@ def lanes(quick: bool) -> dict[str, list[Step]]:
     return result
 
 
+# Below normal on Windows, so the lanes (and the test processes they start, which inherit it) give way to whatever
+# KaiC is doing on the PC; when nothing else wants the CPU they run as fast as before.
+LOW_PRIORITY = getattr(subprocess, "BELOW_NORMAL_PRIORITY_CLASS", 0)
+
+
 def run(command: list[str], cwd: Path) -> tuple[bool, str]:
     result = subprocess.run(command, cwd=cwd, capture_output=True, text=True,
-                            encoding="utf-8", errors="replace")
+                            encoding="utf-8", errors="replace", creationflags=LOW_PRIORITY)
     return result.returncode == 0, (result.stdout + result.stderr).strip()
 
 
