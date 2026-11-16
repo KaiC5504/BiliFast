@@ -293,6 +293,9 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
   final _commentOverlays = CommentOverlayController();
   bool _threadOpen = false;
 
+  /// The route's thread (a reply notification's), opened over 评论 once the page's first comments model is made.
+  CommentFocus? _commentFocus;
+
   /// The uploader sheet the uploader row and staff open (62), and 竖屏's uploader (181).
   final _uploaderSheet = UploaderSheetController();
 
@@ -680,6 +683,10 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
   @override
   void initState() {
     super.initState();
+    if (widget.route.comment case final focus? when !_offline) {
+      _commentFocus = focus;
+      _tabs.select(PageTab.comments, animate: false);
+    }
     _panels.addListener(_panelChanged);
     _overlays
       ..addListener(_panelChanged)
@@ -1012,10 +1019,16 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
       _setThreadOpen(false);
     });
     _listCount.value = null;
-    if (_pad) unawaited(comments.ensureLoaded());
+    final focus = _commentFocus;
+    _commentFocus = null;
+    // Opened on 评论, the list is asked for now rather than by the tab as it builds: with the thread up by then, that
+    // ask's notice would rebuild the overlays mid-build.
+    if (_pad || focus != null) unawaited(comments.ensureLoaded());
     old
       ?..removeListener(_commentsChanged)
       ..dispose();
+    // A root gone or a failed call leaves 评论 as it is, with the model's toast.
+    if (focus != null) unawaited(comments.openThreadByRoot(focus.root, reply: focus.reply));
   }
 
   void _postLanded() {

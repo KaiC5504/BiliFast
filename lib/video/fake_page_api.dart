@@ -45,8 +45,14 @@ class FakePageApi implements PageApi {
         ],
         delay: const Duration(milliseconds: 300),
       )
+        ..unknownRootsDeleted = true
         .._fillDemoComments(now ?? DateTime.now())
         .._fillDemoHistory(now ?? DateTime.now());
+
+  /// The demo's thread for a reply notification: 星野's comment, and a reply on the thread's first page (by time) far
+  /// enough down to be out of sight as it opens.
+  static const demoFocusRoot = 5005;
+  static const demoFocusReply = 5021;
 
   VideoRelation relationValue;
   UploaderCard? uploader;
@@ -226,6 +232,10 @@ class FakePageApi implements PageApi {
   int commentPageSize = 20;
   int threadPageSize = 20;
 
+  /// A thread whose root the fake doesn't hold answers as Bilibili does for a deleted root (12022), not with an
+  /// empty one: the demo's, so the PC run can open a notification's thread that is gone.
+  bool unknownRootsDeleted = false;
+
   List<EmotePackage> emotes = const [];
 
   List<MentionCandidate> followed = const [];
@@ -292,7 +302,9 @@ class FakePageApi implements PageApi {
     int type = 1,
   }) =>
       _answer('thread', 'thread root=$root page=$page sort=${sort.name}', () {
-        final rootComment = _find(root) ?? Comment(rpid: root, member: const CommentMember(mid: 0), message: '');
+        final found = _find(root);
+        if (found == null && unknownRootsDeleted) throw const BiliError.api(code: 12022, message: '已经被删除了');
+        final rootComment = found ?? Comment(rpid: root, member: const CommentMember(mid: 0), message: '');
         final replies = threadReplies[root] ?? rootComment.previewReplies;
         final ordered = sort == CommentSort.time
             ? _ordered(replies, (a, b) => a.ctime.compareTo(b.ctime))

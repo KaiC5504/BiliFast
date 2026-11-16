@@ -125,6 +125,7 @@ class ThreadState {
     this.loading = false,
     this.error,
     this.prompt,
+    this.focus,
   });
 
   final Comment root;
@@ -140,6 +141,9 @@ class ThreadState {
 
   /// The write bar's prompt from the thread's first page, if the server sent one.
   final String? prompt;
+
+  /// A reply on the first page to bring into view as the thread opens (a reply notification's).
+  final int? focus;
 
   ThreadState copyWith({
     Comment? root,
@@ -161,6 +165,7 @@ class ThreadState {
     loading: loading ?? this.loading,
     error: error == null ? this.error : error(),
     prompt: prompt == null ? this.prompt : prompt(),
+    focus: focus,
   );
 
   @override
@@ -174,10 +179,12 @@ class ThreadState {
       other.total == total &&
       other.loading == loading &&
       other.error == error &&
-      other.prompt == prompt;
+      other.prompt == prompt &&
+      other.focus == focus;
 
   @override
-  int get hashCode => Object.hash(root, Object.hashAll(replies), sort, page, isEnd, total, loading, error, prompt);
+  int get hashCode =>
+      Object.hash(root, Object.hashAll(replies), sort, page, isEnd, total, loading, error, prompt, focus);
 }
 
 /// One video's comments (BiliNative `CommentsModel`): 评论's list in either sort, paged by offset, the pinned comment
@@ -570,6 +577,40 @@ class CommentsModel extends ChangeNotifier {
     _threadGeneration += 1;
     _thread = ThreadState(root: root, total: root.replyCount);
     await _loadThread();
+  }
+
+  /// A thread known only by its root's rpid (a reply notification's): nothing shows until its first page, by time,
+  /// brings the root, so a root deleted or a failed call opens nothing and toasts why. [reply] is the thread's
+  /// [ThreadState.focus] when that page has it. True once the thread is open.
+  Future<bool> openThreadByRoot(int root, {int? reply}) async {
+    _threadGeneration += 1;
+    final started = _threadGeneration;
+    try {
+      final page = await api.thread(aid: aid, root: root, page: 1, sort: CommentSort.time, type: type);
+      if (started != _threadGeneration || _disposed) return false;
+      final seen = <int>{};
+      final replies = [
+        for (final reply in page.replies)
+          if (seen.add(reply.rpid)) reply,
+      ];
+      // The thread's answer doesn't say whether the root is pinned; the list's copy does, once loaded.
+      final listed = _current(root);
+      _thread = ThreadState(
+        root: listed == null ? page.root : page.root.copyWith(isPinned: listed.isPinned),
+        replies: replies,
+        page: 1,
+        total: page.total,
+        isEnd: page.isEnd || replies.isEmpty,
+        prompt: page.childPrompt,
+        focus: reply != null && seen.contains(reply) ? reply : null,
+      );
+      _notify();
+      return true;
+    } catch (error, stack) {
+      if (started != _threadGeneration || _disposed) return false;
+      fail(error, stack);
+      return false;
+    }
   }
 
   void closeThread() {
