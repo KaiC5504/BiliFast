@@ -85,7 +85,7 @@ List<InlineSpan> _chips(LiveUser user) => [
   if (user.wealthLevel > 0) ...[
     WidgetSpan(
       alignment: PlaceholderAlignment.middle,
-      child: LiveWealthChip(level: user.wealthLevel),
+      child: LiveWealthChip(level: user.wealthLevel, onDark: true),
     ),
     const WidgetSpan(child: SizedBox(width: LiveRoomTheme.rowChipGap)),
   ],
@@ -271,7 +271,7 @@ class _RoomCardState extends State<_RoomCard> {
     final card = widget.card;
     final liveTime = card.liveTime;
     return _Card(
-      top: 0,
+      top: LiveRoomTheme.roomPadTop,
       bottom: LiveRoomTheme.roomPadBottom,
       child: Column(
         key: const ValueKey('live-chat-room-card'),

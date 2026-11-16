@@ -117,7 +117,7 @@ class RoomBottomBar extends StatelessWidget {
                   ),
                   const Positioned(
                     right: 0,
-                    top: 0,
+                    top: LiveRoomTheme.giftDotTop,
                     width: LiveRoomTheme.giftDot,
                     height: LiveRoomTheme.giftDot,
                     child: DecoratedBox(
@@ -138,17 +138,21 @@ class RoomBottomBar extends StatelessWidget {
             '加号',
             const ValueKey('live-bar-plus'),
             () => toastNotYet(context),
-            Container(
-              padding: const EdgeInsets.only(left: LiveRoomTheme.plusFaceInset),
+            DecoratedBox(
               decoration: BoxDecoration(color: LiveRoomTheme.plusFill, borderRadius: BorderRadius.circular(circle / 2)),
-              child: Row(
+              child: Stack(
                 children: [
-                  LiveFace(url: ownFace, size: LiveRoomTheme.plusFace),
-                  const Expanded(
-                    child: SizedBox(
-                      height: circle,
-                      child: CustomPaint(painter: RoomPlusPainter()),
-                    ),
+                  Positioned(
+                    left: LiveRoomTheme.plusFaceInset,
+                    top: (circle - LiveRoomTheme.plusFace) / 2,
+                    child: LiveFace(url: ownFace, size: LiveRoomTheme.plusFace),
+                  ),
+                  const Positioned(
+                    left: LiveRoomTheme.plusCentre - circle / 2,
+                    top: 0,
+                    width: circle,
+                    height: circle,
+                    child: CustomPaint(painter: RoomPlusPainter()),
                   ),
                 ],
               ),

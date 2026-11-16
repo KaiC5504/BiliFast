@@ -20,7 +20,7 @@ enum RoomShareTarget {
   final String label;
 }
 
-/// 221's second row, in its order (the plan's for the part off the screen).
+/// 221's second row, in its order; past what 221 shows, the order is our own.
 enum RoomMoreItem {
   pictureInPicture('小窗播放'),
   playSettings('播放设置'),
@@ -100,12 +100,15 @@ class RoomMoreSheet extends StatelessWidget {
       ),
       RoomMoreItem.boost => Image.asset(
         'assets/images/live/room_more_boost.png',
-        width: LiveRoomTheme.boostIconWidth,
-        height: LiveRoomTheme.boostIconHeight,
+        width: LiveRoomTheme.boostIcon,
+        height: LiveRoomTheme.boostIcon,
         excludeFromSemantics: true,
       ),
-      RoomMoreItem.spending => const CustomPaint(painter: RoomLineIconPainter.spending()),
-      _ => const CustomPaint(painter: RoomLineIconPainter.colour()),
+      RoomMoreItem.spending => const CustomPaint(
+        size: Size.square(LiveRoomTheme.lineIcon),
+        painter: RoomLineIconPainter.spending(),
+      ),
+      _ => const CustomPaint(size: Size.square(LiveRoomTheme.lineIcon), painter: RoomLineIconPainter.colour()),
     };
     return Container(
       width: LiveRoomTheme.sheetCircle,

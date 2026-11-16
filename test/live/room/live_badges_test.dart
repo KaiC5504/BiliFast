@@ -11,16 +11,23 @@ void main() {
     ),
   );
 
-  testWidgets('荣耀等级: nothing at level 0; the V and the number on its 16 pt capsule', (tester) async {
+  testWidgets('荣耀等级: nothing at level 0; the badge and the number on its 36 × 16 capsule', (tester) async {
     await pump(tester, const LiveWealthChip(level: 0));
     expect(find.byKey(const ValueKey('live-wealth')), findsNothing);
 
-    await pump(tester, const LiveWealthChip(level: 17));
-    expect(find.text('17'), findsOneWidget);
-    expect(tester.getSize(find.byKey(const ValueKey('live-wealth'))).height, LiveRoomTheme.wealthHeight);
-    expect(LiveWealthChip.fill(4), LiveRoomTheme.wealthFills[0]);
-    expect(LiveWealthChip.fill(17), LiveRoomTheme.wealthFills[1]);
-    expect(LiveWealthChip.fill(31), LiveRoomTheme.wealthFills[2]);
+    for (final level in [7, 17, 117]) {
+      await pump(tester, LiveWealthChip(level: level, onDark: true));
+      expect(find.text('$level'), findsOneWidget);
+      expect(
+        tester.getSize(find.byKey(const ValueKey('live-wealth'))),
+        const Size(LiveRoomTheme.wealthWidth, LiveRoomTheme.wealthHeight),
+      );
+    }
+    expect(LiveWealthChip.fill(4, onDark: true), LiveRoomTheme.wealthFills[0]);
+    expect(LiveWealthChip.fill(25, onDark: true), LiveRoomTheme.wealthFills[1]);
+    expect(LiveWealthChip.fill(31, onDark: true), LiveRoomTheme.wealthFills[2]);
+    expect(LiveWealthChip.fill(29), LiveRoomTheme.wealthLightFill);
+    expect([4, 10, 11, 20, 21, 30, 31, 36].map(LiveWealthChip.tier), [0, 0, 1, 1, 2, 2, 3, 3]);
   });
 
   testWidgets('a medal: its name and level on its colours; a guard brings the anchor; unlit is grey', (tester) async {

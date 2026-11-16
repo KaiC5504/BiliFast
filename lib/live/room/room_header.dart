@@ -139,8 +139,9 @@ class _AnchorCapsule extends StatelessWidget {
             ),
           ),
           const SizedBox(width: LiveRoomTheme.nameGap),
+          // The capsule's full height, so the lines sit where their centres say rather than centred as a block.
           ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: LiveRoomTheme.nameMax),
+            constraints: const BoxConstraints(maxWidth: LiveRoomTheme.nameMax, minHeight: LiveRoomTheme.capsuleHeight),
             child: Padding(
               padding: const EdgeInsets.only(top: half + LiveRoomTheme.nameCentre - LiveRoomTheme.nameLine / 2),
               child: Column(
@@ -322,7 +323,7 @@ class RoomChips extends StatelessWidget {
             ),
           ),
           Positioned(
-            right: LiveRoomTheme.countRight,
+            right: 0,
             top: 0,
             bottom: 0,
             child: _Chip(
@@ -356,11 +357,17 @@ class _Chip extends StatelessWidget {
       onTap: onTap,
       child: Container(
         height: LiveRoomTheme.chipHeight,
-        padding: const EdgeInsets.symmetric(horizontal: LiveRoomTheme.chipPad),
+        padding: EdgeInsets.only(
+          left: LiveRoomTheme.chipPadLeft,
+          right: chevron ? LiveRoomTheme.moreRoomsEnd : LiveRoomTheme.chipPad,
+        ),
         alignment: Alignment.center,
         decoration: BoxDecoration(
           color: LiveRoomTheme.glass,
-          borderRadius: BorderRadius.circular(LiveRoomTheme.chipHeight / 2),
+          // 更多直播 runs off the screen's edge.
+          borderRadius: chevron
+              ? const BorderRadius.horizontal(left: Radius.circular(LiveRoomTheme.chipHeight / 2))
+              : BorderRadius.circular(LiveRoomTheme.chipHeight / 2),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
