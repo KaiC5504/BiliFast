@@ -586,7 +586,7 @@ final class NotifyCheck {
       content.title = post.title
       content.body = post.body
       content.sound = .default
-      // No thread of its own: the official app's stack every kind together under the app (234).
+      // No thread of its own: the official app stacks every kind together under the app (234).
       content.userInfo = NotifyRoutes.userInfo(post.route, kind: post.kind)
       let identifier = post.identifier ?? "com.kaichuan.bilifast.notify.\(UUID().uuidString)"
       do {
