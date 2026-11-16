@@ -11,7 +11,7 @@ import 'package:test/test.dart';
 Map<String, Object?> fixture(String name) =>
     jsonDecode(File('test/fixtures/live_socket/$name.json').readAsStringSync()) as Map<String, Object?>;
 
-LiveEvent? decode(Map<String, Object?> json) => LiveDecode.command(json, now: () => DateTime.utc(2026, 11, 17));
+LiveEvent? decode(Map<String, Object?> json) => LiveSocketDecode.command(json, now: () => DateTime.utc(2026, 11, 17));
 
 LivePacket command(Object? json) =>
     LivePacket(op: LiveOp.command, protover: 0, body: Uint8List.fromList(utf8.encode(jsonEncode(json))));

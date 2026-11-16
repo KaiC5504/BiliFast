@@ -8,7 +8,7 @@ import 'live_events.dart';
 
 /// The danmaku socket's commands as events. Every reader is lenient about types (the answers mix numbers, strings
 /// and JSON in strings); a command missing what it can't do without throws [DecodeError].
-abstract final class LiveDecode {
+abstract final class LiveSocketDecode {
   /// The command's name without its suffix (`DANMU_MSG:4:0:2:2:2:0` is `DANMU_MSG`); empty when there is none.
   static String commandName(Map<String, Object?> json) {
     final cmd = json['cmd'];

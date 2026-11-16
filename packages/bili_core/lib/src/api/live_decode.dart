@@ -442,15 +442,16 @@ int _rgb(Object? value) {
   return rgb <= 0 ? 0 : 0xFF000000 | (rgb & 0xFFFFFF);
 }
 
-/// The website's `stream` list in its pick order: HLS only, fmp4 before ts, HEVC before AVC.
+/// The website's `stream` list in its pick order: HLS only, fmp4 HEVC, fmp4 AVC, then ts AVC (AVPlayer plays no HEVC
+/// in TS).
 ({Uri? url, List<int> accept, int current})? _pickStream(JsonObject? playurl, int? qn) {
   final hls = [
     for (final stream in playurl?.lenientList('stream', _object) ?? const <JsonObject>[])
       if (stream.text('protocol_name') == 'http_hls') stream,
   ];
   final candidates = <({JsonObject codec, Uri url})>[];
-  for (final format in const ['fmp4', 'ts']) {
-    for (final codecName in const ['hevc', 'avc']) {
+  for (final (format, codecs) in const [('fmp4', ['hevc', 'avc']), ('ts', ['avc'])]) {
+    for (final codecName in codecs) {
       for (final stream in hls) {
         for (final entry in stream.lenientList('format', _object)) {
           if (entry.text('format_name') != format) continue;

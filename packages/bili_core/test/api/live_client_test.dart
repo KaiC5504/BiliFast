@@ -359,7 +359,7 @@ void main() {
       expect(missing.currentQn, 10000);
     });
 
-    test('without fmp4, ts: HEVC before AVC; without HLS, no stream', () {
+    test('without fmp4, ts: AVC only (AVPlayer plays no HEVC in TS); without HLS, no stream', () {
       Map<String, Object?> stream(List<Object?> formats) => {
         'room_id': 1,
         'live_status': 1,
@@ -388,7 +388,7 @@ void main() {
           },
         ]),
       );
-      expect(ts.url.toString(), 'https://cn-test.bilivideo.com/h?x=1');
+      expect(ts.url.toString(), 'https://cn-test.bilivideo.com/a?x=1');
       expect(ts.qualities.single.name, '10000', reason: 'no g_qn_desc names it');
 
       final none = LiveDecode.playInfo({

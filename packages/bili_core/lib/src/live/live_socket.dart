@@ -284,8 +284,8 @@ final class LiveSocket implements LiveChannel {
       final decoded = jsonDecode(utf8.decode(_fromBrace(body), allowMalformed: true));
       if (decoded is! Map<String, Object?>) throw const FormatException('not an object');
       json = decoded;
-      name = LiveDecode.commandName(decoded);
-      final event = LiveDecode.command(decoded, now: _now);
+      name = LiveSocketDecode.commandName(decoded);
+      final event = LiveSocketDecode.command(decoded, now: _now);
       if (event != null) _events.add(event);
     } catch (error) {
       // Untrusted input: whatever a message throws costs that message only.
