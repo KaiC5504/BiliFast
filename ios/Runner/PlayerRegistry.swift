@@ -516,6 +516,8 @@ final class NativePlayer {
     guard current == generation else { return }
     updateStatus()
     reportDuration(current)
+    // A live stream's duration stays indefinite, so no duration change brings the lock screen its live mark.
+    nowPlaying?.refreshPlayback()
   }
 
   private func playedToEnd(_ current: Int) {

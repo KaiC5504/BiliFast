@@ -164,7 +164,14 @@ enum NowPlaying {
     /// between them the lock screen runs the clock from the elapsed time and rate.
     func refreshPlayback() {
       guard !ended, let item = player.currentItem else { return }
+      // A live stream has no timeline to drag.
+      session.remoteCommandCenter.changePlaybackPositionCommand.isEnabled = !Self.isLive(item)
       session.nowPlayingInfoCenter.nowPlayingInfo = metadata(for: item, current: true)
+    }
+
+    /// A live room's stream: ready, with no end. Before it is ready every item's duration reads indefinite.
+    static func isLive(_ item: AVPlayerItem) -> Bool {
+      item.status == .readyToPlay && item.duration.isIndefinite
     }
 
     func becomeActive() {
@@ -209,10 +216,15 @@ enum NowPlaying {
       if let artwork { values[MPMediaItemPropertyArtwork] = artwork }
       let duration = item.duration.seconds
       if duration.isFinite, duration > 0 { values[MPMediaItemPropertyPlaybackDuration] = duration }
-      if current {
+      let live = current && Self.isLive(item)
+      // Marked live, the lock screen shows LIVE and no timeline; the position inside the stream's window means nothing.
+      if live { values[MPNowPlayingInfoPropertyIsLiveStream] = true }
+      if current && !live {
         let held = heldUntil.map { $0 > Date() } == true ? heldPosition : nil
         let elapsed = held ?? player.currentTime().seconds
         if elapsed.isFinite { values[MPNowPlayingInfoPropertyElapsedPlaybackTime] = max(0, elapsed) }
+      }
+      if current {
         // Waiting for data, the position doesn't move, so the lock screen mustn't run it on.
         values[MPNowPlayingInfoPropertyPlaybackRate] = player.timeControlStatus == .playing ? Double(player.rate) : 0
       }
