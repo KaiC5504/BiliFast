@@ -134,21 +134,23 @@ class SearchVideoRow extends StatelessWidget {
             right: SearchResultTheme.titleRight,
             top: SearchResultTheme.rowPadTop + SearchResultTheme.titleTop,
             child: IgnorePointer(
-              child: Text.rich(
-                TextSpan(
-                  children: [
-                    for (final run in title.runs)
-                      TextSpan(
-                        text: run.text,
-                        style: run.highlighted ? const TextStyle(color: SearchResultTheme.highlight) : null,
-                      ),
-                  ],
+              child: ExcludeSemantics(
+                child: Text.rich(
+                  TextSpan(
+                    children: [
+                      for (final run in title.runs)
+                        TextSpan(
+                          text: run.text,
+                          style: run.highlighted ? const TextStyle(color: SearchResultTheme.highlight) : null,
+                        ),
+                    ],
+                  ),
+                  key: ValueKey('search-title-${video.bvid}'),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: titleStyle,
+                  strutStyle: BiliFonts.strut(titleStyle),
                 ),
-                key: ValueKey('search-title-${video.bvid}'),
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: titleStyle,
-                strutStyle: BiliFonts.strut(titleStyle),
               ),
             ),
           ),
@@ -157,31 +159,33 @@ class SearchVideoRow extends StatelessWidget {
             right: metaRight,
             top: metaTop,
             child: IgnorePointer(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  SearchMetaLine(
-                    glyph: const SizedBox(
-                      width: HistoryTheme.upWidth,
-                      height: SearchResultTheme.metaLine,
-                      child: HistoryUpGlyph(),
+              child: ExcludeSemantics(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    SearchMetaLine(
+                      glyph: const SizedBox(
+                        width: HistoryTheme.upWidth,
+                        height: SearchResultTheme.metaLine,
+                        child: HistoryUpGlyph(),
+                      ),
+                      text: video.author,
                     ),
-                    text: video.author,
-                  ),
-                  const SizedBox(height: SearchResultTheme.metaGap),
-                  SearchMetaLine(
-                    glyph: const SearchGlyphIcon(
-                      SearchGlyph.play,
-                      size: SearchResultTheme.metaGlyph,
-                      color: SearchResultTheme.metaInk,
+                    const SizedBox(height: SearchResultTheme.metaGap),
+                    SearchMetaLine(
+                      glyph: const SearchGlyphIcon(
+                        SearchGlyph.play,
+                        size: SearchResultTheme.metaGlyph,
+                        color: SearchResultTheme.metaInk,
+                      ),
+                      text: plays,
                     ),
-                    text: plays,
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
           ),
-          if (video.mid > 0)
+          if (video.mid > 0 && video.author.isNotEmpty)
             Positioned(
               left: textLeft,
               right: metaRight,

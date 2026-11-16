@@ -166,7 +166,7 @@ class PlayerPrefs {
   bool get bigCardSound => _bigCardSound;
   set bigCardSound(bool value) => _set(() => _bigCardSound = value);
 
-  /// 首页推荐设置's 每次刷新数量.
+  /// 首页推荐设置's 每次刷新数量 (170): how many official pages a 推荐 refresh asks for.
   FeedRefreshSize get feedRefreshSize => _feedRefreshSize;
   set feedRefreshSize(FeedRefreshSize value) => _set(() => _feedRefreshSize = value);
 

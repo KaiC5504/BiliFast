@@ -241,7 +241,7 @@ final class SearchVideo {
   final String author;
   final int mid;
 
-  /// The uploader's, an https URL.
+  /// The uploader's face, an https URL; the answer's are protocol-relative.
   final String face;
 
   /// An https URL; the answer's are protocol-relative.

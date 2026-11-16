@@ -3,23 +3,25 @@ import 'package:bilifast/shared/theme.dart';
 import 'package:bilifast/space/uploader_tap.dart';
 import 'package:bilifast/video/intro/related_list.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart' show RenderParagraph;
 import 'package:flutter/semantics.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-VideoCard card(int i, {int duration = 175, int views = 4815000, int danmaku = 17000, int? mid}) => VideoCard(
-  aid: i,
-  bvid: 'BV$i',
-  cid: i,
-  title: '相关视频 $i',
-  cover: '',
-  duration: duration,
-  ownerMid: mid ?? i,
-  ownerName: '学姐圆$i',
-  ownerFace: 'https://i0.hdslb.com/face$i.jpg',
-  views: views,
-  danmaku: danmaku,
-  likes: 0,
-);
+VideoCard card(int i, {int duration = 175, int views = 4815000, int danmaku = 17000, int? mid, String? name}) =>
+    VideoCard(
+      aid: i,
+      bvid: 'BV$i',
+      cid: i,
+      title: '相关视频 $i',
+      cover: '',
+      duration: duration,
+      ownerMid: mid ?? i,
+      ownerName: name ?? '学姐圆$i',
+      ownerFace: 'https://i0.hdslb.com/face$i.jpg',
+      views: views,
+      danmaku: danmaku,
+      likes: 0,
+    );
 
 Future<void> show(
   WidgetTester tester,
@@ -28,8 +30,10 @@ Future<void> show(
   ValueChanged<VideoCard>? onWatchLater,
   ValueChanged<UploaderRef>? onUploader,
   bool still = false,
+  Size screen = const Size(440, 956),
+  bool column = false,
 }) async {
-  tester.view.physicalSize = const Size(440, 956);
+  tester.view.physicalSize = screen;
   tester.view.devicePixelRatio = 1;
   addTearDown(tester.view.reset);
   if (still) {
@@ -43,7 +47,12 @@ Future<void> show(
         child: Material(
           child: CustomScrollView(
             slivers: [
-              RelatedSliver(cards: cards, onOpen: onOpen ?? (_) {}, onWatchLater: onWatchLater ?? (_) {}),
+              RelatedSliver(
+                cards: cards,
+                column: column,
+                onOpen: onOpen ?? (_) {},
+                onWatchLater: onWatchLater ?? (_) {},
+              ),
               const SliverToBoxAdapter(child: SizedBox(key: ValueKey('after'), height: 10)),
             ],
           ),
@@ -211,6 +220,26 @@ void main() {
       expect(opened, isEmpty);
       handle.dispose();
     });
+
+    final long = '一个很长很长的名字' * 20;
+    for (final (layout, screen, column) in [
+      ('the iPhone', const Size(440, 956), false),
+      ("the iPad's column", const Size(1194, 834), true),
+    ]) {
+      testWidgets('on $layout a name cut short by the line: the target ends where the drawn name does', (tester) async {
+        await show(
+          tester,
+          [card(1, name: long)],
+          screen: screen,
+          column: column,
+        );
+        await tester.pumpAndSettle();
+
+        final drawn = find.text(long);
+        expect(tester.renderObject<RenderParagraph>(drawn).didExceedMaxLines, isTrue);
+        expect(tester.getRect(name).right, moreOrLessEquals(tester.getRect(drawn).right, epsilon: 0.01));
+      });
+    }
   });
 
   testWidgets('⋮ opens a menu whose 稍后再看 saves the video and closes it', (tester) async {

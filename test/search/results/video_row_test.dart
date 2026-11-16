@@ -4,6 +4,7 @@ import 'package:bilifast/shared/menu.dart' show PressHighlight;
 import 'package:bilifast/shared/theme.dart';
 import 'package:flutter/gestures.dart' show kPressTimeout;
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart' show RenderParagraph;
 import 'package:flutter/semantics.dart' show SemanticsAction;
 import 'package:flutter_test/flutter_test.dart';
 
@@ -33,7 +34,6 @@ void main() {
   );
 
   final name = find.byKey(const ValueKey('search-uploader-BV1search1'));
-  // The drawn line is read as a label too; the button is the one that takes a tap.
   final nameButton = find.semantics.byPredicate(
     (node) => node.label == '测试作者' && node.getSemanticsData().hasAction(SemanticsAction.tap),
   );
@@ -152,5 +152,37 @@ void main() {
     expect(openSpaces(tester).single.mid, 501);
     expect(opened, isEmpty);
     semantics.dispose();
+  });
+
+  testWidgets("VoiceOver hears the name in the row's label and on its button, nowhere else", (tester) async {
+    final semantics = tester.ensureSemantics();
+    await pumpRow(tester, video(1, author: '测试作者'));
+    final labels = [
+      for (final node in find.semantics.byPredicate((node) => node.label.contains('测试作者')).evaluate()) node.label,
+    ];
+    expect(labels, hasLength(2));
+    expect(labels, contains('测试作者'));
+    expect(labels, contains(startsWith('测试视频标题 1，测试作者，2:42，9.2万')));
+    expect(find.semantics.byPredicate((node) => node.label.contains('测试视频标题')).evaluate(), hasLength(1));
+    expect(
+      find.semantics.byPredicate(
+        (node) => node.label == '更多操作' && node.getSemanticsData().hasAction(SemanticsAction.tap),
+      ),
+      findsOne,
+    );
+    semantics.dispose();
+  });
+
+  testWidgets('a mid without a name gets no target', (tester) async {
+    await pumpRow(tester, video(1, author: ''));
+    expect(name, findsNothing);
+  });
+
+  testWidgets('a name cut short by the line: the target ends where the drawn name does', (tester) async {
+    final long = '一个很长很长的名字' * 6;
+    await pumpRow(tester, video(1, author: long));
+    final drawn = find.text(long, findRichText: true).first;
+    expect(tester.renderObject<RenderParagraph>(drawn).didExceedMaxLines, isTrue);
+    expect(tester.getRect(name).right, moreOrLessEquals(tester.getRect(drawn).right, epsilon: 0.01));
   });
 }

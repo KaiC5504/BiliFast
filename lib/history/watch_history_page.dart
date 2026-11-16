@@ -367,12 +367,14 @@ class _HistoryRow extends StatelessWidget {
             right: HistoryTheme.titleRight,
             top: HistoryTheme.rowPadTop + HistoryTheme.rowTitleTop,
             child: IgnorePointer(
-              child: Text(
-                item.title,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: titleStyle,
-                strutStyle: BiliFonts.strut(titleStyle),
+              child: ExcludeSemantics(
+                child: Text(
+                  item.title,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: titleStyle,
+                  strutStyle: BiliFonts.strut(titleStyle),
+                ),
               ),
             ),
           ),
@@ -381,17 +383,19 @@ class _HistoryRow extends StatelessWidget {
             right: metaRoom,
             top: metaTop,
             child: IgnorePointer(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _MetaLine(glyph: const HistoryUpGlyph(), text: item.ownerName),
-                  const SizedBox(height: HistoryTheme.metaGap),
-                  _MetaLine(glyph: HistoryDeviceGlyph(item.deviceKind), text: time),
-                ],
+              child: ExcludeSemantics(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _MetaLine(glyph: const HistoryUpGlyph(), text: item.ownerName),
+                    const SizedBox(height: HistoryTheme.metaGap),
+                    _MetaLine(glyph: HistoryDeviceGlyph(item.deviceKind), text: time),
+                  ],
+                ),
               ),
             ),
           ),
-          if (item.ownerMid > 0)
+          if (item.ownerMid > 0 && item.ownerName.isNotEmpty)
             Positioned(
               left: textLeft,
               right: metaRoom,

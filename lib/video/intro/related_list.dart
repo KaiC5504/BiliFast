@@ -449,8 +449,9 @@ class _RelatedRow extends StatelessWidget {
             strutStyle: BiliFonts.strut(_meta),
             textDirection: Directionality.of(context),
             textScaler: MediaQuery.textScalerOf(context),
+            locale: Localizations.maybeLocaleOf(context),
             maxLines: 1,
-            ellipsis: '\u2026',
+            ellipsis: '…',
           )..layout(maxWidth: constraints.maxWidth);
           final width = name.width;
           name.dispose();

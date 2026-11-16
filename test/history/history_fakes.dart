@@ -18,6 +18,7 @@ HistoryItem historyItem(
   int duration = 300,
   int device = 2,
   String? title,
+  String? ownerName,
   int? ownerMid,
   String ownerFace = '',
 }) => HistoryItem(
@@ -26,7 +27,7 @@ HistoryItem historyItem(
   cid: 1000 + aid,
   title: title ?? '视频$aid',
   cover: '',
-  ownerName: 'UP$aid',
+  ownerName: ownerName ?? 'UP$aid',
   ownerMid: ownerMid ?? 500 + aid,
   ownerFace: ownerFace,
   progress: progress,

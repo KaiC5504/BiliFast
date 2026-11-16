@@ -8,6 +8,7 @@ import 'package:bilifast/video/fake_page_api.dart';
 import 'package:bilifast/video/video_route.dart';
 import 'package:flutter/gestures.dart' show kPressTimeout;
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart' show RenderParagraph;
 import 'package:flutter/semantics.dart' show SemanticsAction, SemanticsNode;
 import 'package:flutter_test/flutter_test.dart';
 
@@ -124,5 +125,39 @@ void main() {
     expect(openSpaces(tester).single.mid, 501);
     expect(opened, isEmpty);
     semantics.dispose();
+  });
+
+  testWidgets("VoiceOver hears the name in the row's label and on its button, nowhere else", (tester) async {
+    final semantics = tester.ensureSemantics();
+    await show(tester, watched);
+    final labels = [
+      for (final node in find.semantics.byPredicate((node) => node.label.contains('UP1')).evaluate()) node.label,
+    ];
+    expect(labels, hasLength(2));
+    expect(labels, contains('UP1'));
+    expect(labels, contains(startsWith('看过的视频，UP1，')));
+    expect(find.semantics.byPredicate((node) => node.label.contains('看过的视频')).evaluate(), hasLength(1));
+    expect(
+      find.semantics.byPredicate(
+        (node) => node.label == '更多操作' && node.getSemanticsData().hasAction(SemanticsAction.tap),
+      ),
+      findsOne,
+    );
+    semantics.dispose();
+  });
+
+  testWidgets('a mid without a name gets no target', (tester) async {
+    final nameless = historyItem(3, viewAt: wall(19, 3, 2), ownerName: '');
+    await show(tester, nameless);
+    expect(row(nameless), findsOne);
+    expect(name(nameless), findsNothing);
+  });
+
+  testWidgets('a name cut short by the line: the target ends where the drawn name does', (tester) async {
+    final long = historyItem(4, viewAt: wall(19, 3, 2), ownerName: '一个很长很长的名字' * 6);
+    await show(tester, long);
+    final drawn = find.descendant(of: row(long), matching: find.text(long.ownerName));
+    expect(tester.renderObject<RenderParagraph>(drawn).didExceedMaxLines, isTrue);
+    expect(tester.getRect(name(long)).right, moreOrLessEquals(tester.getRect(drawn).right, epsilon: 0.01));
   });
 }
