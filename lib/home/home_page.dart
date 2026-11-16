@@ -35,11 +35,13 @@ import 'feed_divider.dart';
 import 'feed_inline_player.dart';
 import 'feed_model.dart';
 import 'home_header.dart';
+import 'hot/hot_list.dart';
 import 'tab_bar_icons.dart' show SkinDecodeGate;
 
-/// 首页 (01, port of HomeView.swift): the avatar and the search entry, the 推荐 tab and its feed, above the bottom bar
-/// `MainShell` holds. The entry opens 搜索 with the default word; the avatar opens its page (49), with 设置, the
-/// shortcuts and the last of 最近打开.
+/// 首页 (01, 204, port of HomeView.swift): the avatar and the search entry, the tab row, and 推荐's feed and 热门 side
+/// by side as pages, swiped between or chosen in the row, above the bottom bar `MainShell` holds. The iPad has 推荐
+/// alone under its one row. The entry opens 搜索 with the default word; the avatar opens its page (49), with 设置,
+/// the shortcuts and the last of 最近打开.
 class HomePage extends StatefulWidget {
   const HomePage({super.key, this.developerPage, this.initialLink, this.reloads, this.skin});
 
@@ -85,6 +87,14 @@ class _HomePageState extends State<HomePage> {
 
   /// How far 推荐 is scrolled, which folds the header's top row away (121).
   final _feedOffset = ValueNotifier<double>(0);
+
+  /// 推荐 (page 0) and 热门 (page 1); [_pagePosition] follows the slide, [_shownPage] is the one holding most of the
+  /// screen, whose list folds the header and takes 首页's taps.
+  final _pages = PageController();
+  final _pagePosition = ValueNotifier<double>(0);
+  int _shownPage = 0;
+  final _hotOffset = ValueNotifier<double>(0);
+  final _hotReloads = _Reloads();
   late final _opener = LinkOpener(onPushed: (pushed) => unawaited(_visit(pushed)));
   bool _opening = false;
 
@@ -111,6 +121,7 @@ class _HomePageState extends State<HomePage> {
   void initState() {
     super.initState();
     widget.reloads?.addListener(_reload);
+    _pages.addListener(_pageMoved);
     // Read at launch, so 大卡默认声音 changed in 设置 waits for the next one whether or not a big card has shown yet.
     FeedInlineChoices.sound;
   }
@@ -161,7 +172,35 @@ class _HomePageState extends State<HomePage> {
     _services.appAuth.removeListener(_authChanged);
     _feed?.dispose();
     _feedOffset.dispose();
+    _pages.dispose();
+    _pagePosition.dispose();
+    _hotOffset.dispose();
+    _hotReloads.dispose();
     super.dispose();
+  }
+
+  void _pageMoved() {
+    if (!_pages.hasClients || !_pages.position.hasContentDimensions) return;
+    final page = _pages.page ?? 0;
+    _pagePosition.value = page.clamp(0.0, 1.0);
+    final shown = page.round().clamp(0, 1);
+    if (shown == _shownPage) return;
+    if (SchedulerBinding.instance.schedulerPhase == SchedulerPhase.persistentCallbacks) {
+      SchedulerBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _pageMoved();
+      });
+      return;
+    }
+    setState(() => _shownPage = shown);
+  }
+
+  void _turnTo(int page) {
+    if (!_pages.hasClients) return;
+    if (MediaQuery.disableAnimationsOf(context)) {
+      _pages.jumpToPage(page);
+    } else {
+      unawaited(_pages.animateToPage(page, duration: HomeTabRowTheme.pageTurn, curve: HomeTabRowTheme.pageCurve));
+    }
   }
 
   void _busyChanged() => setState(() => _opening = _opener.busy.value);
@@ -261,7 +300,14 @@ class _HomePageState extends State<HomePage> {
 
   void _openSearch() => unawaited(_visit(openSearchPage(context, placeholder: _searchWord)));
 
-  void _reload() => unawaited(_grid.currentState?.reload());
+  /// 首页's tap reloads the page on screen.
+  void _reload() {
+    if (_shownPage == 1 && !FormFactor.of(context).isPad) {
+      _hotReloads.request();
+    } else {
+      unawaited(_grid.currentState?.reload());
+    }
+  }
 
   void _openCard(FeedCard card, ZoomSource source) => unawaited(
     _visit(
@@ -361,10 +407,30 @@ class _HomePageState extends State<HomePage> {
   /// [head] dresses the top once its pictures have decoded; null keeps 01's.
   Widget _page(BuildContext context, Skin? head) {
     final still = MediaQuery.disableAnimationsOf(context);
+    final pad = FormFactor.of(context).isPad;
+    // 首页 shown: MainShell stills the places out of sight.
+    final placeShown = TickerMode.valuesOf(context).enabled;
+    final hotShown = !pad && _shownPage == 1;
+    final feed = _FeedGrid(
+      key: _grid,
+      feed: _feed!,
+      onOpen: _openCard,
+      onOpenBig: _openBig,
+      onWatchLater: _watchLater,
+      onDislike: _dislike,
+      onUndo: _undoDislike,
+      onReason: _dislikeReason,
+      onRefresh: _refreshFeed,
+      onPull: _pullRefresh,
+      onPullArmed: _pullArmed,
+      onPullDisarmed: _pullDisarmed,
+      refreshing: () => _refreshing,
+      scrollOffset: _feedOffset,
+    );
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: head != null && head.lightStatusHome ? SystemUiOverlayStyle.light : SystemUiOverlayStyle.dark,
       child: Scaffold(
-        backgroundColor: FormFactor.of(context).isPad ? PadHomeTheme.page : BiliColors.pageGrey,
+        backgroundColor: pad ? PadHomeTheme.page : BiliColors.pageGrey,
         resizeToAvoidBottomInset: false,
         body: Stack(
           children: [
@@ -376,29 +442,35 @@ class _HomePageState extends State<HomePage> {
                     skin: head,
                     face: _environment.face,
                     searchWord: _searchWord,
-                    feedOffset: _feedOffset,
+                    // Each page keeps its own scroll; the header folds by the one on screen.
+                    feedOffset: hotShown ? _hotOffset : _feedOffset,
+                    page: _pagePosition,
+                    onPage: _turnTo,
                     onAvatar: _openAvatarPage,
                     onSearch: _openSearch,
                     onHistory: _openHistory,
                   ),
                 ),
                 Expanded(
-                  child: _FeedGrid(
-                    key: _grid,
-                    feed: _feed!,
-                    onOpen: _openCard,
-                    onOpenBig: _openBig,
-                    onWatchLater: _watchLater,
-                    onDislike: _dislike,
-                    onUndo: _undoDislike,
-                    onReason: _dislikeReason,
-                    onRefresh: _refreshFeed,
-                    onPull: _pullRefresh,
-                    onPullArmed: _pullArmed,
-                    onPullDisarmed: _pullDisarmed,
-                    refreshing: () => _refreshing,
-                    scrollOffset: _feedOffset,
-                  ),
+                  child: pad
+                      ? feed
+                      : PageView(
+                          key: const ValueKey('home-pages'),
+                          controller: _pages,
+                          // Nothing lies left of 推荐 or right of 热门 to bounce into.
+                          physics: const ClampingScrollPhysics(),
+                          children: [
+                            _HomeTabPage(shown: !hotShown, child: feed),
+                            _HomeTabPage(
+                              shown: hotShown,
+                              child: HotList(
+                                active: placeShown && hotShown,
+                                scrollOffset: _hotOffset,
+                                reloads: _hotReloads,
+                              ),
+                            ),
+                          ],
+                        ),
                 ),
               ],
             ),
@@ -437,6 +509,36 @@ class _HomePageState extends State<HomePage> {
       ),
     );
   }
+}
+
+/// 推荐 or 热门 as a page, kept alive off screen, where it is still and out of Hero flights as MainShell keeps a hidden
+/// place: 推荐's big card pauses as it does under 我的, and neither page's covers fly to a pushed page.
+class _HomeTabPage extends StatefulWidget {
+  const _HomeTabPage({required this.shown, required this.child});
+
+  final bool shown;
+  final Widget child;
+
+  @override
+  State<_HomeTabPage> createState() => _HomeTabPageState();
+}
+
+class _HomeTabPageState extends State<_HomeTabPage> with AutomaticKeepAliveClientMixin {
+  @override
+  bool get wantKeepAlive => true;
+
+  @override
+  Widget build(BuildContext context) {
+    super.build(context);
+    return TickerMode(
+      enabled: widget.shown,
+      child: HeroMode(enabled: widget.shown, child: widget.child),
+    );
+  }
+}
+
+class _Reloads extends ChangeNotifier {
+  void request() => notifyListeners();
 }
 
 /// Builds its child only while [visible] or animating out, so nothing in it (a spinner above all) keeps ticking once

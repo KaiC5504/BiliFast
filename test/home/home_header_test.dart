@@ -9,6 +9,7 @@ import 'package:bilifast/home/avatar_page.dart';
 import 'package:bilifast/home/feed_model.dart';
 import 'package:bilifast/home/home_header.dart';
 import 'package:bilifast/home/home_page.dart';
+import 'package:bilifast/home/hot/hot_list.dart';
 import 'package:bilifast/home/main_shell.dart';
 import 'package:bilifast/home/recent_store.dart';
 import 'package:bilifast/me/fake_me_api.dart';
@@ -366,6 +367,26 @@ void main() {
         await shoot(tester, '121-home-${dressed ? 'dressed' : 'white'}-folded-ours.png');
       });
     }
+
+    testWidgets("204's tab row: the labels' ink where 204 and 01 have it, the indicator under 热门 then 推荐", (
+      tester,
+    ) async {
+      await show(tester, phone: true, skin: _pictures.skin());
+      // The ink centres in 204 and 01 (px / 3): within half a point, the side bearings of each pair of glyphs.
+      const centres = [106.17, 162.75, 219.5, 277.0, 334.17];
+      for (final tab in HomeTopTab.values) {
+        expect(
+          tester.getCenter(find.byKey(ValueKey(tab.keyName))).dx,
+          moreOrLessEquals(centres[tab.index], epsilon: 0.5),
+          reason: tab.label,
+        );
+      }
+      await tester.tap(find.byKey(ValueKey(HomeTopTab.hot.keyName)));
+      await settle(tester);
+      final indicator = tester.getRect(find.byKey(const ValueKey('home-tab-indicator')));
+      expectRect(indicator, const Rect.fromLTRB(211, 136, 229, 139), reason: "204's, measured");
+      await shoot(tester, '204-home-hot-dressed-ours.png');
+    });
   });
 
   testWidgets('a list too short to scroll folds nothing when dragged up past the trigger, held or let go', (
@@ -384,6 +405,177 @@ void main() {
     await drag.up();
     await settle(tester);
     expectRect(header(tester), open);
+  });
+
+  group("204's tab row", () {
+    final pagesView = find.byKey(const ValueKey('home-pages'));
+    double page(WidgetTester tester) => tester.widget<PageView>(pagesView).controller!.page!;
+    Finder label(HomeTopTab tab) => find.byKey(ValueKey(tab.keyName));
+    TextStyle style(WidgetTester tester, HomeTopTab tab) => tester.widget<Text>(label(tab)).style!;
+    Rect indicator(WidgetTester tester) => tester.getRect(find.byKey(const ValueKey('home-tab-indicator')));
+
+    /// The slot centre of [tab] on the 440 pt screen: 热门 on the middle, 57 pt apart.
+    double slot(HomeTopTab tab) => 220 + (tab.index - HomeTopTab.hot.index) * HomeTabRowTheme.pitch;
+
+    Future<void> hotOffset(WidgetTester tester, double offset) async {
+      tester.widget<HotList>(find.byType(HotList, skipOffstage: false)).scrollOffset.value = offset;
+      await settle(tester);
+    }
+
+    testWidgets('直播 推荐 热门 动画 影视 57 pt apart about the middle; 推荐 chosen, 16 pt semibold pink over its indicator, '
+        'the others 15 pt regular #61666D standing on its bottom', (tester) async {
+      final semantics = tester.ensureSemantics();
+      await show(tester);
+      for (final tab in HomeTopTab.values) {
+        expect(tester.getCenter(label(tab)).dx, moreOrLessEquals(slot(tab)), reason: tab.label);
+        expect(find.text(tab.label), findsOneWidget);
+      }
+      final chosen = style(tester, HomeTopTab.recommend);
+      expect((chosen.color, chosen.fontWeight, chosen.fontSize), (BiliColors.pink, FontWeight.w600, 16.0));
+      final box = tester.getRect(label(HomeTopTab.recommend));
+      const scale = 15 / 16;
+      for (final tab in [HomeTopTab.live, HomeTopTab.hot, HomeTopTab.anime, HomeTopTab.film]) {
+        final other = style(tester, tab);
+        expect((other.color, other.fontWeight), (const Color(0xFF61666D), FontWeight.w400), reason: tab.label);
+        final drawn = tester.getRect(label(tab));
+        expect(drawn.width, moreOrLessEquals(box.width * scale), reason: '${tab.label} drawn at 15 pt');
+        expect(drawn.height, moreOrLessEquals(box.height * scale), reason: tab.label);
+        expect(drawn.bottom, moreOrLessEquals(box.bottom), reason: '${tab.label} on 推荐\'s bottom');
+      }
+      expectRect(
+        indicator(tester),
+        Rect.fromCenter(
+          center: Offset(slot(HomeTopTab.recommend), 142 - 1 / 3 - BiliMetrics.tabRowBottom - 1.5),
+          width: 18,
+          height: 3,
+        ),
+      );
+      expect(
+        tester.getSemantics(label(HomeTopTab.recommend)),
+        isSemantics(label: '推荐', isButton: true, isSelected: true, hasTapAction: true),
+      );
+      expect(
+        tester.getSemantics(label(HomeTopTab.hot)),
+        isSemantics(label: '热门', isButton: true, isSelected: false, hasTapAction: true),
+      );
+      semantics.dispose();
+    });
+
+    testWidgets("dressed, the chosen one and the indicator take the skin's colour, the others it at 72%", (
+      tester,
+    ) async {
+      await show(tester, skin: _pictures.skin());
+      const white = Color(0xFFFFFFFF);
+      expect(style(tester, HomeTopTab.recommend).color, white);
+      expect(
+        (tester.widget<Container>(find.byKey(const ValueKey('home-tab-indicator'))).decoration! as BoxDecoration).color,
+        white,
+      );
+      expect(style(tester, HomeTopTab.hot).color, white.withValues(alpha: 0.72));
+    });
+
+    testWidgets('直播, 动画 and 影视 say 暂未开放 and change nothing', (tester) async {
+      await show(tester);
+      final asked = List.of(http.asked);
+      for (final tab in [HomeTopTab.live, HomeTopTab.anime, HomeTopTab.film]) {
+        await tester.tap(label(tab));
+        await tester.pump();
+        expect(find.text('暂未开放'), findsOneWidget, reason: tab.label);
+        await settle(tester, 60);
+        expect(page(tester), 0);
+        expect(style(tester, HomeTopTab.recommend).color, BiliColors.pink);
+      }
+      expect(http.asked, asked);
+    });
+
+    testWidgets('热门 tapped slides the pages over in 0.3 s, the indicator with them; 推荐 tapped slides back', (
+      tester,
+    ) async {
+      await show(tester);
+      await tester.tap(label(HomeTopTab.hot));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 150));
+      final half = page(tester);
+      expect(half, moreOrLessEquals(HomeTabRowTheme.pageCurve.transform(0.5), epsilon: 0.05));
+      expect(indicator(tester).center.dx, moreOrLessEquals(slot(HomeTopTab.recommend) + half * 57));
+      await settle(tester);
+      expect(page(tester), 1);
+      expect(indicator(tester).center.dx, moreOrLessEquals(slot(HomeTopTab.hot)));
+      expect(style(tester, HomeTopTab.hot).color, BiliColors.pink);
+      expect(style(tester, HomeTopTab.hot).fontWeight, FontWeight.w600);
+      expect(style(tester, HomeTopTab.recommend).color, const Color(0xFF61666D));
+      expect(find.byType(HotList), findsOneWidget);
+
+      await tester.tap(label(HomeTopTab.recommend));
+      await settle(tester);
+      expect(page(tester), 0);
+      expect(indicator(tester).center.dx, moreOrLessEquals(slot(HomeTopTab.recommend)));
+    });
+
+    testWidgets('with Reduce Motion a tap turns the page at once', (tester) async {
+      await show(tester, still: true);
+      await tester.tap(label(HomeTopTab.hot));
+      await tester.pump();
+      expect(page(tester), 1);
+      expect(indicator(tester).center.dx, moreOrLessEquals(slot(HomeTopTab.hot)));
+    });
+
+    testWidgets('a sideways drag slides the pages; the indicator and both labels follow the page mid-way', (
+      tester,
+    ) async {
+      await show(tester);
+      final finger = await tester.startGesture(const Offset(300, 500));
+      await finger.moveBy(const Offset(-20, 0));
+      await finger.moveBy(const Offset(-200, 0));
+      await tester.pump();
+      final at = page(tester);
+      expect(at, inExclusiveRange(0.3, 0.6));
+      expect(indicator(tester).center.dx, moreOrLessEquals(slot(HomeTopTab.recommend) + at * 57));
+      for (final (tab, share) in [(HomeTopTab.recommend, 1 - at), (HomeTopTab.hot, at)]) {
+        final colour = style(tester, tab).color!;
+        final expected = Color.lerp(const Color(0xFF61666D), BiliColors.pink, share)!;
+        for (final (got, want) in [(colour.r, expected.r), (colour.g, expected.g), (colour.b, expected.b)]) {
+          expect(got, moreOrLessEquals(want, epsilon: 1e-6), reason: tab.label);
+        }
+      }
+      final hotBox = tester.getRect(label(HomeTopTab.hot));
+      final full = tester.getRect(label(HomeTopTab.recommend)).width / (15 / 16 + (1 / 16) * (1 - at));
+      expect(hotBox.width, moreOrLessEquals(full * (15 / 16 + (1 / 16) * at)), reason: '热门 grows as it slides in');
+      await finger.moveBy(const Offset(-40, 0));
+      await finger.up();
+      await settle(tester);
+      expect(page(tester), 1);
+
+      await tester.fling(pagesView, const Offset(300, 0), 1000);
+      await settle(tester);
+      expect(page(tester), 0);
+      expect(indicator(tester).center.dx, moreOrLessEquals(slot(HomeTopTab.recommend)));
+    });
+
+    testWidgets('the header folds by the page on screen: each keeps its own scroll, and the magnifier rides in on '
+        '热门 too', (tester) async {
+      await show(tester);
+      final open = header(tester);
+      await scrollTo(tester, 400);
+      expect(header(tester).bottom, open.bottom - _fold, reason: '推荐 scrolled');
+
+      await tester.tap(label(HomeTopTab.hot));
+      await settle(tester);
+      expect(header(tester), open, reason: "热门's list at its top");
+      expect(magnifier(), findsNothing);
+      await hotOffset(tester, 100);
+      expect(header(tester).bottom, open.bottom - _fold, reason: '热门 scrolled');
+      expectRect(glyph(tester), foldedGlyph);
+      await hotOffset(tester, 0);
+      expect(header(tester), open);
+
+      await tester.tap(label(HomeTopTab.recommend));
+      await settle(tester);
+      expect(header(tester).bottom, open.bottom - _fold, reason: '推荐 still scrolled');
+      expect(feedScroll(tester).pixels, 400);
+      await scrollTo(tester, 0);
+      expect(header(tester), open);
+    });
   });
 
   testWidgets("the fold lays the feed out again each frame without building its cards again", (tester) async {

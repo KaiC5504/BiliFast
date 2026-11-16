@@ -15,10 +15,32 @@ import '../shared/toast.dart';
 import '../skin/skin.dart';
 import 'tab_bar_icons.dart' show SkinDecodeGate;
 
-/// 首页's top (01, 110): the avatar and the search entry over the 推荐 tab, on white or the 装扮's pictures, and the
-/// hairline under it. Once [feedOffset], how far 推荐 is scrolled, passes [HomeHeaderTheme.trigger], it folds the top
-/// row away (121): everything moves up under the status bar, the top row fading out and a magnifier riding in at
-/// the tab row's end, which opens 搜索 in its place. Back under the trigger it opens again.
+/// 首页's tabs (204) in the row's order. Only 推荐 and 热门 have pages; the others say 暂未开放.
+enum HomeTopTab {
+  live('直播', 'home-tab-live'),
+  recommend('推荐', 'home-tab-recommend'),
+  hot('热门', 'home-tab-hot'),
+  anime('动画', 'home-tab-anime'),
+  film('影视', 'home-tab-film');
+
+  const HomeTopTab(this.label, this.keyName);
+
+  final String label;
+  final String keyName;
+
+  /// Its page under the row: 推荐 0, 热门 1.
+  int? get page => switch (this) {
+    recommend => 0,
+    hot => 1,
+    live || anime || film => null,
+  };
+}
+
+/// 首页's top (01, 110, 204): the avatar and the search entry over the tab row, on white or the 装扮's pictures, and
+/// the hairline under it. Once [feedOffset], how far the page on screen is scrolled, passes
+/// [HomeHeaderTheme.trigger], it folds the top row away (121): everything moves up under the status bar, the top row
+/// fading out and a magnifier riding in at the tab row's end, which opens 搜索 in its place. Back under the trigger it
+/// opens again.
 class HomeHeader extends StatefulWidget {
   const HomeHeader({
     super.key,
@@ -26,6 +48,8 @@ class HomeHeader extends StatefulWidget {
     required this.face,
     required this.searchWord,
     required this.feedOffset,
+    required this.page,
+    required this.onPage,
     required this.onAvatar,
     required this.onSearch,
     this.onHistory,
@@ -36,6 +60,12 @@ class HomeHeader extends StatefulWidget {
   final String? face;
   final String? searchWord;
   final ValueListenable<double> feedOffset;
+
+  /// How far the pages have slid from 推荐 (0) towards 热门 (1): the labels and the indicator follow it.
+  final ValueListenable<double> page;
+
+  /// A tap on 推荐 or 热门, with its [HomeTopTab.page].
+  final ValueChanged<int> onPage;
   final VoidCallback onAvatar;
   final VoidCallback onSearch;
 
@@ -179,7 +209,16 @@ class _HomeHeaderState extends State<HomeHeader>
                   child: Stack(
                     alignment: Alignment.topCenter,
                     children: [
-                      _RecommendTab(colour: colour ?? BiliColors.pink),
+                      _TabRow(
+                        page: widget.page,
+                        chosen: colour ?? BiliColors.pink,
+                        ink:
+                            colour?.withValues(
+                              alpha: HomeTabRowTheme.skinInkOpacity,
+                            ) ??
+                            HomeTabRowTheme.ink,
+                        onPage: widget.onPage,
+                      ),
                       if (!_controller.isDismissed)
                         Positioned(
                           top: 0,
@@ -601,46 +640,143 @@ class _SearchFieldState extends State<_SearchField> {
   }
 }
 
-/// 01's tab row, with only 推荐 and that one selected: pink, or the 装扮's colour over its picture (110).
-class _RecommendTab extends StatelessWidget {
-  const _RecommendTab({required this.colour});
+/// 204's tab row: 直播 推荐 热门 动画 影视 centred on the screen, the chosen one larger and semibold in [chosen] over the
+/// indicator, the others in [ink]. While the pages slide, the indicator moves between 推荐 and 热门 with them and the
+/// two labels trade size, weight and colour.
+class _TabRow extends StatelessWidget {
+  const _TabRow({
+    required this.page,
+    required this.chosen,
+    required this.ink,
+    required this.onPage,
+  });
 
-  final Color colour;
+  final ValueListenable<double> page;
+  final Color chosen;
+  final Color ink;
+  final ValueChanged<int> onPage;
+
+  static const _middle = HomeTopTab.hot;
 
   @override
-  Widget build(BuildContext context) => Semantics(
-    header: true,
-    selected: true,
-    child: Padding(
-      padding: const EdgeInsets.only(
-        top: BiliMetrics.tabRowTop,
-        bottom: BiliMetrics.tabRowBottom,
-      ),
-      child: Column(
+  Widget build(BuildContext context) => ValueListenableBuilder<double>(
+    valueListenable: page,
+    builder: (context, page, _) {
+      final at = HomeTopTab.recommend.index + page.clamp(0.0, 1.0);
+      return Stack(
         children: [
-          Text(
-            '推荐',
-            key: const ValueKey('home-tab-recommend'),
-            style: TextStyle(
-              fontSize: BiliMetrics.tabText,
-              fontWeight: FontWeight.w600,
-              color: colour,
-            ),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              for (final tab in HomeTopTab.values)
+                _Tab(
+                  tab: tab,
+                  share: math.max(0.0, 1 - (tab.index - at).abs()),
+                  chosen: chosen,
+                  ink: ink,
+                  onTap: () => switch (tab.page) {
+                    final page? => onPage(page),
+                    null => showToast(context, '暂未开放'),
+                  },
+                ),
+            ],
           ),
-          const SizedBox(height: BiliMetrics.tabIndicatorGap),
-          Container(
-            key: const ValueKey('home-tab-indicator'),
-            width: BiliMetrics.tabIndicatorWidth,
-            height: BiliMetrics.tabIndicatorHeight,
-            decoration: BoxDecoration(
-              color: colour,
-              borderRadius: BorderRadius.circular(2),
+          Positioned(
+            left: 0,
+            right: 0,
+            bottom: BiliMetrics.tabRowBottom,
+            child: Center(
+              child: Transform.translate(
+                offset: Offset(
+                  (at - _middle.index) * HomeTabRowTheme.pitch,
+                  0,
+                ),
+                child: Container(
+                  key: const ValueKey('home-tab-indicator'),
+                  width: BiliMetrics.tabIndicatorWidth,
+                  height: BiliMetrics.tabIndicatorHeight,
+                  decoration: BoxDecoration(
+                    color: chosen,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
             ),
           ),
         ],
-      ),
-    ),
+      );
+    },
   );
+}
+
+/// One label in its slot, which takes taps across the whole row's height. [share] is how far it is the chosen one.
+class _Tab extends StatelessWidget {
+  const _Tab({
+    required this.tab,
+    required this.share,
+    required this.chosen,
+    required this.ink,
+    required this.onTap,
+  });
+
+  final HomeTopTab tab;
+  final double share;
+  final Color chosen;
+  final Color ink;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final colour = switch (share) {
+      1.0 => chosen,
+      0.0 => ink,
+      _ => Color.lerp(ink, chosen, share)!,
+    };
+    return Semantics(
+      button: true,
+      selected: share > 0.5,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: onTap,
+        child: SizedBox(
+          width: HomeTabRowTheme.pitch,
+          child: Padding(
+            padding: const EdgeInsets.only(
+              top: BiliMetrics.tabRowTop,
+              bottom: BiliMetrics.tabRowBottom,
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Transform.scale(
+                  scale: HomeTabRowTheme.restingScale +
+                      (1 - HomeTabRowTheme.restingScale) * share,
+                  alignment: Alignment.bottomCenter,
+                  child: Text(
+                    tab.label,
+                    key: ValueKey(tab.keyName),
+                    maxLines: 1,
+                    style: TextStyle(
+                      fontSize: BiliMetrics.tabText,
+                      fontWeight: FontWeight.lerp(
+                        HomeTabRowTheme.weight,
+                        HomeTabRowTheme.chosenWeight,
+                        share,
+                      ),
+                      color: colour,
+                    ),
+                  ),
+                ),
+                // The indicator's room; the indicator itself slides across the slots.
+                const SizedBox(height: BiliMetrics.tabIndicatorGap),
+                const SizedBox(height: BiliMetrics.tabIndicatorHeight),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 /// The iPad's top (ipad/01, 02): the avatar and the search entry at the left, 直播 推荐 热门 追番 影视 centred on the
