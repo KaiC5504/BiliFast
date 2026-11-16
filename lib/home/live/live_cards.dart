@@ -45,14 +45,17 @@ class LiveBars extends StatelessWidget {
   final Color? color;
 
   @override
-  Widget build(BuildContext context) => Image.asset(
-    LiveArt.bars,
-    width: LiveTabTheme.liveTagBarsBox,
-    height: LiveTabTheme.liveTagBarsBox,
-    color: color,
-    colorBlendMode: color == null ? null : BlendMode.srcIn,
-    gaplessPlayback: true,
-    excludeFromSemantics: true,
+  Widget build(BuildContext context) => RepaintBoundary(
+    // Each of the gif's frames repaints only its own 16 pt square, not the list around it.
+    child: Image.asset(
+      LiveArt.bars,
+      width: LiveTabTheme.liveTagBarsBox,
+      height: LiveTabTheme.liveTagBarsBox,
+      color: color,
+      colorBlendMode: color == null ? null : BlendMode.srcIn,
+      gaplessPlayback: true,
+      excludeFromSemantics: true,
+    ),
   );
 }
 
@@ -183,7 +186,6 @@ class LiveStatIcon extends StatelessWidget {
   );
 }
 
-/// ⋮ in its box.
 class LiveMorePainter extends CustomPainter {
   const LiveMorePainter();
 

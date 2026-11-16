@@ -42,7 +42,7 @@ class LiveCarousel extends StatefulWidget {
   final ValueListenable<bool>? Function() scrolling;
   final void Function(LiveCard card, ZoomSource source) onOpen;
 
-  /// The card [screen] wide gets.
+  /// The card's width on a [screen] this wide.
   static double cardWidth(double screen) => screen - LiveTabTheme.carouselSide * 2;
 
   static double height(double screen) => cardWidth(screen) * 9 / 16 + LiveTabTheme.carouselBand;
@@ -334,7 +334,12 @@ class _CarouselCardState extends State<_CarouselCard> implements FeedInlineCard 
                     height: LiveTabTheme.face,
                     child: _Anchor(card: card),
                   ),
-                  const Positioned(right: LiveTabTheme.liveTagRight, top: LiveTabTheme.liveTagTop, child: _LiveTag()),
+                  // A neighbour's tag sits beyond what peeks, so only the middle card's bars move.
+                  Positioned(
+                    right: LiveTabTheme.liveTagRight,
+                    top: LiveTabTheme.liveTagTop,
+                    child: TickerMode(enabled: widget.centred, child: const _LiveTag()),
+                  ),
                 ],
                 if (inline != null && inline.loading)
                   const Center(key: ValueKey('live-big-loading'), child: PlayerLoading()),

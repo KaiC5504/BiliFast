@@ -138,7 +138,7 @@ class RankList extends StatefulWidget {
   final Widget Function(LiveRankEntry entry) row;
   final List<Widget> header;
 
-  /// Room under the last row (the home indicator's, when nothing else sits there).
+  /// Space under the last row (the home indicator's, when nothing else sits there).
   final double bottom;
   final String emptyText;
 

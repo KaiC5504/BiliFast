@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:bili_core/api.dart';
@@ -69,12 +70,20 @@ void main() {
         ),
       ),
     );
+    final context = tester.element(find.byType(Scaffold));
+    var barsCached = false;
     await tester.runAsync(() async {
-      final context = tester.element(find.byType(Scaffold));
       for (final asset in [LiveArt.watched, LiveArt.liked, LiveArt.coverSwitch, LiveArt.areas]) {
         await precacheImage(AssetImage(asset), context);
       }
+      unawaited(precacheImage(const AssetImage(LiveArt.bars), context).then((_) => barsCached = true));
     });
+    // An animated gif hands out its first frame only from a drawn frame, which runAsync never pumps.
+    for (var i = 0; i < 100 && !barsCached; i++) {
+      await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 20)));
+      await tester.pump();
+    }
+    expect(barsCached, isTrue);
     await settle(tester);
   }
 
@@ -91,6 +100,25 @@ void main() {
       tester.getRect(find.byKey(const ValueKey('live-grid-9000'))).bottom,
       moreOrLessEquals(2388 / 3, epsilon: 0.6),
     );
+    // 205's ink: the picture 375.33-392.33 × 16.33 tall, ⊞ 407-423.
+    final cover = tester.getRect(
+      find.descendant(of: find.byKey(const ValueKey('live-area-cover')), matching: find.byType(Image)),
+    );
+    expect(cover.center.dx, moreOrLessEquals(1151.5 / 3, epsilon: 0.4));
+    expect(cover.height, moreOrLessEquals(49 / 3));
+    expect(cover.width, moreOrLessEquals(17, epsilon: 0.4));
+    final grid = tester.getRect(
+      find.descendant(of: find.byKey(const ValueKey('live-area-all')), matching: find.byType(Image)),
+    );
+    expect(grid.left, moreOrLessEquals(407, epsilon: 0.4));
+    expect(grid.width, 16);
+
+    // The 直播中 bars (the carousel's tag and 我的关注's grey ones) have a frame to draw.
+    final bars = find.descendant(of: find.byType(LiveBars), matching: find.byType(RawImage));
+    expect(bars, findsAtLeastNWidgets(2));
+    for (final element in bars.evaluate()) {
+      expect((element.widget as RawImage).image, isNotNull);
+    }
 
     final shots = Platform.environment['BILIFAST_SHOTS'];
     if (shots != null) await saveShot(tester, find.byKey(_screen), '$shots/205-live-ours.png');
@@ -102,6 +130,8 @@ void main() {
     expect(card.top, moreOrLessEquals(348 / 3, epsilon: 0.4));
     expect(card.left, moreOrLessEquals(16 / 3));
     expect(card.bottom, moreOrLessEquals(911 / 3, epsilon: 0.6));
+    // Nothing under the last card on 206.
+    expect(find.text('没有更多了'), findsNothing);
 
     final shots = Platform.environment['BILIFAST_SHOTS'];
     if (shots != null) await saveShot(tester, find.byKey(_screen), '$shots/206-live-following-ours.png');

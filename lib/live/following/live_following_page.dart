@@ -9,7 +9,6 @@ import 'package:flutter/widgets.dart';
 import '../../app/app_scope.dart';
 import '../../app/zoom_back_route.dart';
 import '../../dynamic/following/following_page.dart' show FollowingBarLook;
-import '../../home/feed_model.dart' show FeedModel;
 import '../../home/live/live_cards.dart';
 import '../../shared/loading_tv.dart';
 import '../../shared/release_refresh.dart';
@@ -203,8 +202,7 @@ class _LiveFollowingPageState extends State<LiveFollowingPage> with SkinRefreshR
                   radius: LiveTabTheme.spinnerRadius,
                 ),
               )
-            : model.exhausted
-            ? const _Words(FeedModel.endMessage, key: ValueKey('live-following-end'))
+            // 206 draws nothing under the last card once the list has ended.
             : const SizedBox(height: LiveTabTheme.footerLine),
       ),
     );

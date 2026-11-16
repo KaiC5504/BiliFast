@@ -13,10 +13,10 @@ import 'rank_support.dart';
 
 const _screen = ValueKey('screen');
 
-/// 230-233 as KaiC's iPhone draws them, under the system font; faces and chips are the room builder's. With
+/// 230-233 as KaiC's iPhone draws them, under the system font; faces and chips are drawn by the room's own widgets ([LiveFace], the chips). With
 /// BILIFAST_SHOTS naming a folder outside the repo, the 3× shots are saved there for tools/screen_diff.py.
 void main() {
-  final names = ['kiki_owo', '-你准备寿司吧-', 'popo_723', 'ye_wing', 'SueeXii', '小羊 niniiii', '七月-O_o', '演示观众'];
+  final names = ['演示观众1_o', '-演示观众演示-', '演示观众_3', '演示观众4', '演示观众5', '演示 观众6iii', '演示观众7-o', '演示观众'];
   final scores = [12002, 9000, 6005, 6004, 5001, 5000, 3011, 3000];
   final rank = LiveRankPage(
     entries: [
@@ -28,7 +28,7 @@ void main() {
         ),
     ],
   );
-  final guardNames = ['-你准备寿司吧-', 'kiki_owo', '怡怡猪 O_o', '话话话话话 ovo', 'popo_723', '欣酱欣酱_'];
+  final guardNames = ['-演示观众演示-', '演示观众1_o', '演示观 众3_o', '演示观众演示 ovo', '演示观众_3', '演示观众6_'];
   final weekly = LiveGuardPage(
     entries: [
       for (var i = 0; i < guardNames.length; i++)
@@ -39,7 +39,7 @@ void main() {
     ],
     total: 3351,
     topText: '上周TOP1',
-    topUser: viewer(99, name: '可不可以帮下妹子', guard: 1),
+    topUser: viewer(99, name: '演示观众演示观众', guard: 1),
   );
 
   Future<void> show(WidgetTester tester, {bool landscape = false}) async {

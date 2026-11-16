@@ -9085,8 +9085,8 @@ abstract final class LiveTabTheme {
   static const stripLineGap = 4.0;
 
   /// The area tabs: a 42 row, 14 pt words, the first 9.5 in and the rest 24.67 apart, 推荐 semibold in the page's ink,
-  /// the others grey. From 336 the page's grey covers them at 85% to 95%, under the picture (16.33) and ⊞ (16) icons in
-  /// #61666D centred 31 apart, the last 25 from the right.
+  /// the others grey. From 336 the page's grey covers them at 85% to 95%, under the picture (16.33 tall at its own
+  /// shape, 17 wide) and ⊞ (16) icons in #61666D, their centres 31 apart, the last's 25 from the right.
   static const areaRow = 42.0;
   static const areaText = 14.0;
   static const areaLead = 9.5;
@@ -9102,6 +9102,7 @@ abstract final class LiveTabTheme {
   static const areaGridRight = 25.0;
   static const areaIconPitch = 31.0;
   static const areaIconTarget = 30.0;
+  static const areaReveal = Duration(milliseconds: 250);
 
   /// The two-column cards: 5 from the left, 5 apart and 6 from the right (212 wide on the phone), 4 corners; a 4:3 cover over a 50 band. On the cover a tag at the top left,
   /// the corner picture 20 tall at the top right, and 13.33 over its bottom the 10 pt 👁 (14 wide) and 👍 (13.33) counts
