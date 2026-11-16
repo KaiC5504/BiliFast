@@ -558,7 +558,9 @@ class PagePlayback extends ChangeNotifier implements KeptPlayback {
     final navigator = _services.navigator.currentState;
     if (navigator == null || _closed) return false;
     final route = VideoRoute(bvid: _bvid, cid: _cid, title: _title, playback: this, offline: offline);
-    unawaited(navigator.push(RestoredPageRoute<void>(builder: (_) => restorePage(route))));
+    unawaited(
+      navigator.push(RestoredPageRoute<void>(builder: (_) => restorePage(route), settings: VideoRoute.pageSettings)),
+    );
     return true;
   }
 
@@ -618,7 +620,7 @@ class PagePlayback extends ChangeNotifier implements KeptPlayback {
 /// The page the small window's restore button brings back: in place at once, with the swipe back as any page's.
 /// AVKit flies the window to where the player view is when it attaches, so a slide in would send it off screen.
 class RestoredPageRoute<T> extends SwipeBackPageRoute<T> {
-  RestoredPageRoute({required super.builder});
+  RestoredPageRoute({required super.builder, super.settings});
 
   @override
   Duration get transitionDuration => Duration.zero;
