@@ -1,0 +1,45 @@
+{
+ "cmd": "ONLINE_RANK_V2",
+ "data": {
+  "rank_type": "gold-rank",
+  "list": [
+   {
+    "uid": 10013,
+    "face": "https://i0.hdslb.com/bfs/face/face-0113.jpg",
+    "score": "300",
+    "uname": "第三",
+    "rank": 3,
+    "guard_level": 0
+   },
+   {
+    "uid": 10011,
+    "face": "https://i0.hdslb.com/bfs/face/face-0111.jpg",
+    "score": "900",
+    "uname": "第一",
+    "rank": 1,
+    "guard_level": 3
+   },
+   {
+    "uid": 10014,
+    "face": "https://i0.hdslb.com/bfs/face/face-0114.jpg",
+    "score": "100",
+    "uname": "第四",
+    "rank": 4,
+    "guard_level": 0
+   },
+   {
+    "uid": 10012,
+    "face": "",
+    "uinfo": {
+     "base": {
+      "face": "https://i0.hdslb.com/bfs/face/face-0112.jpg"
+     }
+    },
+    "score": "500",
+    "uname": "第二",
+    "rank": 2,
+    "guard_level": 0
+   }
+  ]
+ }
+}
