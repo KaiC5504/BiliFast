@@ -1510,6 +1510,22 @@ void main() {
     expect(opened, ['BV1EF411e9oF -']);
   });
 
+  test('related videos are asked for as the open starts, not after its view answers', () async {
+    final gate = http.gates[Canned.signedViewPath] = Completer<void>();
+    final controller = makeController();
+    unawaited(controller.openVideo(bv));
+    final session = makeSession(on: controller);
+    await settle();
+    expect(controller.video, isNull, reason: 'the view is still out');
+    expect(http.to(relatedPath), hasLength(1));
+    expect(session.related.single.bvid, 'BV1EF411e9oF');
+    gate.complete();
+    await settle();
+    expect(controller.video?.bvid, bv);
+    expect(http.to(relatedPath), hasLength(1), reason: 'the view landing asks nothing more');
+    expect(session.related.single.bvid, 'BV1EF411e9oF');
+  });
+
   test('once its page left, the session ignores the next page\'s video', () async {
     final session = makeSession();
     await controller.openVideo(bv, cid: p1);
@@ -1539,9 +1555,8 @@ void main() {
       gate.complete();
       await settle();
       expect(controller.page?.cid, p2);
-      expect(http.to(relatedPath), hasLength(1));
+      expect(http.to(relatedPath), hasLength(2), reason: 'each page asked for its related videos as its open began');
       expect(http.to(playerInfoPath), hasLength(1));
-      expect(first.related, isEmpty);
       expect(second.related.single.bvid, 'BV1EF411e9oF');
     });
 

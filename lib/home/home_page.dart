@@ -269,6 +269,7 @@ class _HomePageState extends State<HomePage> {
         context,
         VideoRoute(
           bvid: card.bvid,
+          cidHint: card.cid > 0 ? card.cid : null,
           title: card.title,
           cover: card.cover,
           zoomSource: source,

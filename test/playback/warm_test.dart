@@ -189,7 +189,7 @@ void main() {
       await controller.setQuality(80);
       expect(engine.released, contains('tok2'));
       final asked = playUrls();
-      await controller.openVideo(next, cid: nextCid);
+      await controller.openVideo(next, cid: nextCid, detail: nextDetail());
       expect(playUrls(), asked + 1);
       expect(engine.promoted, isEmpty);
       expect(lastWarmField(), 'miss quality');

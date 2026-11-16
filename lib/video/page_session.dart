@@ -505,7 +505,8 @@ class PagePlayerSession extends ChangeNotifier with WidgetsBindingObserver imple
     _updateNowPlaying();
   }
 
-  /// Follows the controller's video: 看点 and the 人像防挡 mask once per part, related videos once per video.
+  /// Follows the controller's video: 看点 and the 人像防挡 mask once per part, related videos once per video, from its
+  /// open.
   void _follow() {
     final video = _controller.video;
     final page = _controller.page;
@@ -527,10 +528,12 @@ class PagePlayerSession extends ChangeNotifier with WidgetsBindingObserver imple
       notifyListeners();
       return;
     }
-    if (video != null && video.bvid != _relatedFor) {
-      _relatedFor = video.bvid;
+    // Asked as the open starts: the list needs only the video's id, not its view.
+    final relatedBvid = video?.bvid ?? _controller.requestedBvid;
+    if (relatedBvid != null && relatedBvid != _relatedFor) {
+      _relatedFor = relatedBvid;
       _related = const [];
-      unawaited(_loadRelated(video.bvid));
+      unawaited(_loadRelated(relatedBvid));
     }
     final item = video == null || page == null ? null : logic.PlayItem(bvid: video.bvid, cid: page.cid);
     if (item != null && item != _current) {

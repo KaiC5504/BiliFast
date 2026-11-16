@@ -17,12 +17,15 @@ import 'video_page.dart';
 /// by the small window's restore button: the page takes it over instead of opening the video. An [offline] route plays
 /// the 离线缓存 part [cid] from the phone, never asking Bilibili for it (`openOfflinePage`); without a [start] it
 /// resumes where the library saw it stop. [source] names where the page was opened from (a 推荐 card's carries its
-/// track data). [comment] opens the page on 评论 with that thread up (a reply notification's).
+/// track data). [comment] opens the page on 评论 with that thread up (a reply notification's). [cidHint] is the part a
+/// card names, which chooses nothing (a video in parts still opens the part it was left on): the open only asks for its
+/// streams beside the view, and keeps them if that part is the one played.
 @immutable
 final class VideoRoute {
   const VideoRoute({
     required this.bvid,
     this.cid,
+    this.cidHint,
     this.start,
     this.title,
     this.cover,
@@ -37,6 +40,7 @@ final class VideoRoute {
 
   final String bvid;
   final int? cid;
+  final int? cidHint;
   final double? start;
   final String? title;
   final String? cover;
