@@ -9679,7 +9679,132 @@ abstract final class LivePlayerTheme {
 }
 
 /// The 弹幕 inputs and emote panel (223, 226, 227).
-abstract final class LiveSendTheme {}
+///
+/// 226: a #12101A panel with 12 pt top corners sits on the keyboard, 84 pt tall: the field #292831 from 12 to 358, 28
+/// pt tall 8 under the panel's top, 13 pt words 10.67 in; 发送 58 × 28 pt, 12 from the edge, 14 pt white words on the
+/// pink, at 40% while the field is empty. Under them a 48 pt band: emotes of 28 pt centred 40 apart from 26, fading
+/// out before the three glyphs (译 18 × 20, the face 20, A 18.67), each centred in a 48 pt cell ending at the edge,
+/// #C0C0C0 (the face pink while the panel shows). 醒目留言's pill sits 4 pt above the panel, 32 pt tall from 12 to 104.
+abstract final class LiveSendTheme {
+  static const panelFill = Color(0xFF12101A);
+  static const panelRadius = 12.0;
+
+  static const fieldTop = 8.0;
+  static const fieldHeight = 28.0;
+  static const fieldSide = 12.0;
+  static const fieldFill = Color(0xFF292831);
+  static const fieldPadding = 32 / 3;
+  static const fieldText = 13.0;
+  static const fieldInk = Color(0xFFFFFFFF);
+  static const placeholder = Color(0xFF999999);
+
+  /// The caret in 223: pink, 2 × 15.33 pt.
+  static const cursor = BiliColors.pink;
+  static const caretWidth = 2.0;
+  static const caretHeight = 46 / 3;
+
+  /// The field stops taking characters here, as Bilibili's danmaku limit.
+  static const maxLength = 40;
+
+  static const sendWidth = 58.0;
+  static const sendGap = 12.0;
+  static const sendFill = BiliColors.pink;
+  static const sendFillEmpty = Color(0x66FF6699);
+  static const sendText = 14.0;
+  static const sendInk = Color(0xFFFFFFFF);
+
+  /// The band under the field over the keyboard (226), and its 40 pt over the emote panel (227).
+  static const bandHeight = 48.0;
+  static const bandHeightPanel = 40.0;
+  static const emoteSize = 28.0;
+  static const emoteStep = 40.0;
+  static const emoteLeft = 12.0;
+  static const emoteFade = 48.0;
+
+  /// How many emotes the band holds: the recently used first, then the first package's.
+  static const recentCount = 20;
+
+  static const glyphCell = 48.0;
+  static const glyph = Color(0xFFC0C0C0);
+  static const glyphOn = BiliColors.pink;
+  static const translateWidth = 18.0;
+  static const translateHeight = 20.0;
+  static const faceSize = 20.0;
+  static const faceStroke = 4 / 3;
+  static const faceEyeX = 11 / 3;
+  static const faceEyeY = 8.3 / 3;
+  static const faceEyeRadius = 1.1;
+  static const faceMouthTop = 0.7;
+  static const faceMouthRadius = 2.5;
+  static const styleSize = 56 / 3;
+
+  /// 醒目留言's pill: #17181E with a 0.67 pt white 20% line, the 18 × 16.67 pt SC mark 13 in, 12 pt #E5E5E5 words
+  /// 5.33 after it.
+  static const pillHeight = 32.0;
+  static const pillGap = 4.0;
+  static const pillLeft = 12.0;
+  static const pillLeftLandscape = 44.0;
+  static const pillFill = Color(0xFF17181E);
+  static const pillLine = Color(0x33FFFFFF);
+  static const pillLineWidth = 2 / 3;
+  // Inside the line, which the decoration adds to the padding.
+  static const pillPadLeft = 13.0 - pillLineWidth;
+  static const pillPadRight = 28 / 3 - pillLineWidth;
+  static const pillMarkWidth = 18.0;
+  static const pillMarkHeight = 50 / 3;
+  static const pillMarkBody = 41 / 3;
+  static const pillMarkRadius = 3.5;
+  static const pillMarkTop = Color(0xFFBE5FFE);
+  static const pillMarkBottom = Color(0xFF8B10FE);
+  static const pillMarkText = 9.5;
+  static const pillMarkInk = Color(0xFFFFFFFF);
+  static const pillTextGap = 16 / 3;
+  static const pillText = 12.0;
+  static const pillInk = Color(0xFFE5E5E5);
+
+  /// 223: the same panel across the top of the keyboard, the field from 106 pt in to 6 before three glyph cells
+  /// (centred 696.67, 732, 768), 6 more to 发送, which ends 106 from the right edge; the emotes from 74 in, fading 66
+  /// from the right. 醒目留言's pill 44 in.
+  static const landscapeSide = 106.0;
+  static const landscapeGlyphCell = 322 / 9;
+  static const landscapeGlyphGap = 6.0;
+  static const landscapeSendGap = 6.0;
+  static const landscapeEmoteLeft = 74.0;
+  static const landscapeEmoteRight = 66.0;
+
+  /// 227's panel in the keyboard's place, 356 pt from the band down: 全部表情 (12 pt #C9CCD0, 16 in) in a 25 pt row,
+  /// emotes of 32 pt in 52 × 50 cells from 12 in, eight to a row; ⌫ a #29272F key 53.33 × 34.33 pt, 10 from the
+  /// right and 20 above the packages bar, its glyph 20.33 × 14.67 with a 1 pt line; the bar #29272F, cells 50 × 44
+  /// with 24 pt icons, the chosen one in the panel's colour, 21 pt under them.
+  static const emotePanelHeight = 356.0;
+  static const emotePanelLandscape = 224.0;
+  static const headerHeight = 25.0;
+  static const headerLeft = 16.0;
+  static const headerText = 12.0;
+  static const headerInk = Color(0xFFC9CCD0);
+  static const gridSide = 12.0;
+  static const gridCellWidth = 52.0;
+  static const gridCellHeight = 50.0;
+  static const gridEmote = 32.0;
+  static const columns = 8;
+  static const deleteWidth = 160 / 3;
+  static const deleteHeight = 103 / 3;
+  static const deleteRight = 10.0;
+  static const deleteBottom = 20.0;
+  static const deleteRadius = 4.0;
+  static const deleteFill = Color(0xFF29272F);
+  static const deleteGlyphWidth = 61 / 3;
+  static const deleteGlyphHeight = 44 / 3;
+  static const deleteGlyphStroke = 1.0;
+  static const deleteInk = Color(0xFFFFFFFF);
+  static const barFill = Color(0xFF29272F);
+  static const barCellWidth = 50.0;
+  static const barCellHeight = 44.0;
+  static const barIcon = 24.0;
+  static const barBottom = 21.0;
+  static const empty = Color(0xFF999999);
+  static const emptyText = 13.0;
+}
 
 /// 高能榜 (230-233).
 abstract final class LiveRankTheme {
