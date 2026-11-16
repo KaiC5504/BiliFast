@@ -1,7 +1,5 @@
 <div align="center">
-  <img src="docs/icons/default.png" width="120" height="120" alt="BiliFast 默认图标" />
-  &nbsp;&nbsp;&nbsp;
-  <img src="docs/icons/cat.png" width="120" height="120" alt="BiliFast 猫猫图标" />
+  <img src="docs/icons/default.png" width="120" height="120" alt="BiliFast 默认图标" />&emsp;&emsp;<img src="docs/icons/cat.png" width="120" height="120" alt="BiliFast 猫猫图标" />
   <h1>BiliFast</h1>
   <p><b>还是熟悉的味道，就是快了亿点点。</b></p>
   <sub>两款图标任选：默认的小电视，或者趴在进度条上的猫猫（设置 → 应用图标）</sub>
