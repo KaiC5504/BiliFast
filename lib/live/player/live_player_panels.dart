@@ -220,6 +220,29 @@ class _MoreButton extends StatelessWidget {
                 child: _icon(),
               ),
             ),
+            if (item == LiveMoreItem.boost)
+              Positioned(
+                left:
+                    LivePlayerTheme.moreColumn / 2 +
+                    LivePlayerTheme.moreBadgeOffset -
+                    LivePlayerTheme.moreBadge / 2 -
+                    LivePlayerTheme.moreBadgeRing,
+                top:
+                    LivePlayerTheme.moreDisc / 2 -
+                    LivePlayerTheme.moreBadgeOffset -
+                    LivePlayerTheme.moreBadge / 2 -
+                    LivePlayerTheme.moreBadgeRing,
+                child: Container(
+                  key: const ValueKey('live-more-boost-dot'),
+                  width: LivePlayerTheme.moreBadge + LivePlayerTheme.moreBadgeRing * 2,
+                  height: LivePlayerTheme.moreBadge + LivePlayerTheme.moreBadgeRing * 2,
+                  decoration: BoxDecoration(
+                    color: LivePlayerTheme.moreBadgeInk,
+                    shape: BoxShape.circle,
+                    border: Border.all(color: BiliColors.onVideo, width: LivePlayerTheme.moreBadgeRing),
+                  ),
+                ),
+              ),
             Positioned(
               top: LivePlayerTheme.moreDisc / 2 + LivePlayerTheme.moreLabelDrop - LivePlayerTheme.moreLabel,
               height: LivePlayerTheme.moreLabel * 2,

@@ -26,7 +26,7 @@ const selfUid = 12345;
 
 /// A room whose feed the test drives and whose sends it records; [failure] makes the next send throw.
 class FakeRoom extends LiveRoomModel {
-  FakeRoom({required super.api}) : super(entry: const LiveRoomEntry(roomId: 7734200), loggedIn: () => true);
+  FakeRoom({required super.api}) : super(entry: const LiveRoomEntry(roomId: 1000002), loggedIn: () => true);
 
   bool signedIn = true;
 

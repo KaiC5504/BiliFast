@@ -50,8 +50,8 @@ void main() {
     expect(rig.controller.playing, isTrue);
     expect(rig.controller.quality?.name, '1080P 原画 (高帧率)');
     // The lock screen: the room's title and anchor, no timeline (the player marks the stream live itself).
-    expect(rig.player.nowPlaying?.title, '全国大赛 AQ vs LGD');
-    expect(rig.player.nowPlaying?.artist, '夜莲 Annbbers');
+    expect(rig.player.nowPlaying?.title, '演示比赛 AA vs BB');
+    expect(rig.player.nowPlaying?.artist, '演示 Streamer');
     expect(rig.player.nowPlaying?.hasNext, isFalse);
     expect(rig.player.nowPlaying?.hasPrevious, isFalse);
     expect(rig.player.calls, contains('pip auto true'));
@@ -335,7 +335,7 @@ void main() {
     final rig = await playing(tester);
     await tester.pumpWidget(const SizedBox());
     await rig.controller.share(tester.element(find.byType(SizedBox)));
-    expect(rig.shared, [Uri.parse('https://live.bilibili.com/7734200')]);
+    expect(rig.shared, [Uri.parse('https://live.bilibili.com/1000002')]);
     await rig.controller.startPictureInPicture();
     expect(rig.player.calls.last, 'pip start');
   });

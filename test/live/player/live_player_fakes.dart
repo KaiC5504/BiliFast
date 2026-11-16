@@ -33,8 +33,8 @@ const qualities = [
 
 /// A play info at [qn]; each call makes a new one, as each answer from the room is.
 LivePlayInfo playAt(int qn, {int ask = 0}) => LivePlayInfo(
-  roomId: 7734200,
-  uid: 50329118,
+  roomId: 1000002,
+  uid: 2000002,
   status: LiveStatus.live,
   url: Uri.parse('https://example.invalid/live/$qn/$ask/index.m3u8'),
   qualities: qualities,
@@ -46,7 +46,7 @@ class FakeRoom extends LiveRoomModel {
   FakeRoom({bool Function()? loggedIn})
     : super(
         api: FakeLiveApi(),
-        entry: const LiveRoomEntry(roomId: 7734200, title: '全国大赛 AQ vs LGD', anchorName: '夜莲 Annbbers'),
+        entry: const LiveRoomEntry(roomId: 1000002, title: '演示比赛 AA vs BB', anchorName: '演示 Streamer'),
         loggedIn: loggedIn ?? () => true,
       );
 
