@@ -41,6 +41,7 @@ class LiveRoomModel extends ChangeNotifier {
     required this.loggedIn,
     DateTime Function()? now,
     this.viewer,
+    this.reportsEntry = true,
     Logger? logger,
   }) : now = now ?? DateTime.now,
        _logger = logger ?? Logger.shared;
@@ -68,6 +69,9 @@ class LiveRoomModel extends ChangeNotifier {
   /// The account as its own rows show it. Without it those rows have no name, and the socket's echo of a send is told
   /// by its text alone.
   final LiveUser Function()? viewer;
+
+  /// Whether opening it puts the room in 历史记录 (`roomEntryAction`): a room page does, 首页's carousel doesn't.
+  final bool reportsEntry;
   final Logger _logger;
 
   LiveRoomState _state = LiveRoomState.loading;
@@ -324,7 +328,7 @@ class LiveRoomModel extends ChangeNotifier {
       _cardAdded = true;
       _append([LiveChatRoomCard(title: title, description: _info?.description ?? '', liveTime: play.liveTime)]);
     }
-    if (!_entered && loggedIn()) {
+    if (reportsEntry && !_entered && loggedIn()) {
       _entered = true;
       unawaited(_try('enter', () => api.enter(roomId)));
     }

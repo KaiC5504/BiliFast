@@ -125,7 +125,7 @@ class LiveInlinePlayback extends ChangeNotifier {
 
   LiveRoomModel _makeRoom() {
     _logger.info(LogCategory.player, 'live inline start', {'room': entry.roomId});
-    final room = LiveRoomModel(api: _api, entry: entry, loggedIn: _loggedIn)..addListener(_roomChanged);
+    final room = LiveRoomModel(api: _api, entry: entry, loggedIn: _loggedIn, reportsEntry: false)..addListener(_roomChanged);
     unawaited(
       room.start().catchError((Object error) {
         _logger.warn(LogCategory.player, 'live inline room failed', {'error': '${error.runtimeType}'});
