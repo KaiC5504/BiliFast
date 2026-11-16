@@ -266,7 +266,7 @@ void main() {
     await rig.controller.start();
     rig.room.go(
       LiveRoomState.live,
-      play: const LivePlayInfo(roomId: 7734200, uid: 50329118, status: LiveStatus.live, qualities: qualities),
+      play: const LivePlayInfo(roomId: 1000002, uid: 2000002, status: LiveStatus.live, qualities: qualities),
     );
     await tester.pump();
     expect(rig.controller.phase, LivePlayerPhase.failed);

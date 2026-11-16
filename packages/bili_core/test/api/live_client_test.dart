@@ -492,7 +492,7 @@ void main() {
       expectWbiSigned(only(_roomPath));
       expect(http.query(only(_roomPath)), containsPair('room_id', '5001'));
       expect(http.query(only(_cardPath)), containsPair('mid', '7001'));
-      expect((info.roomId, info.uid, info.title), (5001, 7001, '全国大赛 AQ vs LGD'));
+      expect((info.roomId, info.uid, info.title), (5001, 7001, '演示比赛 AA vs BB'));
       expect((info.anchorName, info.anchorFace), ('测试主播甲', 'https://i0.hdslb.com/bfs/face/live-face-0001.jpg'));
       expect(info.anchorFrame, 'https://i0.hdslb.com/bfs/live/frame-mobile.png');
       expect(info.verify, LiveVerify.personal);

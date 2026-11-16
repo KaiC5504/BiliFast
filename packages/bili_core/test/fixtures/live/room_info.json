@@ -1,5 +1,5 @@
 {"code":0,"message":"0","ttl":1,"data":{
-"room_info":{"uid":7001,"room_id":5001,"short_id":3,"title":"全国大赛 AQ vs LGD","cover":"https://i0.hdslb.com/bfs/live/room-cover-5001.jpg","live_status":1,"area_name":"无畏契约","parent_area_name":"网游","online":9349,
+"room_info":{"uid":7001,"room_id":5001,"short_id":3,"title":"演示比赛 AA vs BB","cover":"https://i0.hdslb.com/bfs/live/room-cover-5001.jpg","live_status":1,"area_name":"无畏契约","parent_area_name":"网游","online":9349,
  "pendants":{"frame":{"name":"frame","value":"https://i0.hdslb.com/bfs/live/frame-web.png"},"mobile_frame":{"name":"frame","value":"https://i0.hdslb.com/bfs/live/frame-mobile.png"}}},
 "anchor_info":{"base_info":{"uname":"测试主播甲","face":"https://i0.hdslb.com/bfs/face/live-face-0001.jpg","official_info":{"role":1,"title":"测试认证","type":0}}},
 "news_info":{"uid":7001,"ctime":"2026-11-01 12:00:00","content":"<p>测试公告第一行</p><p>第二行 &amp; 更多<br/>第三行</p>"},

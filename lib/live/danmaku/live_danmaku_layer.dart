@@ -55,6 +55,7 @@ class LiveDanmakuLayerState extends State<LiveDanmakuLayer> with SingleTickerPro
 
   /// The layer's clock, in seconds: the last frame's, held while the ticker sleeps.
   double _seconds = 0;
+  bool _tickerEnabled = true;
   double _base = 0;
   int _lastMs = 0;
 
@@ -91,6 +92,15 @@ class LiveDanmakuLayerState extends State<LiveDanmakuLayer> with SingleTickerPro
       unawaited(services.blockRules.refresh());
     }
     _ownUid = () => services.environment.mid ?? 0;
+    // A muted ticker's elapsed time runs on; restarting it from the held clock keeps a paused picture's danmaku where
+    // they stopped.
+    final enabled = TickerMode.valuesOf(context).enabled;
+    if (enabled && !_tickerEnabled && _ticker.isActive) {
+      _ticker.stop();
+      _base = _seconds;
+      _ticker.start();
+    }
+    _tickerEnabled = enabled;
     final size = MediaQuery.sizeOf(context);
     // Full screen is the phone turned: laid out by the screen's shape, as the video page is.
     _presentation = size.width > size.height ? Presentation.landscape : Presentation.inline;

@@ -142,7 +142,7 @@ class LivePhaseLayer extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             spacing: BiliMetrics.rowGap,
             children: [
-              _text('直播加载失败', LivePlayerTheme.endedText),
+              _text(controller.failureText, LivePlayerTheme.endedText),
               // Locked, only the lock answers a touch.
               if (!controller.locked)
                 ChromeTap(
