@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:bili_core/api.dart';
 import 'package:bili_core/devlog.dart';
@@ -13,6 +14,20 @@ ChatMessage _text(int seqno, {int sender = 7}) =>
 
 ChatSession _person({NoticeBox? box, int sessionType = 1}) =>
     ChatSession(talkerId: 7, name: '演示', face: '', lastText: '', time: _at, box: box, sessionType: sessionType);
+
+/// Answers each messages call with the next of [pages], as Bilibili might shape them.
+class _PagedApi extends FakeMessageApi {
+  _PagedApi(this.pages);
+
+  final List<ChatMessagePage> pages;
+  final asked = <int?>[];
+
+  @override
+  Future<ChatMessagePage> messages(ChatSession session, {int? beforeSeqno}) async {
+    asked.add(beforeSeqno);
+    return pages[math.min(asked.length - 1, pages.length - 1)];
+  }
+}
 
 ChatModel _model(FakeMessageApi api, {ChatSession? session}) {
   final model = ChatModel(
@@ -78,6 +93,68 @@ void main() {
     await Future<void>.delayed(Duration.zero);
     expect(model.olderFailed, isFalse);
     expect(model.messages.first.seqno, 1);
+  });
+
+  test('an older page that only repeats what is shown, its cursor unmoved, ends the paging', () async {
+    final api = _PagedApi([
+      ChatMessagePage(messages: [_text(8), _text(9)], hasMore: true, minSeqno: 8, maxSeqno: 9),
+      ChatMessagePage(messages: [_text(8)], hasMore: true, minSeqno: 8, maxSeqno: 8),
+    ]);
+    final model = _model(api);
+    await model.start();
+
+    await model.loadOlder();
+    expect(model.hasMore, isFalse);
+    await model.loadOlder();
+    expect(api.asked, [null, 8]);
+  });
+
+  test('an older page of nothing but take-backs pages on from its lower cursor', () async {
+    final api = _PagedApi([
+      ChatMessagePage(messages: [_text(8), _text(9)], hasMore: true, minSeqno: 8, maxSeqno: 9),
+      const ChatMessagePage(messages: [], hasMore: true, minSeqno: 5, maxSeqno: 7),
+      ChatMessagePage(messages: [_text(3), _text(4)], minSeqno: 3, maxSeqno: 4),
+    ]);
+    final model = _model(api);
+    await model.start();
+
+    await model.loadOlder();
+    expect(model.hasMore, isTrue);
+    await model.loadOlder();
+    expect(api.asked, [null, 8, 5]);
+    expect(model.messages.map((message) => message.seqno), [3, 4, 8, 9]);
+    expect(model.hasMore, isFalse);
+  });
+
+  test('系统通知 pages by its own cursor the same way', () async {
+    ChatMessage notice(int cursor) =>
+        ChatMessage(seqno: cursor, senderMid: 0, kind: ChatMessageKind.notice, title: '演示', time: _at);
+    final api = _PagedApi([
+      ChatMessagePage(messages: [notice(900), notice(950)], hasMore: true, minSeqno: 900, maxSeqno: 950),
+      ChatMessagePage(messages: [notice(900)], hasMore: true, minSeqno: 900, maxSeqno: 900),
+    ]);
+    final model = _model(api, session: _person(box: NoticeBox.system));
+    await model.start();
+
+    await model.loadOlder();
+    await model.loadOlder();
+    expect(api.asked, [null, 900]);
+    expect(model.hasMore, isFalse);
+  });
+
+  test('加关注 sends one follow while one is out', () async {
+    final api = FakeMessageApi(chatSettingsOf: {7: const ChatSettings()});
+    final model = _model(api);
+    await model.loadSettings();
+
+    final hold = api.holds['follow'] = Completer<void>();
+    final first = model.follow();
+    final second = model.follow();
+    api.holds.clear();
+    hold.complete();
+    await Future.wait([first, second]);
+    expect(api.follows, [(mid: 7, on: true)]);
+    expect(model.following, isTrue);
   });
 
   test('a sent message shows at once and is replaced by the answer; a failure takes it away', () async {

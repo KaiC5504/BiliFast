@@ -8660,10 +8660,8 @@ abstract final class MessageFeedTheme {
 
 /// A chat and the notice boxes (200-203, 218, 219). Filled by the chats' builder.
 abstract final class MessageChatTheme {
-  static const page = BiliColors.pageGrey;
-
-  /// 200-203 behind the bar and the list read #F6F7F8, a shade lighter than [page].
-  static const screen = BiliColors.softGrey;
+  /// 200-203 behind the bar and the list.
+  static const page = BiliColors.softGrey;
   static const text = BiliColors.text;
   static const grey = BiliColors.secondaryText;
 
@@ -8746,10 +8744,6 @@ abstract final class MessageChatTheme {
   static const theirs = BiliColors.card;
   static const yours = Color(0xFFBFEDFA);
 
-  /// 202's replies draw their bubble this much shorter than yours and a notice box's, though their rows keep the same
-  /// pitch.
-  static const theirShortfall = 11 / 3;
-
   /// Emotes 4/3 of the text's size, as in comments; 200's 网页链接 after the link's 12.67 pt chain, 1.6 pt either side
   /// and its top level with the words' ink.
   static const emote = bubbleText * 4 / 3;
@@ -8757,12 +8751,14 @@ abstract final class MessageChatTheme {
   static const linkGlyphGap = 1.6;
   static const linkGlyphDrop = 17 / 6;
 
-  /// 203's 此条消息为自动回复: 11 pt grey, under a 0.5 pt rule 10 pt below the text's ink.
+  /// 203's 此条消息为自动回复: 11 pt grey, under a 0.5 pt rule 10 pt below the text's ink, the bubble ending 29.67 pt
+  /// under the rule.
   static const autoReplyGap = 7.5;
   static const autoReplyRule = 0.5;
   static const autoReplyRuleInk = Color(0xFFE7E8E8);
   static const autoReplyText = 11.0;
   static const autoReplyLine = 15.0;
+  static const autoReplyBottom = 20 / 3;
 
   /// The account's face as 202 draws it: under a pendant the face is 32 pt in its 56 pt frame, and 大会员's 12 pt
   /// disc in a white ring 5/3 pt in from the face's right and 2 up from its bottom.
@@ -8774,8 +8770,10 @@ abstract final class MessageChatTheme {
   static const vipBottom = 2.0;
   static const vipRingInk = Color(0xFFFFFFFF);
 
-  /// A picture message, fitted into 200 × 200 pt with the bubble's corners.
+  /// A picture message, fitted into 200 × 200 pt with the bubble's corners; one whose size the message doesn't give is
+  /// a 120 pt square.
   static const pictureSide = 200.0;
+  static const pictureUnsized = 120.0;
   static const pictureFill = BiliColors.pageGrey;
 
   /// 200 and 201's cards, 16 pt apart: 20 pt in, 10 pt corners, 12 pt inside. The 16 pt semibold title's ink 14.33 pt
@@ -8823,10 +8821,66 @@ abstract final class MessageChatTheme {
   static const emoteGlyphHeight = 20.0;
   static const keyboardGlyphHeight = 17.0;
   static const keyboardInk = BiliColors.pink;
-  static const cursor = BiliColors.pink;
 
-  /// 219's emote panel under the composer, the home indicator's strip included.
-  static const emotePanel = 1114 / 3;
+  /// The field's caret, 1 × 16.67 pt and square, on the line's middle (219).
+  static const cursor = BiliColors.pink;
+  static const caretWidth = 1.0;
+  static const caretHeight = 50 / 3;
+
+  /// 219's emote panel under the composer, 372 pt with the home indicator's strip: the page's grey, a 1/3 pt lighter
+  /// line 1/3 under its top and a 30 × 3 pt grab handle 8.67 under it. Eight emotes of 30 pt to a row, centred 52 pt
+  /// apart from 38 in, rows 48 pt apart from 47.67 under the top, with no headings. A package of large emotes or of
+  /// 颜文字 (not in 219) is laid out as the comments' panel lays it.
+  static const emotePanel = 372.0;
+  static const panelFill = BiliColors.pageGrey;
+  static const panelLineTop = 1 / 3;
+  static const panelLine = 1 / 3;
+  static const panelLineInk = Color(0xFFF8F9F9);
+  static const handleTop = 26 / 3;
+  static const handleWidth = 30.0;
+  static const handleHeight = 3.0;
+  static const handleInk = Color(0xFFC1C2C2);
+  static const gridSide = 12.0;
+  static const gridTop = 71 / 3;
+  static const columns = 8;
+  static const row = 48.0;
+  static const emoteSide = 30.0;
+  static const largeColumns = ComposerTheme.largeColumns;
+  static const largeRow = ComposerTheme.largeRow;
+  static const largeEmote = ComposerTheme.largeEmote;
+  static const textColumns = ComposerTheme.textColumns;
+  static const textRow = ComposerTheme.textRow;
+  static const kaomojiText = ComposerTheme.kaomojiFont;
+  static const kaomojiPad = ComposerTheme.kaomojiPad;
+  static const panelSpinnerRadius = ComposerTheme.spinnerRadius;
+
+  /// The panel's 44 pt white bar in 50 pt slots: ⚙ (19.33 pt tall), 🔍 and 🕒 (16.67) in [dim], the pink ★
+  /// (18.67 × 18, its ink 2/3 above the slot's middle), then the packages' 28 pt icons or a 颜文字's first face in
+  /// 9 pt grey; the slot shown is on [panelFill]. 🔍's NEW is a 29.33 × 14 pt pink tag 19.67 into its slot and 5 under
+  /// the bar's top, its 10 pt white letters centred.
+  static const bar = BiliColors.card;
+  static const barHeight = 44.0;
+  static const barSlot = 50.0;
+  static const barSelected = panelFill;
+  static const barGearWidth = 52 / 3;
+  static const barGearHeight = 58 / 3;
+  static const barGlyph = 50 / 3;
+  static const barStarWidth = 56 / 3;
+  static const barStarHeight = 18.0;
+  static const barStarLift = 2 / 3;
+  static const barStar = BiliColors.pink;
+  static const packageIcon = ComposerTheme.tabIcon;
+  static const kaomojiTabText = ComposerTheme.kaomojiTabFont;
+  static const kaomojiTabPad = ComposerTheme.kaomojiTabPad;
+  static const kaomojiTab = ComposerTheme.kaomojiTab;
+  static const newLeft = 59 / 3;
+  static const newTop = 5.0;
+  static const newWidth = 88 / 3;
+  static const newHeight = 14.0;
+  static const newRadius = 2.0;
+  static const newFill = BiliColors.pink;
+  static const newInk = BiliColors.card;
+  static const newText = 10.0;
 }
 
 /// 消息设置 and its pickers (188, 195, 215, 216). Filled by 消息设置's builder.

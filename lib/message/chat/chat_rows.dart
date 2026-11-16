@@ -170,34 +170,23 @@ class ChatBubbleRow extends StatelessWidget {
         ),
       );
     }
-    final shortfall = own || box != null ? 0.0 : MessageChatTheme.theirShortfall;
     return ConstrainedBox(
       constraints: const BoxConstraints(maxWidth: MessageChatTheme.bubbleMaxText + MessageChatTheme.bubblePadding * 2),
-      child: Stack(
+      child: DecoratedBox(
         key: ValueKey('chat-bubble-${message.seqno}'),
-        children: [
-          Positioned(
-            left: 0,
-            right: 0,
-            top: 0,
-            bottom: shortfall,
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                color: own ? MessageChatTheme.yours : MessageChatTheme.theirs,
-                borderRadius: _corners,
-              ),
-            ),
+        decoration: BoxDecoration(
+          color: own ? MessageChatTheme.yours : MessageChatTheme.theirs,
+          borderRadius: _corners,
+        ),
+        child: Padding(
+          padding: EdgeInsets.fromLTRB(
+            MessageChatTheme.bubblePadding,
+            MessageChatTheme.bubbleTop,
+            MessageChatTheme.bubblePadding,
+            message.autoReply ? MessageChatTheme.autoReplyBottom : MessageChatTheme.bubbleBottom,
           ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(
-              MessageChatTheme.bubblePadding,
-              MessageChatTheme.bubbleTop,
-              MessageChatTheme.bubblePadding,
-              MessageChatTheme.bubbleBottom,
-            ),
-            child: content,
-          ),
-        ],
+          child: content,
+        ),
       ),
     );
   }
@@ -207,7 +196,7 @@ class ChatBubbleRow extends StatelessWidget {
     final height = message.pictureHeight.toDouble();
     const side = MessageChatTheme.pictureSide;
     final scale = width > 0 && height > 0 ? math.min(side / width, side / height) : 0.0;
-    final size = scale > 0 ? Size(width * scale, height * scale) : const Size.square(side * 0.6);
+    final size = scale > 0 ? Size(width * scale, height * scale) : const Size.square(MessageChatTheme.pictureUnsized);
     return ClipRRect(
       key: ValueKey('chat-picture-${message.seqno}'),
       borderRadius: _corners,

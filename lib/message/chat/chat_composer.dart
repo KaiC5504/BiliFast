@@ -1,3 +1,6 @@
+import 'dart:async';
+
+import 'package:flutter/foundation.dart' show TargetPlatform, defaultTargetPlatform;
 import 'package:flutter/material.dart'
     show AdaptiveTextSelectionToolbar, InputBorder, InputDecoration, Material, MaterialType, TextField;
 import 'package:flutter/services.dart';
@@ -9,7 +12,7 @@ import 'chat_glyphs.dart';
 import 'chat_rows.dart' show chatStyle;
 
 /// A chat's composer (202, 218, 219): the picture button, 发个消息聊聊呗, and the face that swaps the keyboard for the
-/// emote panel (the pink keyboard swaps it back). The keyboard's send key sends.
+/// emote panel (the pink keyboard, or a tap on the field, swaps it back). Return sends.
 class ChatComposer extends StatelessWidget {
   const ChatComposer({
     super.key,
@@ -32,6 +35,12 @@ class ChatComposer extends StatelessWidget {
   static Widget _editMenu(BuildContext context, EditableTextState state) => SystemContextMenu.isSupported(context)
       ? SystemContextMenu.editableText(editableTextState: state)
       : AdaptiveTextSelectionToolbar.editableText(editableTextState: state);
+
+  /// Flutter draws an iOS caret 2 pt taller than it is asked for.
+  static double get _caretHeight => switch (defaultTargetPlatform) {
+    TargetPlatform.iOS || TargetPlatform.macOS => MessageChatTheme.caretHeight - 2,
+    _ => MessageChatTheme.caretHeight,
+  };
 
   @override
   Widget build(BuildContext context) {
@@ -74,10 +83,19 @@ class ChatComposer extends StatelessWidget {
                       focusNode: focus,
                       minLines: 1,
                       maxLines: MessageChatTheme.fieldMaxLines,
-                      keyboardType: TextInputType.text,
-                      textInputAction: TextInputAction.send,
+                      // The keyboard's plain ⏎ (218), not 发送; the return it types sends instead of breaking the line.
+                      keyboardType: TextInputType.multiline,
+                      textInputAction: TextInputAction.newline,
+                      inputFormatters: [_ReturnSends(onSend)],
                       keyboardAppearance: Brightness.light,
+                      // Under the emote panel the field keeps its caret with no keyboard (219).
+                      readOnly: showingEmotes,
+                      showCursor: true,
+                      onTap: showingEmotes ? onToggleEmotes : null,
                       cursorColor: MessageChatTheme.cursor,
+                      cursorWidth: MessageChatTheme.caretWidth,
+                      cursorHeight: _caretHeight,
+                      cursorRadius: Radius.zero,
                       contextMenuBuilder: _editMenu,
                       style: style,
                       strutStyle: strut,
@@ -123,6 +141,25 @@ class ChatComposer extends StatelessWidget {
         ),
       ),
     );
+  }
+}
+
+/// Takes a return typed at the caret back out and sends what was there; a pasted text keeps its line breaks.
+class _ReturnSends extends TextInputFormatter {
+  _ReturnSends(this.onSend);
+
+  final ValueChanged<String> onSend;
+
+  @override
+  TextEditingValue formatEditUpdate(TextEditingValue oldValue, TextEditingValue newValue) {
+    final old = oldValue.text;
+    final selection = oldValue.selection;
+    final start = selection.isValid ? selection.start : old.length;
+    final end = selection.isValid ? selection.end : old.length;
+    if (newValue.text != old.replaceRange(start, end, '\n')) return newValue;
+    // Not from inside the formatter: the send clears the field it is formatting.
+    scheduleMicrotask(() => onSend(old));
+    return oldValue;
   }
 }
 

@@ -13,6 +13,9 @@ abstract final class ChatArt {
   static const emote = 'assets/images/message/chat_emote.png';
   static const keyboard = 'assets/images/message/chat_keyboard.png';
   static const link = 'assets/images/message/chat_link.png';
+  static const emoteSearch = 'assets/images/message/chat_emote_search.png';
+  static const emoteRecent = 'assets/images/message/chat_emote_recent.png';
+  static const emoteStar = 'assets/images/message/chat_emote_star.png';
 }
 
 /// [asset] tinted [color] in a [width] × [height] box.
