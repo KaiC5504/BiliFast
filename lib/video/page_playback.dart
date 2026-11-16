@@ -64,6 +64,7 @@ class PagePlayback extends ChangeNotifier implements KeptPlayback {
     this._storyFeed = pageStoryFeed,
   }) : _bvid = route.bvid,
        _cid = route.cid,
+       _cidHint = route.cidHint,
        _startAt = route.start,
        _view = route.view,
        _detail = route.detail,
@@ -100,6 +101,9 @@ class PagePlayback extends ChangeNotifier implements KeptPlayback {
   /// open starts at its position; another part of the same video reuses the view and detail it has.
   String _bvid;
   int? _cid;
+
+  /// The route's [VideoRoute.cidHint], for its own open only: the part's playurl is asked beside the view.
+  int? _cidHint;
   double? _startAt;
   VideoView? _view;
   VideoDetail? _detail;
@@ -316,7 +320,15 @@ class PagePlayback extends ChangeNotifier implements KeptPlayback {
     }
     unawaited(_reporter?.leave());
     unawaited(
-      controller.openVideo(_bvid, cid: _cid, start: _startAt, view: _view, detail: _detail, autoplay: _autoplay),
+      controller.openVideo(
+        _bvid,
+        cid: _cid,
+        cidHint: _cidHint,
+        start: _startAt,
+        view: _view,
+        detail: _detail,
+        autoplay: _autoplay,
+      ),
     );
     _reporter = WatchReporter(
       controller: controller,
@@ -394,6 +406,7 @@ class PagePlayback extends ChangeNotifier implements KeptPlayback {
     _followed = followed;
     _bvid = bvid;
     _cid = cid;
+    _cidHint = null;
     _startAt = null;
     _autoplay = true;
     willPlay();
