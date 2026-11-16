@@ -91,6 +91,8 @@ final class Rig {
       time.advance(frameMs);
       if (clock.running) {
         clock.handle(PositionChanged(seconds: clock.seconds, hostMs: time.clock.nowMs(), rate: 1));
+        // The player's readout wakes the layer on its events, about 10 a second.
+        if (i % 12 == 0) wake.value++;
       }
       await tester.pump(const Duration(microseconds: 8333));
     }
@@ -167,6 +169,22 @@ void main() {
     await tester.pump();
     expect(painter(), same(first), reason: 'only the Opacity above it rebuilds');
     expect(tester.widget<Opacity>(inLayer(Opacity)).opacity, 0.4);
+  });
+
+  testWidgets('a 弹幕设置 change wakes a ticker asleep over an empty screen, which takes it and sleeps again', (
+    tester,
+  ) async {
+    final rig = Rig()..timeline.add([item('很久以后', 60000)]);
+    await rig.mount(tester);
+    rig.play(0);
+    await rig.run(tester, 0.2);
+    expect(rig.state(tester).ticking, isFalse);
+
+    rig.store.update(rig.store.value.copyWith(area: 1));
+    expect(rig.state(tester).ticking, isTrue);
+    await tester.pump();
+    expect(rig.state(tester).options.area, 1);
+    expect(rig.state(tester).ticking, isFalse);
   });
 
   testWidgets('不透明度 fades what is flying without laying anything out again', (tester) async {

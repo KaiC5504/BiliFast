@@ -73,6 +73,8 @@ final class Rig {
       time.advance(frameMs);
       if (clock.running) {
         clock.handle(PositionChanged(seconds: clock.seconds, hostMs: time.clock.nowMs(), rate: 1));
+        // The player's readout wakes the layer on its events, about 10 a second.
+        if (i % 12 == 0) wake.value++;
       }
       await tester.pump(const Duration(microseconds: 8333));
     }
@@ -227,6 +229,106 @@ void main() {
     await rig.run(tester, 0.05);
     expect(rig.state(tester).ticking, isTrue);
     expect(rig.shown(tester, '开关'), isNotNull, reason: 'laid out again where it would be');
+  });
+
+  group('playing with nothing to draw', () {
+    testWidgets('the ticker sleeps until the next one is within 0.5 s, then it enters at the edge on time', (
+      tester,
+    ) async {
+      final rig = Rig();
+      rig.timeline.add([item('三秒', 3000)]);
+      await rig.mount(tester);
+      rig.play(0);
+      await tester.pump();
+      expect(rig.state(tester).ticking, isFalse);
+
+      // Each wake ticks one frame and finds nothing due yet.
+      await rig.run(tester, 2.3);
+      expect(rig.state(tester).ticking, isFalse);
+      expect(rig.visible(tester), isEmpty);
+
+      await rig.run(tester, 0.3);
+      expect(rig.state(tester).ticking, isTrue, reason: 'awake before it is due');
+      await rig.run(tester, 0.45);
+      final entered = rig.shown(tester, '三秒')!;
+      // 0.05 s into a 7 s crossing of 400 + w.
+      final travelled = 0.05 * (Rig.size.width + entered.rect.width) / 7;
+      expect(Rig.size.width - entered.rect.left, closeTo(travelled, 1.5));
+    });
+
+    testWidgets('it sleeps again once the last one has left', (tester) async {
+      final rig = Rig();
+      rig.timeline.add([item('最后', 500)]);
+      await rig.mount(tester);
+      rig.play(0);
+      await rig.run(tester, 7);
+      expect(rig.state(tester).ticking, isTrue);
+      await rig.run(tester, 0.6);
+      expect(rig.visible(tester), isEmpty);
+      expect(rig.state(tester).ticking, isFalse);
+    });
+
+    testWidgets('without a wake to bring it back it keeps ticking', (tester) async {
+      final rig = Rig();
+      rig.timeline.add([item('远', 30000)]);
+      await tester.pumpWidget(
+        Center(
+          child: SizedBox.fromSize(
+            size: Rig.size,
+            child: DanmakuLayer(clock: rig.clock, timeline: rig.timeline, sprites: rig.sprites),
+          ),
+        ),
+      );
+      rig.play(0);
+      await rig.run(tester, 0.2);
+      expect(rig.state(tester).ticking, isTrue);
+    });
+
+    testWidgets('at 2× it looks a second ahead', (tester) async {
+      final rig = Rig();
+      rig.timeline.add([item('倍速', 1800)]);
+      await rig.mount(tester);
+      rig.play(1);
+      await tester.pump();
+      expect(rig.state(tester).ticking, isFalse, reason: '0.8 s ahead at 1×');
+
+      rig.clock.handle(const RateChanged(2));
+      rig.wake.value++;
+      await tester.pump();
+      expect(rig.state(tester).ticking, isTrue);
+    });
+
+    testWidgets('a seek wakes it into what the new position shows', (tester) async {
+      final rig = Rig();
+      rig.timeline.add([item('后面', 30000)]);
+      await rig.mount(tester);
+      rig.play(0);
+      await rig.run(tester, 0.2);
+      expect(rig.state(tester).ticking, isFalse);
+
+      rig.clock.jump(31);
+      rig.wake.value++;
+      await tester.pump();
+      expect(rig.state(tester).ticking, isTrue);
+      expect(rig.shown(tester, '后面'), isNotNull);
+    });
+
+    testWidgets('a new timeline (an own danmaku sent) wakes it, and the own one enters at the edge', (tester) async {
+      final rig = Rig();
+      rig.timeline.add([item('远', 30000)]);
+      await rig.mount(tester);
+      rig.play(0);
+      await rig.run(tester, 1);
+      expect(rig.state(tester).ticking, isFalse);
+
+      final ms = (rig.clock.seconds * 1000).floor();
+      final sent = DanmakuTimeline()..add([item('远', 30000), item('自己发的', ms, own: true)]);
+      await rig.mount(tester, timeline: sent);
+      expect(rig.state(tester).ticking, isTrue);
+      await rig.run(tester, 1 / 120);
+      final own = rig.shown(tester, '自己发的')!;
+      expect(own.rect.left, greaterThan(Rig.size.width - 5));
+    });
   });
 
   testWidgets('without a timeline nothing ticks', (tester) async {

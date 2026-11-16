@@ -64,6 +64,12 @@ final class DanmakuTimeline {
     _last = ms;
   }
 
+  /// The time of the first danmaku later than [ms], or null when none is.
+  int? nextAfter(int ms) {
+    final index = _firstIndexAfter(ms);
+    return index < _items.length ? _items[index].elem.progressMs : null;
+  }
+
   /// Index of the first item with `progressMs > ms`.
   int _firstIndexAfter(int ms) {
     var low = 0;

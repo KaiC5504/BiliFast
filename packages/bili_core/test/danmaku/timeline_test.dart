@@ -77,4 +77,19 @@ void main() {
       ..add([DisplayDanmaku(elem: makeElem('b', at: 100), text: 'b', isOwn: false)]);
     expect(texts(t.advance(200)), ['a', 'b']);
   });
+
+  test('nextAfter names the first time past ms, whatever has been handed out', () {
+    final t = DanmakuTimeline();
+    expect(t.nextAfter(0), isNull);
+    t.add(items([500, 500, 1500, 4000]));
+    expect(t.nextAfter(-1), 500);
+    expect(t.nextAfter(499), 500);
+    expect(t.nextAfter(500), 1500);
+    expect(t.advance(800).length, 2);
+    expect(t.nextAfter(800), 1500);
+    expect(t.nextAfter(0), 500);
+    expect(t.nextAfter(4000), isNull);
+    t.add(items([4200]));
+    expect(t.nextAfter(4000), 4200);
+  });
 }

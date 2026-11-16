@@ -196,6 +196,9 @@ final class DanmakuScene extends ChangeNotifier {
   /// Danmaku from a seek are still being laid out, so frames are needed even while the clock stands still.
   bool get catchingUp => _backlog.isNotEmpty || _keep != null;
 
+  /// Nothing on screen, and nothing waiting to go on.
+  bool get idle => _items.isEmpty && !catchingUp;
+
   List<DanmakuOnScreen> get visible => [
     for (final item in _items)
       if (!item.gone)

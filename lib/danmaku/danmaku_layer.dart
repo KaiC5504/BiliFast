@@ -16,9 +16,9 @@ import 'danmaku_sprites.dart';
 import 'mask/mask_feed.dart';
 
 /// Danmaku over the video. While the clock runs, a ticker reads it every frame and only the painter repaints;
-/// nothing rebuilds per frame. While it stands still the ticker sleeps, and [wake] (player events, a seek)
-/// brings it back for a frame or for good. A 弹幕设置 change shows at once, mid-flight; only 不透明度 rebuilds
-/// anything, and then just the Opacity above the painter.
+/// nothing rebuilds per frame. While it stands still, or nothing is on screen or due soon, the ticker sleeps, and
+/// [wake] (player events, a seek) brings it back for a frame or for good. A 弹幕设置 change shows at once, mid-flight;
+/// only 不透明度 rebuilds anything, and then just the Opacity above the painter.
 ///
 /// Given 人像防挡's [mask] and the [picture], the danmaku pass behind the people in it.
 class DanmakuLayer extends StatefulWidget {
@@ -206,9 +206,22 @@ class DanmakuLayerState extends State<DanmakuLayer> with SingleTickerProviderSta
     if (_maskFeed case final feed?) {
       final playhead = clock.seconds;
       feed.follow(playhead);
-      _clip.show(feed.frameAt(playhead));
+      if (!_scene.idle) _clip.show(feed.frameAt(playhead));
     }
-    if (!clock.running && !_scene.catchingUp) _ticker.stop();
+    if (clock.running ? _canSleep(timeline, seconds, clock.rate) : !_scene.catchingUp) _ticker.stop();
+  }
+
+  /// Video seconds ahead the ticker must already be running for, at 1×; it scales with a faster rate.
+  static const lookAhead = 0.5;
+
+  /// While playing, an empty screen with nothing due soon needs no frames: [wake], fired by every player event (about
+  /// 10 a second), comes back well within [lookAhead] to look again. Without it nothing would.
+  bool _canSleep(DanmakuTimeline timeline, double seconds, double rate) {
+    if (widget.wake == null || !_scene.idle) return false;
+    if (!seconds.isFinite) return true;
+    final ms = (seconds * 1000).floor();
+    final next = timeline.nextAfter(ms);
+    return next == null || next - ms > lookAhead * 1000 * math.max(rate, 1);
   }
 
   /// Built once: a rebuild for 不透明度 hands Opacity the same child, so the builder doesn't run again.
