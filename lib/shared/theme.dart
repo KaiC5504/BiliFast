@@ -8985,4 +8985,194 @@ abstract final class LivePlayerTheme {}
 abstract final class LiveSendTheme {}
 
 /// 高能榜 (230-233).
-abstract final class LiveRankTheme {}
+abstract final class LiveRankTheme {
+  /// Upright, a sheet over the screen's lower 70% (its top 286.67 down on 956) under 12 pt corners; in full screen a
+  /// 375 pt panel at the right, square, the whole height. The room stays undimmed beside it.
+  static const sheetShare = 0.7;
+  static const sheetRadius = 12.0;
+  static const panelWidth = 375.0;
+  static const slideIn = Duration(milliseconds: 250);
+
+  /// The tab row, 50 tall: 14 pt labels, their middles 19.67 down, 房间观众's 100 from the left edge and 大航海's
+  /// 100 from the right; the chosen one's 80 × 3 underline 37 down.
+  static const tabsHeight = 50.0;
+  static const tabText = 14.0;
+  static const tabCentre = 19.67;
+  static const tabInset = 100.0;
+  static const underlineWidth = 80.0;
+  static const underlineHeight = 3.0;
+  static const underlineTop = 37.0;
+  static const tabSwitch = Duration(milliseconds: 250);
+
+  /// 房间观众 on white, its label and underline #FB7299, 大航海's #7F7F7F; 大航海 on its purple, label and underline
+  /// cream, 房间观众's a lilac grey. The purple runs from #302458 at the top to #1B162A near the bottom (231, 233).
+  static const audiencePage = BiliColors.card;
+  static const audienceChosen = BiliColors.verticalPink;
+  static const audienceOther = Color(0xFF7F7F7F);
+  static const guardChosen = Color(0xFFF5E2BA);
+  static const guardOther = Color(0xFF918AAB);
+  static const guardTop = Color(0xFF302458);
+  static const guardBottom = Color(0xFF1B162A);
+  static const guardBottomStop = 0.87;
+
+  /// Rows, 65 tall, both tabs: 36 pt faces; names 14 pt medium, their middle 11.75 above the row's; under them, the
+  /// chips. 1-3 get the APK's 24 × 16 tags (榜1-3, 大航海's italic numerals), the rest plain numbers in that column.
+  static const rowHeight = 65.0;
+  static const rankWidth = 24.0;
+  static const rankHeight = 16.0;
+  static const faceSize = 36.0;
+  static const nameText = 14.0;
+  static const nameWeight = FontWeight.w500;
+  static const nameLine = 20.0;
+  static const nameCentre = -11.75;
+  static const chipsHeight = 16.0;
+  static const chipGap = 16 / 3;
+
+  /// Load the next page with less than two rows left below.
+  static const loadAhead = 130.0;
+
+  /// 房间观众 (230, 232): the 在线榜 pill 12 in at the top, 21 tall with 10 either side, its 12 pt pink on a pink tint
+  /// and 3.33 corners; the 12 pt grey line 31 down (25 tall), ⓘ 13 pt after it, 贡献值 and its 11.33 pt ⇌ 14.33 from
+  /// the right; rows from 56 down.
+  static const pillLeft = 12.0;
+  static const pillHeight = 21.0;
+  static const pillPadX = 10.0;
+  static const pillRadius = 10 / 3;
+  static const pillText = 12.0;
+  static const pillFill = Color(0xFFFFECF1);
+  static const pillInk = BiliColors.pink;
+  static const infoTop = 31.0;
+  static const infoHeight = 25.0;
+  static const infoText = 12.0;
+  static const audienceInfoLeft = 12.0;
+  static const audienceInfoInk = BiliColors.secondaryText;
+  static const helpGap = 16 / 3;
+  static const helpSize = 13.0;
+  static const exchangeSize = 34 / 3;
+  static const exchangeGap = 2.0;
+  static const edgeRight = 43 / 3;
+  static const audienceListTop = 56.0;
+
+  /// 房间观众's row: the tag or #999999 12 pt number 14.33 in, the face 52 in, the name and chips 107.33 in (chips'
+  /// middle 11.33 below the row's), the 12 pt grey 贡献值 15 from the right.
+  static const audienceRankLeft = 43 / 3;
+  static const audienceRankText = 12.0;
+  static const audienceRankInk = Color(0xFF999999);
+  static const audienceFaceLeft = 52.0;
+  static const audienceNameLeft = 322 / 3;
+  static const audienceNameInk = BiliColors.text;
+  static const audienceChipsCentre = 34 / 3;
+  static const scoreText = 12.0;
+  static const scoreInk = BiliColors.secondaryText;
+  static const scoreRight = 15.0;
+  static const scoreGap = 12.0;
+
+  /// The viewer's own row under a 1 pt #F1F2F3 rule, 56 tall over the home indicator: - or the rank, the face, 贡献值 N
+  /// and 快来投喂吧～ in 10 pt grey (middles 9.83 above and 9.17 below the row's), and the 56 × 24 pink 去投喂 with 12 pt
+  /// white words, 14.33 from the right.
+  static const ownRule = 1.0;
+  static const ownRuleInk = BiliColors.pageGrey;
+  static const ownHeight = 56.0;
+  static const ownText = 10.0;
+  static const ownInk = BiliColors.secondaryText;
+  static const ownLine = 14.0;
+  static const ownTopCentre = -9.83;
+  static const ownBottomCentre = 9.17;
+  static const ownRankInk = BiliColors.secondaryText;
+  static const feedWidth = 56.0;
+  static const feedHeight = 24.0;
+  static const feedText = 12.0;
+  static const feedFill = BiliColors.pink;
+  static const feedInk = BiliColors.onPink;
+
+  /// 大航海 (231, 233): a panel 12 in from each side under a 1 pt cream rim at 24% and 8 pt corners, a lilac wash
+  /// fading down; inside, 14 from its edges, the 25 pt segmented tabs 15.67 down (6 apart, 8 pt corners, 12 pt words:
+  /// the chosen one lighter and semibold), 上周TOP1's 50 pt card 17.33 under them, the 12 pt line 10.33 under that.
+  static const panelInset = 12.0;
+  static const panelRadius = 8.0;
+  static const panelRim = Color(0x3DF5E2BA);
+  static const panelRimWidth = 1.0;
+  static const panelWashTop = Color(0x1A8F7BFF);
+  static const panelWashBottom = Color(0x058F7BFF);
+  static const guardContentInset = 26.0;
+  static const segmentsTop = 47 / 3;
+  static const segmentHeight = 25.0;
+  static const segmentGap = 6.0;
+  static const segmentRadius = 8.0;
+  static const segmentText = 12.0;
+  static const segmentChosenFill = Color(0xFF5B5487);
+  static const segmentChosenInk = Color(0xFFDCCAFF);
+  static const segmentChosenWeight = FontWeight.w600;
+  static const segmentFill = Color(0xFF463D6D);
+  static const segmentInk = Color(0xFF9B8DC5);
+  static const cardGap = 52 / 3;
+  static const cardHeight = 50.0;
+  static const cardRadius = 8.0;
+  static const cardTop = Color(0xFF42376C);
+  static const cardBottom = Color(0xFF362B5B);
+  static const cardFace = 24.0;
+  static const cardFaceGap = 20.0;
+  static const cardTitleText = 13.0;
+  static const cardTitleWeight = FontWeight.w600;
+  static const cardTitleInk = Color(0xFFE5D9FF);
+  static const cardNameText = 14.0;
+  static const cardNameInk = Color(0xFFC9CCD0);
+  static const guardInfoGap = 31 / 3;
+  static const guardInfoInk = Color(0xFFC9CCD0);
+  static const guardHelpInk = BiliColors.secondaryText;
+
+  /// 大航海's row: the numeral's column centred 32.5 in (14 pt grey past 3), the framed face's middle 81.83 in, name
+  /// (white) and medal 122 in, the medal's middle 8.17 below the row's.
+  static const guardRankLeft = 20.5;
+  static const guardRankText = 14.0;
+  static const guardRankInk = BiliColors.secondaryText;
+  static const guardFaceLeft = 63.83;
+  static const guardNameLeft = 122.0;
+  static const guardNameInk = Color(0xFFFFFFFF);
+  static const guardChipsCentre = 49 / 6;
+
+  /// The bar over the panel's foot, 80 tall whatever the safe area, #2A243E under a 1 pt #605D67 rim with 12 pt
+  /// corners; its row's middle 25 down. 千舰 (the room's badge, server art drawn here as words: 15 pt heavy cream over
+  /// a soft violet glow) 17 in, the 12 pt cream prompt 73.67 in, and 立即上船: 30 tall, 14.33 from the right, a cream
+  /// gradient, the APK's anchor 22 pt tall 8 in, 14 pt brown words 2 after it and 9 from the end.
+  static const barHeight = 80.0;
+  static const barRow = 50.0;
+  static const barRadius = 12.0;
+  static const barFill = Color(0xFF2A243E);
+  static const barRim = Color(0xFF605D67);
+  static const barRimWidth = 1.0;
+  static const badgeLeft = 17.0;
+  static const badgeText = 15.0;
+  static const badgeWeight = FontWeight.w800;
+  static const badgeTop = Color(0xFFFDF0D7);
+  static const badgeBottom = Color(0xFFF1DCAA);
+  static const badgeGlow = Color(0x804B4178);
+  static const badgeGlowWidth = 48.0;
+  static const badgeGlowHeight = 36.0;
+  static const promptLeft = 221 / 3;
+  static const promptLeftBare = 17.0;
+  static const promptText = 12.0;
+  static const promptInk = Color(0xFFF5E2BA);
+  static const boardHeight = 30.0;
+  static const boardStart = Color(0xFFFEF8E9);
+  static const boardEnd = Color(0xFFF5E2BB);
+  static const boardAnchor = 22.0;
+  static const boardAnchorLeft = 8.0;
+  static const boardAnchorGap = 2.0;
+  static const boardText = 14.0;
+  static const boardInk = Color(0xFF604041);
+  static const boardPadRight = 9.0;
+
+  /// A failed list's words and 重试, the next page's spinner and the empty list, as 热门's.
+  static const stateText = HotListTheme.stateText;
+  static const stateInk = HotListTheme.stateInk;
+  static const stateGap = HotListTheme.stateGap;
+  static const retryHeight = HotListTheme.retryHeight;
+  static const retryPadX = HotListTheme.retryPadX;
+  static const retryText = HotListTheme.retryText;
+  static const retryRim = HotListTheme.retryRim;
+  static const retryInk = BiliColors.pink;
+  static const footerPad = HotListTheme.footerPad;
+  static const footerLine = HotListTheme.footerLine;
+  static const spinnerRadius = HotListTheme.spinnerRadius;
+}
