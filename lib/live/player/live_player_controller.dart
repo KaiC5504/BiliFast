@@ -13,6 +13,7 @@ import '../../player_ui/end_screen_portrait.dart' show ShareLink, shareThroughSy
 import '../../shared/remote_image.dart' show secureImageUrl;
 import '../../shared/theme.dart';
 import '../../video/page_session.dart' show CoverFile, cachedCoverFile;
+import '../../video/pip_keeper.dart';
 import '../../video/player_prefs.dart';
 import '../room/live_room_model.dart';
 import 'live_player_prefs.dart';
@@ -30,7 +31,7 @@ enum LivePlayerPhase {
   /// The room isn't live: the cover, dimmed, with 直播已结束.
   ended,
 
-  /// The stream failed after one fresh ask, or the play info did: 重试.
+  /// The stream failed after its fresh ask, or after too many of them, or the play info did: 重试.
   failed,
 }
 
@@ -84,7 +85,8 @@ class LivePlayerNotices extends ChangeNotifier {
 /// the lock, 弹 (kept between rooms), picture in picture, background sound and the lock screen.
 ///
 /// Live goes straight to the player: no engine, no seek, no duration, no speed. A stall or a failure asks the room
-/// for a fresh stream once ([LiveRoomModel.refreshStream]); a second one shows 重试. Full screen is the orientation's
+/// for a fresh stream ([LiveRoomModel.refreshStream]); another before [steadyPlay] of playing, or past [freshLimit]
+/// asks in [freshWindow], shows 重试, and nothing more is asked until it is pressed. Full screen is the orientation's
 /// landscape while the room owns it; iOS turns the screen itself, as the official room's turn is the system's (225).
 class LivePlayerController extends ChangeNotifier with WidgetsBindingObserver {
   LivePlayerController({
@@ -106,8 +108,16 @@ class LivePlayerController extends ChangeNotifier with WidgetsBindingObserver {
     services.device.orientation.addListener(_orientationChanged);
   }
 
+  static const steadyPlay = Duration(seconds: 60);
+  static const freshLimit = 3;
+  static const freshWindow = Duration(minutes: 5);
+
   final LiveRoomModel room;
   final AppServices services;
+
+  /// What [PipKeeper] keeps for this player while the small window plays it with no page; its own entry is never
+  /// released when it plays.
+  KeptPlayback? keptAs;
 
   /// How long the stream may load or wait for data before it counts as stalled.
   final Duration stallLimit;
@@ -141,8 +151,12 @@ class LivePlayerController extends ChangeNotifier with WidgetsBindingObserver {
   /// The play info loaded on the player; a new one from the room loads again.
   LivePlayInfo? _loaded;
 
-  /// A fresh stream was asked after a stall or failure, and none has played since.
+  /// A fresh stream was asked after a stall or failure, and none has played [steadyPlay] since.
   bool _refreshAsked = false;
+  Timer? _steady;
+
+  /// One per fresh stream a stall or failure asked in the last [freshWindow].
+  final _freshAsks = <Timer>[];
   bool _refreshing = false;
   bool _failed = false;
   Timer? _stall;
@@ -155,6 +169,8 @@ class LivePlayerController extends ChangeNotifier with WidgetsBindingObserver {
   bool _resumeOnShow = false;
   bool _owning = false;
   bool _pictureInPicture = false;
+  bool _kept = false;
+  final _restores = StreamController<void>.broadcast();
 
   /// The pause about to come is the controller's own.
   bool _pauseExpected = false;
@@ -210,6 +226,18 @@ class LivePlayerController extends ChangeNotifier with WidgetsBindingObserver {
   bool get danmakuOn => _prefs.danmakuOn;
 
   bool get pictureInPicture => _pictureInPicture;
+
+  /// The small window's restore button, while no page shows this player.
+  Stream<void> get restoreRequests => _restores.stream;
+
+  /// The room offers no stream the player can play.
+  bool get unsupportedStream {
+    final play = room.play;
+    return room.state == LiveRoomState.live && play != null && play.url == null;
+  }
+
+  /// The line over 重试.
+  String get failureText => unsupportedStream ? '暂不支持该直播流' : '直播加载失败';
 
   /// Starts playing once [room]'s play info is in, and again whenever it changes.
   Future<void> start() async {
@@ -277,14 +305,14 @@ class LivePlayerController extends ChangeNotifier with WidgetsBindingObserver {
   /// ⟳: the room's stream asked again at the current quality.
   Future<void> refreshStream() async {
     _failed = false;
-    _refreshAsked = false;
+    _userAsked();
     await _askFresh('refresh');
   }
 
   /// 重试 after a failure: the play info again if that failed, else a fresh stream.
   Future<void> retry() async {
     _failed = false;
-    _refreshAsked = false;
+    _userAsked();
     notifyListeners();
     if (room.state == LiveRoomState.failed) {
       await room.retry();
@@ -302,7 +330,7 @@ class LivePlayerController extends ChangeNotifier with WidgetsBindingObserver {
     _pendingQuality = quality?.name ?? '';
     _autoQuality = quality == null;
     _failed = false;
-    _refreshAsked = false;
+    _userAsked();
     notifyListeners();
     try {
       await room.setQuality(quality?.qn ?? 0);
@@ -378,6 +406,27 @@ class LivePlayerController extends ChangeNotifier with WidgetsBindingObserver {
     _quietly(player.startPictureInPicture, 'pip start');
   }
 
+  /// Its page left while the small window plays it (true): the orientation goes and the restore button may bring a
+  /// page back; false when a page took it back.
+  void setKept(bool kept) {
+    if (_disposed || kept == _kept) return;
+    _kept = kept;
+    if (kept) {
+      _releaseOrientation();
+    } else if (!_covered) {
+      _claimOrientation();
+    }
+    final player = _player;
+    if (player != null) _quietly(() => player.setRestorable(kept), 'restorable');
+    _applyAutoPip();
+  }
+
+  /// No page will come back for the restore button: the small window ends at once.
+  void refuseRestore() {
+    final player = _player;
+    if (player != null && !_disposed) _quietly(() => player.setRestorable(false), 'restorable');
+  }
+
   /// The page is covered or shown (pauses and resumes as a video page does).
   void setCovered(bool covered) {
     if (covered == _covered || _disposed) return;
@@ -421,10 +470,11 @@ class LivePlayerController extends ChangeNotifier with WidgetsBindingObserver {
         _awayCheck = Timer(awayGrace, () {
           _awayCheck = null;
           if (!_background || _pictureInPicture || _disposed) return;
-          if (_status == PlayerStatus.playing || _status == PlayerStatus.buffering) {
-            _pausedAway = true;
-            final player = _player;
-            if (player != null) _pause(player);
+          // A stream still loading would start playing away from the screen once it is in.
+          final player = _player;
+          if (player != null && _loaded != null) {
+            if (_wantsPlay) _pausedAway = true;
+            _pause(player);
           }
           _updateNowPlaying();
         });
@@ -502,6 +552,8 @@ class LivePlayerController extends ChangeNotifier with WidgetsBindingObserver {
         _pictureInPicture = active;
         _updateNowPlaying();
         notifyListeners();
+      case PictureInPictureRestore():
+        _restores.add(null);
       case RemoteCommand(:final kind):
         _remoteCommand(kind);
       case AudioInterruption(:final began, :final shouldResume):
@@ -516,11 +568,28 @@ class LivePlayerController extends ChangeNotifier with WidgetsBindingObserver {
   void _statusChanged(PlayerStatus status) {
     final was = _status;
     _status = status;
+    if (status != PlayerStatus.playing) {
+      _steady?.cancel();
+      _steady = null;
+    }
     switch (status) {
       case PlayerStatus.playing:
         _stall?.cancel();
-        _refreshAsked = false;
         _refreshing = false;
+        // Past the away check (its grace lets the small window start), nothing may play.
+        if (_heldAway && _awayCheck == null) {
+          if (_wantsPlay) _pausedAway = true;
+          final player = _player;
+          if (player != null) _pause(player);
+          break;
+        }
+        // A fresh stream that plays and fails again at once gets no second one.
+        if (_refreshAsked) {
+          _steady ??= Timer(steadyPlay, () {
+            _steady = null;
+            _refreshAsked = false;
+          });
+        }
         _pausedAway = false;
         if (!_wantsPlay && !_covered) _wantsPlay = true;
         if (_pendingQuality != null) {
@@ -555,12 +624,20 @@ class LivePlayerController extends ChangeNotifier with WidgetsBindingObserver {
     _stall = Timer(stallLimit, () => _streamFailed('stall'));
   }
 
-  /// The first stall or failure since the last play asks a fresh stream; the next shows 重试.
+  /// A stall or failure asks a fresh stream, unless the last fresh one hasn't played [steadyPlay] or [freshLimit] were
+  /// asked in [freshWindow]: then 重试.
   void _streamFailed(String reason) {
     _stall?.cancel();
+    _steady?.cancel();
+    _steady = null;
     if (_disposed || _loaded == null) return;
-    _logger.warn(LogCategory.player, 'live stream stopped', {'reason': reason, 'refreshed': _refreshAsked});
-    if (_refreshAsked) {
+    final capped = _freshAsks.length >= freshLimit;
+    _logger.warn(LogCategory.player, 'live stream stopped', {
+      'reason': reason,
+      'refreshed': _refreshAsked,
+      'recent': _freshAsks.length,
+    });
+    if (_refreshAsked || capped) {
       _failed = true;
       _refreshing = false;
       _pendingQuality = null;
@@ -572,6 +649,9 @@ class LivePlayerController extends ChangeNotifier with WidgetsBindingObserver {
       return;
     }
     _refreshAsked = true;
+    late final Timer ask;
+    ask = Timer(freshWindow, () => _freshAsks.remove(ask));
+    _freshAsks.add(ask);
     _refreshing = true;
     notifyListeners();
     // Out of the player's event, which the new load's own events would otherwise land inside.
@@ -654,15 +734,28 @@ class LivePlayerController extends ChangeNotifier with WidgetsBindingObserver {
     _quietly(player.pause, 'pause');
   }
 
-  /// One video at a time: a closed page kept for the small window lets go first.
+  /// ⟳, 重试 or a quality: the fresh asks start over.
+  void _userAsked() {
+    _refreshAsked = false;
+    _steady?.cancel();
+    _steady = null;
+    for (final ask in _freshAsks) {
+      ask.cancel();
+    }
+    _freshAsks.clear();
+  }
+
+  /// One video at a time: another closed page kept for the small window lets go first.
   void _willPlay() {
-    if (services.pipKeeper.kept != null) services.pipKeeper.release();
+    final keeper = services.pipKeeper;
+    final kept = keeper.kept;
+    if (kept != null && !identical(kept, keptAs)) keeper.release();
   }
 
   void _applyAutoPip() {
     final player = _player;
     if (player == null || !player.capabilities.pictureInPicture) return;
-    final on = !_covered && _settings.autoPip && _loaded != null;
+    final on = !_covered && !_kept && _settings.autoPip && _loaded != null;
     _quietly(() => player.setAutoPictureInPicture(on), 'auto pip');
   }
 
@@ -750,7 +843,13 @@ class LivePlayerController extends ChangeNotifier with WidgetsBindingObserver {
     if (_disposed) return;
     _disposed = true;
     _stall?.cancel();
+    _steady?.cancel();
+    for (final ask in _freshAsks) {
+      ask.cancel();
+    }
+    _freshAsks.clear();
     _awayCheck?.cancel();
+    unawaited(_restores.close());
     services.device.orientation.removeListener(_orientationChanged);
     if (_started) {
       room.removeListener(_roomChanged);

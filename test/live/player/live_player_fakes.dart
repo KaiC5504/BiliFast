@@ -60,6 +60,9 @@ class FakeRoom extends LiveRoomModel {
   /// Makes [refreshStream] throw.
   Object? refreshError;
 
+  /// Makes [setQuality] throw.
+  Object? qualityError;
+
   void go(LiveRoomState state, {LivePlayInfo? play}) {
     stateValue = state;
     if (play != null) playValue = play;
@@ -90,6 +93,7 @@ class FakeRoom extends LiveRoomModel {
   @override
   Future<void> setQuality(int qn) async {
     asked.add('quality $qn');
+    if (qualityError case final error?) throw error;
     playValue = playAt(qn == 0 ? 10000 : qn, ask: ++asks);
     notifyListeners();
   }

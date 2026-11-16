@@ -3,12 +3,12 @@ import 'dart:async';
 import 'package:bili_core/devlog.dart';
 import 'package:flutter/foundation.dart';
 
-/// A video page's playback as the keeper sees it ([PagePlayback]).
+/// A page's playback as the keeper sees it: a video page's [PagePlayback], or a live room's.
 abstract interface class KeptPlayback {
   /// The small window is playing its video.
   bool get pipActive;
 
-  /// The video it plays, for the log.
+  /// What it plays, for the log: a video's bvid, or `live <room id>`.
   String get bvid;
 
   /// Its page left while the small window plays it: it goes on with no page, 自动连播 and 定时关闭 included.

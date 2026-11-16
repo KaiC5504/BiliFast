@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:bili_core/api.dart';
+import 'package:bili_core/devlog.dart';
 import 'package:flutter/material.dart' show Material, MaterialType;
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
@@ -9,6 +10,10 @@ import '../../app/app_environment.dart';
 import '../../app/app_scope.dart';
 import '../../app/route_observer.dart';
 import '../../shared/theme.dart';
+import '../../shared/toast.dart';
+import '../../video/actions/actions_model.dart' show ActionsModel;
+import '../../video/page_playback.dart' show RestoredPageRoute;
+import '../../video/pip_keeper.dart';
 import '../danmaku/live_send_input.dart';
 import '../live_entry.dart';
 import '../live_login.dart';
@@ -28,12 +33,109 @@ import 'superchat/room_superchat.dart';
 typedef LiveRoomModelFactory = LiveRoomModel Function(AppServices services, LiveRoomEntry entry);
 typedef LivePlayerControllerFactory = LivePlayerController Function(AppServices services, LiveRoomModel room);
 
+/// A room's model and player, which outlive its page while the small window plays it (as a video page's playback
+/// does): [PipKeeper] keeps it, the restore button pushes the room back on it, ✕ or another video closes it.
+class LiveRoomPlayback implements KeptPlayback {
+  LiveRoomPlayback({required this.services, required this.entry, required this.model, required this.controller}) {
+    controller
+      ..keptAs = this
+      ..addListener(_controllerChanged);
+    _restores = controller.restoreRequests.listen((_) => restore());
+  }
+
+  final AppServices services;
+  final LiveRoomEntry entry;
+  final LiveRoomModel model;
+  final LivePlayerController controller;
+  StreamSubscription<void>? _restores;
+  bool _pictureInPicture = false;
+  bool _closed = false;
+
+  bool get closed => _closed;
+
+  @override
+  bool get pipActive => !_closed && controller.pictureInPicture;
+
+  @override
+  String get bvid => 'live ${model.roomId}';
+
+  @override
+  void keep() {
+    if (_closed) return;
+    model.setShown(false);
+    // The page is being disposed, with the tree locked; giving the orientation up notifies the page below.
+    scheduleMicrotask(() {
+      if (!_closed) controller.setKept(true);
+    });
+  }
+
+  @override
+  void returned() {
+    if (_closed) return;
+    controller.setKept(false);
+  }
+
+  @override
+  bool pushPage() {
+    final navigator = services.navigator.currentState;
+    if (navigator == null || _closed) return false;
+    unawaited(
+      navigator.push(
+        RestoredPageRoute<void>(
+          builder: (_) => LiveRoomPage(entry: entry, playback: this),
+        ),
+      ),
+    );
+    return true;
+  }
+
+  /// The small window's restore button. Refused while kept, the window ends at once rather than waiting on a page
+  /// that won't come.
+  void restore() {
+    final keeper = services.pipKeeper;
+    if (!identical(keeper.kept, this) || keeper.restore(this)) return;
+    Logger.shared.warn(LogCategory.ui, 'restore refused', {
+      'bvid': bvid,
+      'reason': _closed ? 'closed' : 'no navigator',
+    });
+    controller.refuseRestore();
+  }
+
+  /// Stops and frees the player and the model.
+  @override
+  void close() {
+    if (_closed) return;
+    _closed = true;
+    controller.removeListener(_controllerChanged);
+    unawaited(_restores?.cancel());
+    // Just after: this can run inside the controller's own notification (the small window closing).
+    scheduleMicrotask(() {
+      controller.dispose();
+      model.dispose();
+    });
+  }
+
+  void _controllerChanged() {
+    final active = controller.pictureInPicture;
+    if (active == _pictureInPicture || _closed) return;
+    _pictureInPicture = active;
+    if (active) {
+      services.pipKeeper.pipStarted(this);
+    } else {
+      services.pipKeeper.pipStopped(this);
+    }
+  }
+}
+
 /// A room (207-209, 221-233): its header, the player, the chat and the bottom bar in portrait; the full-screen player
 /// in landscape; the overlays over both.
 class LiveRoomPage extends StatefulWidget {
-  const LiveRoomPage({super.key, required this.entry, this.createModel, this.createController});
+  const LiveRoomPage({super.key, required this.entry, this.playback, this.createModel, this.createController});
 
   final LiveRoomEntry entry;
+
+  /// The room the small window's restore button brought back; a fresh one when it was closed meanwhile.
+  final LiveRoomPlayback? playback;
 
   /// Tests' model and player in place of the real ones.
   @visibleForTesting
@@ -47,8 +149,10 @@ class LiveRoomPage extends StatefulWidget {
 
 class _LiveRoomPageState extends State<LiveRoomPage> with RouteAware {
   AppServices? _services;
+  late final LiveRoomPlayback _playback;
   late final LiveRoomModel _model;
   late final LivePlayerController _controller;
+  late LiveRoomState _roomState;
   final _overlays = LiveOverlays();
 
   /// 229's sheet over the open 醒目留言 card.
@@ -70,26 +174,19 @@ class _LiveRoomPageState extends State<LiveRoomPage> with RouteAware {
     super.didChangeDependencies();
     if (_services == null) {
       final services = _services = AppScope.of(context);
-      _model =
-          widget.createModel?.call(services, widget.entry) ??
-          LiveRoomModel(
-            api: services.liveApi,
-            entry: widget.entry,
-            loggedIn: () => services.environment.account is LoggedIn,
-            viewer: () => LiveUser(
-              uid: services.environment.mid ?? 0,
-              name: switch (services.environment.account) {
-                LoggedIn(:final name) => name,
-                _ => '',
-              },
-              face: services.environment.face ?? '',
-            ),
-          );
-      _controller =
-          widget.createController?.call(services, _model) ?? LivePlayerController(room: _model, services: services);
+      final brought = widget.playback;
+      final playback = _playback = brought != null && !brought.closed ? brought : _newPlayback(services);
+      _model = playback.model;
+      _controller = playback.controller;
+      _roomState = _model.state;
+      _model.addListener(_roomChanged);
       _model.setShown(true);
       unawaited(_model.start());
       unawaited(_controller.start());
+      // Not in this build: a kept playback let go notifies the keeper's listeners.
+      scheduleMicrotask(() {
+        if (mounted) services.pipKeeper.pageShown(playback, opened: true);
+      });
     }
     // Only another page covers the room: the sheets and the login page's dialog route are no cover.
     if (ModalRoute.of(context) case final PageRoute<dynamic> route when route != _route) {
@@ -107,9 +204,38 @@ class _LiveRoomPageState extends State<LiveRoomPage> with RouteAware {
       ..removeListener(_overlayChanged)
       ..dispose();
     _superChatMenu.dispose();
-    _controller.dispose();
-    _model.dispose();
+    _model.removeListener(_roomChanged);
+    _services?.pipKeeper.pageRemoved(_playback);
     super.dispose();
+  }
+
+  LiveRoomPlayback _newPlayback(AppServices services) {
+    final model =
+        widget.createModel?.call(services, widget.entry) ??
+        LiveRoomModel(
+          api: services.liveApi,
+          entry: widget.entry,
+          loggedIn: () => services.environment.account is LoggedIn,
+          viewer: () => LiveUser(
+            uid: services.environment.mid ?? 0,
+            name: switch (services.environment.account) {
+              LoggedIn(:final name) => name,
+              _ => '',
+            },
+            face: services.environment.face ?? '',
+          ),
+        );
+    final controller =
+        widget.createController?.call(services, model) ?? LivePlayerController(room: model, services: services);
+    return LiveRoomPlayback(services: services, entry: widget.entry, model: model, controller: controller);
+  }
+
+  void _roomChanged() {
+    final was = _roomState;
+    _roomState = _model.state;
+    if (was == LiveRoomState.live && _roomState == LiveRoomState.ended && mounted && !_covered) {
+      showToast(context, '直播已结束');
+    }
   }
 
   void _overlayChanged() {
@@ -423,5 +549,16 @@ class _LiveRoomPageState extends State<LiveRoomPage> with RouteAware {
           RoomMoreItem.desktop:
         toastNotYet(context);
     }
+  }
+}
+
+/// A room write that failed after its control let go (点赞's gathered send): one that needs a login opens [login], the
+/// room's own way to the login page; any other toasts.
+void roomWriteFailed(BuildContext context, Object error, {required Future<bool> Function() login}) {
+  if (!context.mounted) return;
+  if (liveNeedsLogin(error)) {
+    unawaited(login());
+  } else {
+    showToast(context, ActionsModel.failureMessage(error));
   }
 }

@@ -1,11 +1,13 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:bili_core/api.dart';
 import 'package:bilifast/live/player/live_player_controller.dart';
 import 'package:bilifast/live/player/live_player_prefs.dart';
 import 'package:bilifast/live/room/live_room_model.dart';
 import 'package:bilifast/player/bili_player.dart';
 import 'package:bilifast/shared/theme.dart';
+import 'package:bilifast/video/pip_keeper.dart';
 import 'package:bilifast/video/player_prefs.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -143,12 +145,201 @@ void main() {
     rig.controller.dispose();
   });
 
+  testWidgets('a fresh stream that plays and fails at once gets no second ask; one that played 60 s does', (
+    tester,
+  ) async {
+    final rig = await playing(tester);
+    rig.player.emit(const PlayerFailed('播放失败，请稍后重试'));
+    await tester.pump();
+    expect(rig.room.asked, ['refresh']);
+
+    // The fresh stream plays a moment, then fails: no loop of asks.
+    rig.player.emit(const StatusChanged(PlayerStatus.playing));
+    await tester.pump(const Duration(seconds: 5));
+    rig.player.emit(const PlayerFailed('播放失败，请稍后重试'));
+    await tester.pump();
+    expect(rig.room.asked, ['refresh']);
+    expect(rig.controller.phase, LivePlayerPhase.failed);
+
+    await rig.controller.retry();
+    await tester.pump();
+    expect(rig.room.asked, ['refresh', 'refresh']);
+    rig.player.emit(const PlayerFailed('播放失败，请稍后重试'));
+    await tester.pump();
+    expect(rig.room.asked, hasLength(3), reason: '重试 starts the asks over');
+
+    // Played steadily for a minute, the next failure gets its fresh stream; a pause on the way starts the count over.
+    rig.player.emit(const StatusChanged(PlayerStatus.playing));
+    await tester.pump(const Duration(seconds: 40));
+    rig.player.emit(const StatusChanged(PlayerStatus.buffering));
+    rig.player.emit(const StatusChanged(PlayerStatus.playing));
+    await tester.pump(const Duration(seconds: 40));
+    rig.player.emit(const PlayerFailed('播放失败，请稍后重试'));
+    await tester.pump();
+    expect(rig.room.asked, hasLength(3));
+    expect(rig.controller.phase, LivePlayerPhase.failed);
+
+    await rig.controller.retry();
+    await tester.pump();
+    rig.player.emit(const PlayerFailed('播放失败，请稍后重试'));
+    await tester.pump();
+    expect(rig.room.asked, hasLength(5));
+    rig.player.emit(const StatusChanged(PlayerStatus.playing));
+    await tester.pump(LivePlayerController.steadyPlay);
+    rig.player.emit(const PlayerFailed('播放失败，请稍后重试'));
+    await tester.pump();
+    expect(rig.room.asked, hasLength(6));
+    expect(rig.controller.phase, LivePlayerPhase.loading);
+    rig.controller.dispose();
+  });
+
+  testWidgets('three fresh asks in five minutes, then 重试 and nothing asked until it is pressed', (tester) async {
+    final rig = await playing(tester);
+    Future<void> playThenFail() async {
+      rig.player.emit(const StatusChanged(PlayerStatus.playing));
+      await tester.pump(LivePlayerController.steadyPlay);
+      rig.player.emit(const PlayerFailed('播放失败，请稍后重试'));
+      await tester.pump();
+    }
+
+    rig.player.emit(const PlayerFailed('播放失败，请稍后重试'));
+    await tester.pump();
+    await playThenFail();
+    await playThenFail();
+    expect(rig.room.asked, ['refresh', 'refresh', 'refresh']);
+    await playThenFail();
+    expect(rig.room.asked, hasLength(3));
+    expect(rig.controller.phase, LivePlayerPhase.failed);
+    await tester.pump(const Duration(minutes: 10));
+    expect(rig.room.asked, hasLength(3));
+
+    await rig.controller.retry();
+    await tester.pump();
+    expect(rig.room.asked, hasLength(4));
+    rig.player.emit(const PlayerFailed('播放失败，请稍后重试'));
+    await tester.pump();
+    expect(rig.room.asked, hasLength(5), reason: 'pressed, the count starts over');
+
+    // Asks older than five minutes no longer count.
+    final later = await playing(tester);
+    Future<void> playFor(Duration time) async {
+      later.player.emit(const StatusChanged(PlayerStatus.playing));
+      await tester.pump(time);
+      later.player.emit(const PlayerFailed('播放失败，请稍后重试'));
+      await tester.pump();
+    }
+
+    later.player.emit(const PlayerFailed('播放失败，请稍后重试'));
+    await tester.pump();
+    await playFor(LivePlayerController.freshWindow);
+    await playFor(LivePlayerController.steadyPlay);
+    await playFor(LivePlayerController.steadyPlay);
+    expect(later.room.asked, hasLength(4));
+    expect(later.controller.phase, LivePlayerPhase.loading);
+    rig.controller.dispose();
+    later.controller.dispose();
+  });
+
+  testWidgets('a quality switch that fails says 切换失败，请稍后重试 and keeps the quality playing', (tester) async {
+    final rig = await playing(tester);
+    rig.room.qualityError = StateError('no stream');
+    rig.player.calls.clear();
+    await rig.controller.pickQuality(qualities[2]);
+    await tester.pump();
+    expect(rig.room.asked, ['quality 250']);
+    expect(rig.controller.notices.shown.map((n) => n.text), ['切换中，请稍候', '切换失败，请稍后重试']);
+    expect(rig.controller.quality?.name, '1080P 原画 (高帧率)');
+    expect(rig.controller.phase, LivePlayerPhase.playing);
+    expect(loads(rig), isEmpty);
+    expect(rig.player.calls, isNot(contains('pause')));
+
+    // A later play says nothing of a switch.
+    rig.player.emit(const StatusChanged(PlayerStatus.playing));
+    await tester.pump();
+    expect(rig.controller.notices.shown, hasLength(2));
+    await tester.pump(LivePlayerTheme.noteShown);
+    rig.controller.dispose();
+  });
+
+  testWidgets('a room live with no stream the player can play says 暂不支持该直播流', (tester) async {
+    final rig = await liveRig();
+    await rig.controller.start();
+    rig.room.go(
+      LiveRoomState.live,
+      play: const LivePlayInfo(roomId: 7734200, uid: 50329118, status: LiveStatus.live, qualities: qualities),
+    );
+    await tester.pump();
+    expect(rig.controller.phase, LivePlayerPhase.failed);
+    expect(rig.controller.unsupportedStream, isTrue);
+    expect(rig.controller.failureText, '暂不支持该直播流');
+
+    rig.room.go(LiveRoomState.live, play: playAt(10000));
+    await tester.pump();
+    rig.player.emit(const PlayerFailed('播放失败，请稍后重试'));
+    rig.room.refreshError = StateError('no stream');
+    await tester.pump();
+    expect(rig.controller.phase, LivePlayerPhase.failed);
+    expect(rig.controller.failureText, '直播加载失败');
+    rig.controller.dispose();
+  });
+
+  testWidgets(
+    'kept for the small window it gives the orientation up and is restorable; the restore button reaches it',
+    (tester) async {
+      final rig = await playing(tester);
+      final orientation = rig.services.device.orientation;
+      final restores = <void>[];
+      final sub = rig.controller.restoreRequests.listen(restores.add);
+      addTearDown(sub.cancel);
+      await rig.controller.setFullScreen(true);
+      rig.player.calls.clear();
+
+      rig.controller.setKept(true);
+      expect(rig.player.calls, containsAllInOrder(['restorable true', 'pip auto false']));
+      expect(orientation.presentation.fullScreen, isFalse);
+      expect(rig.controller.fullScreen, isFalse);
+      rig.player.emit(const PictureInPictureRestore());
+      await tester.pump();
+      expect(restores, hasLength(1));
+
+      rig.player.calls.clear();
+      rig.controller.setKept(false);
+      expect(rig.player.calls, containsAllInOrder(['restorable false', 'pip auto true']));
+      await rig.controller.setFullScreen(true);
+      expect(rig.controller.fullScreen, isTrue);
+      rig.controller.refuseRestore();
+      expect(rig.player.calls.last, 'restorable false');
+      rig.controller.dispose();
+    },
+  );
+
+  testWidgets('a fresh page plays without releasing its own kept entry', (tester) async {
+    final rig = await liveRig();
+    final kept = _Kept();
+    rig.services.pipKeeper.pageRemoved(kept);
+    expect(rig.services.pipKeeper.kept, same(kept));
+    rig.controller.keptAs = kept;
+    await rig.controller.start();
+    rig.room.go(LiveRoomState.live, play: playAt(10000));
+    await tester.pump();
+    expect(rig.services.pipKeeper.kept, same(kept));
+
+    // Anything else kept lets go before the stream plays.
+    rig.controller.keptAs = null;
+    rig.room.go(LiveRoomState.live, play: playAt(250));
+    await tester.pump();
+    expect(rig.services.pipKeeper.kept, isNull);
+    expect(kept.closed, isTrue);
+    rig.controller.dispose();
+  });
+
   testWidgets('a fresh stream the room fails to give shows 重试', (tester) async {
     final rig = await playing(tester);
     rig.room.refreshError = StateError('no stream');
     rig.player.emit(const PlayerFailed('网络连接失败，请检查网络后重试'));
     await tester.pump();
     expect(rig.controller.phase, LivePlayerPhase.failed);
+    rig.controller.dispose();
   });
 
   testWidgets('a room that ends unloads the stream; a failed play info shows 重试, which asks the room again', (
@@ -252,6 +443,54 @@ void main() {
     expect(rig.player.calls, contains('play'));
   });
 
+  testWidgets('with 后台听视频 off, a stream still loading as the app leaves is paused, and stays so when it plays', (
+    tester,
+  ) async {
+    final prefs = PlayerPrefs.memory()..backgroundListen = false;
+    final rig = await liveRig(playerPrefs: prefs);
+    await rig.controller.start();
+    rig.room.go(LiveRoomState.live, play: playAt(10000));
+    await tester.pump();
+    rig.player.emit(const StatusChanged(PlayerStatus.loading));
+    await tester.pump();
+    rig.player.calls.clear();
+    rig.controller.didChangeAppLifecycleState(AppLifecycleState.paused);
+    await tester.pump(const Duration(seconds: 1));
+    expect(rig.player.calls, contains('pause'));
+
+    // The load lands playing anyway: paused again, the lock screen left alone.
+    rig.player.calls.clear();
+    rig.player.emit(const StatusChanged(PlayerStatus.playing));
+    await tester.pump();
+    expect(rig.player.calls, contains('pause'));
+    expect(rig.player.nowPlaying, isNull);
+    rig.player.emit(const StatusChanged(PlayerStatus.paused));
+    await tester.pump();
+    expect(rig.controller.playing, isTrue);
+    expect(rig.controller.phase, LivePlayerPhase.paused);
+
+    rig.player.calls.clear();
+    rig.controller.didChangeAppLifecycleState(AppLifecycleState.resumed);
+    await tester.pump();
+    expect(rig.player.calls, contains('play'));
+    rig.controller.dispose();
+  });
+
+  testWidgets('a play reported in the away grace is left for the small window', (tester) async {
+    final prefs = PlayerPrefs.memory()..backgroundListen = false;
+    final rig = await liveRig(playerPrefs: prefs);
+    await rig.controller.start();
+    rig.room.go(LiveRoomState.live, play: playAt(10000));
+    await tester.pump();
+    rig.controller.didChangeAppLifecycleState(AppLifecycleState.paused);
+    rig.player.calls.clear();
+    rig.player.emit(const StatusChanged(PlayerStatus.playing));
+    rig.player.emit(const PictureInPictureChanged(true));
+    await tester.pump(const Duration(seconds: 2));
+    expect(rig.player.calls, isNot(contains('pause')));
+    rig.controller.dispose();
+  });
+
   testWidgets('with 后台听视频 on, or in the small window, it plays on away', (tester) async {
     final rig = await playing(tester);
     rig.player.calls.clear();
@@ -339,4 +578,27 @@ void main() {
     await rig.controller.startPictureInPicture();
     expect(rig.player.calls.last, 'pip start');
   });
+}
+
+/// Another page's playback kept for the small window.
+final class _Kept implements KeptPlayback {
+  bool closed = false;
+
+  @override
+  bool get pipActive => true;
+
+  @override
+  String get bvid => 'BV1kept';
+
+  @override
+  void keep() {}
+
+  @override
+  void returned() {}
+
+  @override
+  void close() => closed = true;
+
+  @override
+  bool pushPage() => false;
 }
