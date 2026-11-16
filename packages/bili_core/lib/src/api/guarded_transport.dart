@@ -17,7 +17,12 @@ final class GuardedTransport implements HTTPTransport {
   GuardedTransport(
     this._inner, {
     this.writesAllowed = const {},
-    this.getWrites = const {'/x/feed/dislike', '/x/feed/dislike/cancel'},
+    this.getWrites = const {
+      '/x/feed/dislike',
+      '/x/feed/dislike/cancel',
+      '/session_svr/v1/session_svr/update_ack',
+      '/x/sys-msg/update_cursor',
+    },
     this.uncounted = const {},
     this.burst = 8,
     this.refill = const Duration(seconds: 1),

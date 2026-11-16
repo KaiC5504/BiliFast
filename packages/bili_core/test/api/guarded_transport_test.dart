@@ -231,6 +231,22 @@ void main() {
       await expectLater(transport.send(_get('/x/feed/dislike/cancel')), throwsA(_readOnly));
       expect(inner.sent, isEmpty);
     });
+
+    test("消息's read marks are writes whichever host and method: update_ack and 系统通知's update_cursor", () async {
+      final transport = guard();
+      for (final url in [
+        'https://api.vc.bilibili.com/session_svr/v1/session_svr/update_ack?talker_id=1&ack_seqno=2&csrf=secret-jct',
+        'https://message.bilibili.com/x/sys-msg/update_cursor?cursor=3&csrf=secret-jct',
+      ]) {
+        await expectLater(transport.send(HTTPRequest(url: Uri.parse(url))), throwsA(_readOnly));
+      }
+      await expectLater(
+        transport.send(_post('/session_svr/v1/session_svr/update_ack', host: 'https://api.vc.bilibili.com')),
+        throwsA(_readOnly),
+      );
+      expect(inner.sent, isEmpty);
+      expect(log(), isNot(contains('secret')));
+    });
   });
 
   group("Bilibili's risk control", () {
