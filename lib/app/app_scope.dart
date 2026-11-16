@@ -23,6 +23,7 @@ import '../me/me_profile_store.dart';
 import '../message/fake_message_api.dart';
 import '../message/message_api.dart';
 import '../message/message_model.dart';
+import '../message/message_prefs.dart';
 import '../notify/notify_host.dart';
 import '../offline/fake_offline_library.dart';
 import '../offline/offline_library.dart';
@@ -207,6 +208,7 @@ class AppServices {
     this._dynamicApi,
     this._messageApi,
     this._messages,
+    MessagePrefs? messagePrefs,
     MeProfileStore? meProfile,
     this._skinApi,
     this.skinFolder,
@@ -240,6 +242,7 @@ class AppServices {
        pageApi = pageApi ?? ClientPageApi(environment.client),
        searchHistory = searchHistory ?? SearchHistoryStore.memory(),
        meProfile = meProfile ?? MeProfileStore.memory(),
+       messagePrefs = messagePrefs ?? MessagePrefs.memory(),
        danmakuSettings = danmakuSettings ?? DanmakuSettingsStore.memory() {
     this.blockRules =
         blockRules ?? BlockRuleStore(api: this.pageApi, isLoggedIn: () => environment.account is LoggedIn);
@@ -293,6 +296,7 @@ class AppServices {
     environment.removeListener(_accountChanged);
     environment.logins.removeListener(_loggedIn);
     _historyFlusher.dispose();
+    _madeMessages?.dispose();
   }
 
   final AppEnvironment environment;
@@ -343,9 +347,14 @@ class AppServices {
       (environment.fake ? FakeMessageApi.demo() : ClientMessageApi(environment.client, mid: () => environment.mid ?? 0));
 
   final MessageModel? _messages;
+  MessageModel? _madeMessages;
 
   /// 消息's counts, badge and sessions, made on first use.
-  late final MessageModel messages = _messages ?? MessageModel(api: messageApi, environment: environment);
+  late final MessageModel messages =
+      _messages ?? (_madeMessages = MessageModel(api: messageApi, environment: environment, prefs: messagePrefs));
+
+  /// 消息设置's 消息提醒, kept on the phone (`message_prefs.json`).
+  final MessagePrefs messagePrefs;
 
   /// The account 我的 last showed, kept on the phone (`me.json`) so a launch draws it at once.
   final MeProfileStore meProfile;
