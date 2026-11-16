@@ -13,11 +13,14 @@ import 'package:bilifast/app/app_scope.dart';
 import 'package:bilifast/app/zoom_back_route.dart';
 import 'package:bilifast/history/watch_history_page.dart';
 import 'package:bilifast/home/avatar_page.dart';
+import 'package:bilifast/home/feed_big_card.dart';
 import 'package:bilifast/home/feed_card.dart';
 import 'package:bilifast/home/feed_divider.dart';
+import 'package:bilifast/home/feed_inline_player.dart';
 import 'package:bilifast/home/feed_model.dart';
 import 'package:bilifast/home/feed_more_sheet.dart';
 import 'package:bilifast/home/home_page.dart';
+import 'package:bilifast/home/hot/hot_list.dart';
 import 'package:bilifast/home/main_shell.dart';
 import 'package:bilifast/home/recent_store.dart';
 import 'package:bilifast/search/fake_search_api.dart';
@@ -31,6 +34,7 @@ import 'package:bilifast/shared/release_refresh.dart';
 import 'package:bilifast/shared/remote_image.dart';
 import 'package:bilifast/shared/theme.dart';
 import 'package:bilifast/playback/playback_controller.dart';
+import 'package:bilifast/player/bili_player.dart';
 import 'package:bilifast/skin/skin_loading_view.dart';
 import 'package:bilifast/skin/skin_model.dart';
 import 'package:bilifast/video/intro/title_block.dart';
@@ -136,8 +140,9 @@ void main() {
     String? initialLink,
     SkinModel Function(AppEnvironment environment)? skin,
     AppToken? token,
+    Size size = const Size(440, 900),
   }) async {
-    tester.view.physicalSize = const Size(440, 900);
+    tester.view.physicalSize = size;
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
     if (scale != 1) {
@@ -475,9 +480,11 @@ void main() {
       http.gates[1] = Completer<void>();
       final pull = await tester.startGesture(tester.getCenter(find.byKey(const ValueKey('feed'))));
       double? armedAt;
+      // The pull starts once past the slop that wins the drag from the PageView 推荐 shares with 热门.
       for (var i = 0; i < 60 && armedAt == null; i++) {
         await pull.moveBy(const Offset(0, 4));
         await tester.pump();
+        if (view.evaluate().isEmpty) continue;
         if (tester.widget<SkinLoadingView>(view).playing) armedAt = tester.getTopLeft(card('BV1c0')).dy - cardTop;
       }
       expect(armedAt, isNotNull);
@@ -1607,7 +1614,8 @@ void main() {
 
       Future<TestGesture> armed(WidgetTester tester) async {
         final finger = await tester.startGesture(tester.getCenter(feedList));
-        await move(tester, finger, 12);
+        // The first step only wins the drag from the PageView 推荐 shares with 热门; it moves nothing.
+        await move(tester, finger, 13);
         expect(tester.widget<LoadingTv>(find.byType(LoadingTv)).playing, isTrue, reason: 'armed');
         return finger;
       }
@@ -2031,6 +2039,139 @@ void main() {
       final stack = tester.widget<Stack>(find.descendant(of: cover('BV1aaa'), matching: find.byType(Stack)).first);
       expect(stack.children.first, isA<CoverPlaceholder>(), reason: 'under the picture');
       expect(tester.getRect(placeholder), tester.getRect(cover('BV1aaa')), reason: 'filling the cover');
+    });
+  });
+
+  group('推荐 and 热门 side by side (204)', () {
+    final pagesView = find.byKey(const ValueKey('home-pages'));
+    PageController pages(WidgetTester tester) => tester.widget<PageView>(pagesView).controller!;
+    HotList hot(WidgetTester tester) => tester.widget<HotList>(find.byType(HotList, skipOffstage: false));
+    ScrollPosition feedScroll(WidgetTester tester) => tester
+        .state<ScrollableState>(
+          find.descendant(of: find.byKey(const ValueKey('feed')), matching: find.byType(Scrollable)).first,
+        )
+        .position;
+
+    Future<void> swipe(WidgetTester tester, double dx) async {
+      await tester.fling(pagesView, Offset(dx, 0), 1000);
+      await settle(tester, 20);
+    }
+
+    testWidgets('launch opens on 推荐; 热门 is built once reached, and both keep their state across the trip', (
+      tester,
+    ) async {
+      http.pages[1] = twenty();
+      await show(tester);
+      await settle(tester);
+      expect(pages(tester).page, 0);
+      expect(find.byType(HotList, skipOffstage: false), findsNothing, reason: 'not built until reached');
+      feedScroll(tester).jumpTo(300);
+      await settle(tester);
+
+      await swipe(tester, -300);
+      expect(pages(tester).page, 1);
+      expect(find.byType(HotList), findsOneWidget);
+      final hotState = tester.state(find.byType(HotList));
+      await swipe(tester, 300);
+      expect(pages(tester).page, 0);
+      expect(feedScroll(tester).pixels, 300, reason: '推荐 kept where it was');
+      expect(find.byType(HotList), findsNothing, reason: 'off screen');
+      await swipe(tester, -300);
+      expect(identical(tester.state(find.byType(HotList)), hotState), isTrue, reason: '热门 kept alive');
+      expect(http.asked, [1], reason: 'no refresh from the trips');
+    });
+
+    testWidgets('热门 is active only while it is on screen and 首页 shows', (tester) async {
+      await show(tester);
+      await settle(tester);
+      await swipe(tester, -300);
+      expect(hot(tester).active, isTrue);
+
+      await tester.tap(find.byKey(const ValueKey('home-tab-mine')));
+      await settle(tester);
+      expect(hot(tester).active, isFalse, reason: '我的 shown');
+      await tester.tap(find.byKey(const ValueKey('home-tab-home')));
+      await settle(tester);
+      expect(hot(tester).active, isTrue);
+
+      await swipe(tester, 300);
+      expect(hot(tester).active, isFalse, reason: '推荐 on screen');
+      Widget nearest(Type type) => tester.widget(
+        find
+            .ancestor(of: find.byType(HotList, skipOffstage: false), matching: find.byType(type, skipOffstage: false))
+            .first,
+      );
+      expect((nearest(TickerMode) as TickerMode).enabled, isFalse, reason: 'still while off screen');
+      expect((nearest(HeroMode) as HeroMode).enabled, isFalse, reason: 'out of Hero flights while off screen');
+    });
+
+    testWidgets("首页's tap reloads the page on screen: 热门's list there, 推荐 back on 推荐", (tester) async {
+      http.pages[1] = twenty();
+      await show(tester);
+      await settle(tester);
+      await swipe(tester, -300);
+      var reloads = 0;
+      hot(tester).reloads!.addListener(() => reloads++);
+
+      await tester.tap(find.byKey(const ValueKey('home-tab-home')));
+      await settle(tester);
+      expect(reloads, 1);
+      expect(http.asked, [1], reason: '推荐 untouched');
+
+      await swipe(tester, 300);
+      await tester.tap(find.byKey(const ValueKey('home-tab-home')));
+      await settle(tester, 20);
+      expect(reloads, 1);
+      expect(http.asked, [1, 1], reason: '推荐 refreshed');
+    });
+
+    testWidgets("推荐's big card pauses while 热门 shows and plays on back on 推荐", (tester) async {
+      HomePage.feedPages = (index) async => index == 1 ? [bigCard('BV1GJ411x7h7'), ...smalls('h', 8)] : const [];
+      HomePage.precacheCover = (context, url, size) async => true;
+      HomePage.precacheBigCover = (context, url, size) async => true;
+      FeedInlineChoices.reset();
+      addTearDown(() {
+        HomePage.feedPages = null;
+        HomePage.precacheCover = FeedCardView.precacheCover;
+        HomePage.precacheBigCover = FeedBigCardView.precacheCover;
+        FeedInlineChoices.reset();
+      });
+      /// The last play or pause since the last load, or the load's own autoplay.
+      bool playing(FakePlayer player) {
+        final load = player.calls.lastIndexWhere((call) => call.startsWith('load'));
+        final asked = player.calls.skip(load + 1).where((call) => call == 'play' || call == 'pause');
+        return asked.isEmpty ? player.loaded?.autoplay ?? false : asked.last == 'play';
+      }
+
+      await show(tester);
+      await settle(tester, 20);
+      final inline = player;
+      expect(inline.loaded, isNotNull, reason: 'the big card asked for a player');
+      inline.emit(const StatusChanged(PlayerStatus.playing));
+      await settle(tester, 2);
+      expect(playing(inline), isTrue);
+
+      await swipe(tester, -300);
+      expect(playing(inline), isFalse, reason: '热门 on screen');
+      await settle(tester, 20);
+      expect(playing(inline), isFalse, reason: 'held while 热门 shows');
+
+      await swipe(tester, 300);
+      await settle(tester, 20);
+      expect(playing(inline), isTrue, reason: 'back on 推荐');
+      expect(identical(player, inline), isTrue, reason: 'the same player, not a new one');
+    });
+
+    testWidgets('the iPad keeps 推荐 alone under its one row', (tester) async {
+      http.pages[1] = twenty();
+      await show(tester, size: const Size(834, 1194));
+      await settle(tester);
+      expect(pagesView, findsNothing);
+      expect(find.byType(HotList, skipOffstage: false), findsNothing);
+      expect(find.byKey(const ValueKey('home-tab-hot')), findsNothing, reason: "the phone's row isn't built");
+      await tester.tap(find.byKey(const ValueKey('home-tab-home')));
+      await settle(tester, 20);
+      expect(http.asked, [1, 1], reason: "首页's tap refreshes 推荐");
     });
   });
 }

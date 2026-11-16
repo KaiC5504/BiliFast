@@ -8143,6 +8143,27 @@ abstract final class SettingsListTheme {
 /// 首页's tab row (204): 直播 推荐 热门 动画 影视, 推荐 and 热门 side by side as pages. Filled by the tab row's builder.
 abstract final class HomeTabRowTheme {
   static const tabCount = 5;
+
+  /// The labels' centres 57 pt apart with 热门 on the screen's middle, as both indicators sit (01: 163, 204: 220); each
+  /// slot takes taps across its pitch.
+  static const pitch = 57.0;
+
+  /// The chosen label is 16 pt semibold, the others 15 pt regular (推荐's ink 30.67 wide chosen, 29 not; 15 tall against
+  /// 14), every label's box standing on the same bottom: their ink ends 1/3 pt lower than a shared baseline would put
+  /// it. Every label is laid out at the chosen size and the others drawn scaled down about their bottom, so a label
+  /// grows as its page slides in and the row keeps its height.
+  static const restingScale = 15 / BiliMetrics.tabText;
+  static const weight = FontWeight.w400;
+  static const chosenWeight = FontWeight.w600;
+
+  /// The others' grey on white (01's #61666D, the folded magnifier's); over a 装扮's picture the skin's colour at the
+  /// magnifier's 72% (204: a black 热门 over the others' #464A44 on #D9E8D3).
+  static const ink = HomeHeaderTheme.searchInk;
+  static const skinInkOpacity = HomeHeaderTheme.skinSearchOpacity;
+
+  /// A tap on 推荐 or 热门 slides the pages over in UIKit's ease-in-out (no recording of the official one).
+  static const pageTurn = Duration(milliseconds: 300);
+  static const pageCurve = Curves.easeInOut;
 }
 
 /// 首页's 热门 (204, 217). Filled by 热门's builder.
