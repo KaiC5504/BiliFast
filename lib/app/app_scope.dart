@@ -8,6 +8,7 @@ import '../account/app_auth.dart';
 import '../account/login_gate.dart';
 import '../danmaku/block_rule_store.dart';
 import '../danmaku/danmaku_settings_store.dart';
+import '../device/memory_warnings.dart';
 import '../device/network_monitor.dart';
 import '../device/player_device.dart';
 import '../devtools/crash_log.dart';
@@ -49,6 +50,7 @@ class AppPlayback with WidgetsBindingObserver {
     this.engine,
     this.codecMemory,
     NetworkMonitor? network,
+    MemoryWarnings? memoryWarnings,
     this.muted = false,
     Logger? logger,
   }) : _logger = logger ?? Logger.shared {
@@ -59,6 +61,7 @@ class AppPlayback with WidgetsBindingObserver {
       CrashLog.report(error, stack, source: 'engine start', logger: _logger);
     }));
     _network = (network ?? NetworkMonitor.platform()).changes.listen(_networkChanged);
+    _memoryWarnings = (memoryWarnings ?? MemoryWarnings.platform()).warnings.listen(_memoryWarning);
   }
 
   final Future<PlaybackController> Function() _start;
@@ -74,6 +77,7 @@ class AppPlayback with WidgetsBindingObserver {
   final bool muted;
   final Logger _logger;
   late final StreamSubscription<bool> _network;
+  late final StreamSubscription<int> _memoryWarnings;
 
   final Set<PlaybackController> _pages = {};
 
@@ -123,6 +127,7 @@ class AppPlayback with WidgetsBindingObserver {
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     unawaited(_network.cancel());
+    unawaited(_memoryWarnings.cancel());
   }
 
   /// The controllers' probes of the server go to the shared engine as one ([SharedEngine]): when it had to restart,
@@ -136,9 +141,38 @@ class AppPlayback with WidgetsBindingObserver {
     }
   }
 
-  /// The shared engine trims its prefetch once; each controller logs and marks the warning.
+  /// Flutter's notice comes on every trip to the background (FlutterEngine.mm's flutterDidEnterBackground) as well as
+  /// on iOS's real warnings, which [MemoryWarnings] brings on its own. Away, the video the app comes back to (or plays
+  /// on: 后台听视频, the small window) keeps its prefetch and the rest drop theirs; in the foreground it is only the
+  /// real warning again.
   @override
   void didHaveMemoryPressure() {
+    final state = WidgetsBinding.instance.lifecycleState;
+    if (state == AppLifecycleState.resumed) return;
+    var kept = 0;
+    for (final controller in List.of(_pages)) {
+      if (_inPlay(controller)) {
+        kept++;
+      } else {
+        controller.dropPrefetch();
+      }
+    }
+    _logger.info(LogCategory.player, 'low-memory notice while away', {
+      'state': state?.name ?? 'unknown',
+      'kept': kept,
+      'live': live,
+    });
+  }
+
+  /// Loaded (playing, or paused on the page shown) or about to play. A covered page and a card its rule paused are
+  /// held, so they count as stopped whatever they had loaded; going by the player's status instead would drop a
+  /// video caught buffering, or one AVPlayer pauses as the app leaves.
+  static bool _inPlay(PlaybackController controller) =>
+      !controller.autoplayHeld && (controller.phase == PlaybackPhase.playing || controller.loadWillPlay);
+
+  /// iOS's own warning: the shared engine trims its prefetch once; each controller logs and marks the warning.
+  void _memoryWarning(int footprintMB) {
+    _logger.warn(LogCategory.player, 'memory warning', {'footprintMB': footprintMB, 'live': live});
     engine?.dropCache();
     for (final controller in List.of(_pages)) {
       controller.memoryPressure();

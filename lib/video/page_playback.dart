@@ -71,6 +71,12 @@ class PagePlayback extends ChangeNotifier implements KeptPlayback {
        _source = route.source,
        offline = route.offline;
 
+  /// How far ahead AVPlayer buffers: a page's playback as the player's default, a muted card less, a covered page
+  /// next to nothing.
+  static const pageBuffer = Duration(seconds: 30);
+  static const inlineBuffer = Duration(seconds: 8);
+  static const heldBuffer = Duration(seconds: 1);
+
   final AppServices _services;
   final PageSessionFactory _createSession;
 
@@ -266,6 +272,7 @@ class PagePlayback extends ChangeNotifier implements KeptPlayback {
     if (_covered) controller.holdAutoplay(true);
     if (_inline) {
       _quietly(() => controller.player.setMuted(true), 'mute');
+      _quietly(() => controller.player.setForwardBuffer(inlineBuffer), 'forward buffer');
       controller.setAutoPictureInPicture(false);
     }
     _open();
@@ -450,6 +457,8 @@ class PagePlayback extends ChangeNotifier implements KeptPlayback {
     }
     controller.setAutoPictureInPicture(true, now: play && controller.phase == PlaybackPhase.playing);
     _quietly(() => controller.player.setMuted(_services.playback.muted), 'unmute');
+    _quietly(() => controller.player.setForwardBuffer(pageBuffer), 'forward buffer');
+    controller.setIdle(false);
   }
 
   /// [page] left: the asks go nowhere until another page attaches.
@@ -482,11 +491,14 @@ class PagePlayback extends ChangeNotifier implements KeptPlayback {
     _hold();
   }
 
-  /// Paused while covered, and kept so: every load starts paused until shown.
+  /// Paused while covered, and kept so: every load starts paused until shown. AVPlayer keeps filling its forward
+  /// buffer while paused, and the engine refills an idle session's prefetch only when played or shown again.
   void _hold() {
     final controller = _controller!;
     controller.holdAutoplay(true);
+    controller.setIdle(true);
     _quietly(controller.player.pause, 'pause');
+    _quietly(() => controller.player.setForwardBuffer(heldBuffer), 'forward buffer');
     _setAutoPictureInPicture(false);
     _session?.readout.status.addListener(_stillCovered);
   }
@@ -511,6 +523,8 @@ class PagePlayback extends ChangeNotifier implements KeptPlayback {
     if (controller == null) return;
     final play = resume && resuming;
     controller.holdAutoplay(false, play: play);
+    controller.setIdle(false);
+    _quietly(() => controller.player.setForwardBuffer(_inline ? inlineBuffer : pageBuffer), 'forward buffer');
     _setAutoPictureInPicture(true);
     if (play) {
       willPlay();
