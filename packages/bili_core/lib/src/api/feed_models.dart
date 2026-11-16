@@ -171,6 +171,32 @@ final class FeedCard {
 
   String get id => bvid;
 
+  /// The card as an ordinary one, for a big card that isn't drawn big.
+  FeedCard get small => big == null
+      ? this
+      : FeedCard(
+          aid: aid,
+          bvid: bvid,
+          cid: cid,
+          title: title,
+          cover: cover,
+          duration: duration,
+          views: views,
+          danmaku: danmaku,
+          ownerName: ownerName,
+          ownerMid: ownerMid,
+          reason: reason,
+          isVertical: isVertical,
+          viewsText: viewsText,
+          danmakuText: danmakuText,
+          dislike: dislike,
+          ownerFace: ownerFace,
+          published: published,
+          idx: idx,
+          trackId: trackId,
+          flowData: flowData,
+        );
+
   @override
   bool operator ==(Object other) =>
       other is FeedCard &&

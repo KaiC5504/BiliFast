@@ -1563,6 +1563,63 @@ void main() {
 
     List<String> newest(FeedModel feed) => [for (final card in feed.newest) card.bvid];
 
+    test('one big card a refresh, at its top: an extra page in before the swap brings it up when page 1 has none, '
+        'and every other big card is drawn as an ordinary one', () async {
+      // The extra pages land within the hold a refresh over cards on screen keeps, as on the phone.
+      final model = FeedModel(
+        client: BiliClient(transport: http, cookies: CookieJar(Canned.cookies), logger: Logger(session: 'test'))
+          ..appToken = fakeAppToken,
+        logger: Logger(session: 'test')..add(logs),
+        officialWanted: () => true,
+        refreshPages: () => pages,
+        minimumRefresh: const Duration(milliseconds: 200),
+      );
+      pages = 1;
+      http.officialPages[0] = items('old', 1);
+      await model.refresh();
+      pages = 3;
+      http.officialPages[0] = items('a', 2);
+      http.officialPages[1] = [officialItem('BVbig1', goto: 'inline_av_v2'), ...items('b', 2)];
+      http.officialPages[2] = [officialItem('BVbig2', goto: 'inline_av_v2'), ...items('c', 1)];
+      await model.refresh();
+      await settled(model);
+      final cards = model.cards;
+      expect([for (final card in cards) card.bvid].take(2), ['BVbig1', 'BVa0']);
+      expect([for (final card in cards) if (card.big != null) card.bvid], ['BVbig1']);
+      expect(cards.map((card) => card.bvid), contains('BVbig2'));
+    });
+
+    test('page 1\'s big card stays on top and the extra pages\' are drawn as ordinary ones', () async {
+      final model = feed();
+      http.officialPages[0] = [officialItem('BVbig0', goto: 'inline_av_v2'), ...items('a', 1)];
+      http.officialPages[1] = [officialItem('BVbig1', goto: 'inline_av_v2'), ...items('b', 1)];
+      http.officialPages[2] = items('c', 1);
+      await model.refresh();
+      await settled(model);
+      expect(model.cards.first.bvid, 'BVbig0');
+      expect([for (final card in model.cards) if (card.big != null) card.bvid], ['BVbig0']);
+    });
+
+    test('a big card on an extra page that comes after the swap goes in as an ordinary card', () async {
+      final model = FeedModel(
+        client: BiliClient(transport: http, cookies: CookieJar(Canned.cookies), logger: Logger(session: 'test'))
+          ..appToken = fakeAppToken,
+        logger: Logger(session: 'test')..add(logs),
+        officialWanted: () => true,
+        refreshPages: () => 2,
+        minimumRefresh: Duration.zero,
+      );
+      http.officialPages[0] = items('a', 2);
+      http.officialPages[1] = [officialItem('BVbig1', goto: 'inline_av_v2'), ...items('b', 1)];
+      http.officialGates[1] = Completer<void>();
+      await model.refresh();
+      expect(model.cards.first.bvid, 'BVa0', reason: 'page 1 shows before the extra page comes');
+      http.officialGates[1]!.complete();
+      await settled(model);
+      expect(model.cards.first.bvid, 'BVa0');
+      expect([for (final card in model.cards) if (card.big != null) card.bvid], isEmpty);
+    });
+
     test('one page shows as before: one call, and the refresh is done when it comes back', () async {
       http.officialPages[0] = items('a', 2);
       http.officialPages[1] = items('b', 2);
