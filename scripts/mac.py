@@ -87,6 +87,9 @@ echo "installed on the iPhone: $installed (this build: $build)"
 
 SIM = r"""
 name="{name}"; type="{type}"
+# simctl boots the device without Simulator.app, so nothing shows on the Mac's screen or in its Dock; a window or Dock
+# icon that appears anyway is closed again, unless the app was already open before this run.
+gui_before=$(pgrep -x Simulator || true)
 udid=$(xcrun simctl list devices available | sed -nE "s/^ *$name \(([0-9A-F-]+)\).*/\1/p" | head -1)
 if [ -z "$udid" ]; then
   runtime=$(xcrun simctl list runtimes | sed -nE 's/^iOS .* - (com\.apple\.CoreSimulator\.SimRuntime\.iOS-[0-9-]+)$/\1/p' | tail -1)
@@ -108,7 +111,13 @@ xcrun simctl launch "$udid" {bundle} > /dev/null
 sleep {wait}
 mkdir -p "$HERE/shots"
 xcrun simctl io "$udid" screenshot "$HERE/shots/{shot}.png" > /dev/null 2>&1
-echo "launched on $name"
+# Muted already (MUTE), but nothing is left running that could make a sound.
+xcrun simctl terminate "$udid" {bundle} > /dev/null 2>&1 || true
+if [ -z "$gui_before" ] && pgrep -x Simulator > /dev/null; then
+  killall Simulator > /dev/null 2>&1 || true
+  echo "warning: Simulator.app opened on the Mac's screen during the run; closed it"
+fi
+echo "ran on $name"
 """
 
 STOP = r"""
