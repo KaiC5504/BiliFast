@@ -1,5 +1,6 @@
 import AVFoundation
 import UIKit
+import os
 
 /// Every native player by id. A player outlives its Flutter view: picture in picture keeps playing while the view is
 /// gone, and a restored page attaches the same host view again. Only `dispose` releases one.
@@ -41,10 +42,63 @@ final class PlayerRegistry {
     player.captureFrame(reply)
   }
 
+  func unload(_ id: Int64) throws {
+    let player = try self.player(id)
+    guard let unloaded = PlayerTeardown.step("unload", { player.unload() }) else { return }
+    deferRelease { player.releaseUnloaded(unloaded) }
+  }
+
+  /// Gone for Dart at once; what AVFoundation takes long to let go of follows later (`deferRelease`).
   func dispose(_ id: Int64) {
     guard let player = players.removeValue(forKey: id) else { return }
     player.log("native player disposed", ["live": players.count])
-    player.dispose()
+    PlayerTeardown.step("retire") { player.retire() }
+    var retired: NativePlayer? = player
+    deferRelease {
+      retired?.finishTeardown()
+      PlayerTeardown.step("dealloc") { retired = nil }
+    }
+  }
+
+  /// Releasing an item, a layer and a picture in picture controller took 0.04 to 0.30 s each on the phone, on the
+  /// thread Flutter draws on, and a page pop disposes several at once: they wait out the page transition, then go
+  /// one a frame.
+  private static let releaseDelay: TimeInterval = 0.35
+  private static let releaseGap: TimeInterval = 1.0 / 60
+  private var releases: [(due: DispatchTime, run: @MainActor () -> Void)] = []
+  private var releaseScheduled = false
+
+  private func deferRelease(_ run: @escaping @MainActor () -> Void) {
+    releases.append((due: .now() + Self.releaseDelay, run: run))
+    scheduleRelease(notBefore: .now())
+  }
+
+  private func scheduleRelease(notBefore earliest: DispatchTime) {
+    guard !releaseScheduled, let next = releases.first else { return }
+    releaseScheduled = true
+    DispatchQueue.main.asyncAfter(deadline: max(next.due, earliest)) { [weak self] in
+      MainActor.assumeIsolated { self?.releaseNext() }
+    }
+  }
+
+  private func releaseNext() {
+    releaseScheduled = false
+    guard !releases.isEmpty else { return }
+    let run = releases.removeFirst().run
+    run()
+    scheduleRelease(notBefore: .now() + Self.releaseGap)
+  }
+}
+
+/// Instruments' intervals for each step of letting a player go.
+enum PlayerTeardown {
+  static let log = OSLog(subsystem: Bundle.main.bundleIdentifier ?? "bilifast", category: "PlayerTeardown")
+
+  static func step<T>(_ name: StaticString, _ body: () throws -> T) rethrows -> T {
+    let id = OSSignpostID(log: log)
+    os_signpost(.begin, log: log, name: name, signpostID: id)
+    defer { os_signpost(.end, log: log, name: name, signpostID: id) }
+    return try body()
   }
 }
 
@@ -144,9 +198,9 @@ final class NativePlayer {
     }
   }
 
-  /// The page closed: without an item AVPlayer stops filling its 30 s forward buffer. The layer stays attached for
-  /// the next load.
-  func unload() {
+  /// The page closed. The layer stays attached for the next load. Returns the generation `releaseUnloaded` empties
+  /// the player for, once the page has gone (PlayerRegistry), or nil when it holds no item.
+  func unload() -> Int? {
     // An emptied player under a live picture in picture would leave a black window to close by hand.
     host.stopPiP()
     generation += 1
@@ -155,8 +209,14 @@ final class NativePlayer {
     // Detached first, so the pause doesn't report a status for the item being dropped.
     detachItem()
     player.pause()
-    player.replaceCurrentItem(with: nil)
     updateStatus()
+    return player.currentItem == nil ? nil : generation
+  }
+
+  /// Without an item AVPlayer stops filling its forward buffer. A load since the unload has its own item to keep.
+  func releaseUnloaded(_ unloaded: Int) {
+    guard unloaded == generation, !retired, player.currentItem != nil else { return }
+    PlayerTeardown.step("unload item release") { player.replaceCurrentItem(with: nil) }
   }
 
   func play() {
@@ -258,31 +318,44 @@ final class NativePlayer {
     }
   }
 
-  func dispose() {
-    NowPlaying.set(self, info: nil)
+  /// Disposed, the player says nothing more to Dart and stops at once; `finishTeardown` lets go of the rest later.
+  func retire() {
+    PlayerTeardown.step("now playing off") { NowPlaying.set(self, info: nil) }
+    retired = true
     generation += 1
     pendingSeeks = 0
     wantsPlay = false
-    player.pause()
-    detachItem()
-    player.replaceCurrentItem(with: nil)
-    if let timeObserver { player.removeTimeObserver(timeObserver) }
-    timeObserver = nil
-    playerObservations.forEach { $0.invalidate() }
-    playerObservations = []
-    host.tearDown()
+    PlayerTeardown.step("observers off") {
+      if let timeObserver { player.removeTimeObserver(timeObserver) }
+      timeObserver = nil
+      playerObservations.forEach { $0.invalidate() }
+      playerObservations = []
+      detachItem()
+    }
+    PlayerTeardown.step("pause") { player.pause() }
+    host.retire()
   }
 
+  func finishTeardown() {
+    PlayerTeardown.step("item release") { player.replaceCurrentItem(with: nil) }
+    host.finishTeardown()
+  }
+
+  /// Nil once retired: main-queue blocks KVO posted before then, and the interruption's weak owner, can still run
+  /// while the player waits for its release.
+  private var live: PlayerEventApi? { retired ? nil : events }
+  private var retired = false
+
   func log(_ kind: String, _ fields: [String: Any]) {
-    events.onLog(playerId: id, kind: kind, fields: fields.mapValues { Optional($0) }, completion: ignoreReply)
+    live?.onLog(playerId: id, kind: kind, fields: fields.mapValues { Optional($0) }, completion: ignoreReply)
   }
 
   func sendRemoteCommand(_ command: NativeRemoteCommand, seconds: Double?) {
-    events.onRemoteCommand(playerId: id, command: command, seconds: seconds, completion: ignoreReply)
+    live?.onRemoteCommand(playerId: id, command: command, seconds: seconds, completion: ignoreReply)
   }
 
   func sendInterruption(began: Bool, shouldResume: Bool) {
-    events.onInterruption(playerId: id, began: began, shouldResume: shouldResume, completion: ignoreReply)
+    live?.onInterruption(playerId: id, began: began, shouldResume: shouldResume, completion: ignoreReply)
   }
 
   private func observePlayer() {
@@ -432,7 +505,7 @@ final class NativePlayer {
     let seconds = time.seconds.isFinite ? time.seconds : 0
     // The rate the playhead moves at while playing; paused, the rate playback resumes at.
     let rate = player.rate > 0 ? player.rate : player.defaultRate
-    events.onPosition(playerId: id, seconds: seconds, rate: Double(rate), completion: ignoreReply)
+    live?.onPosition(playerId: id, seconds: seconds, rate: Double(rate), completion: ignoreReply)
   }
 
   private func itemChanged(_ current: Int) {
@@ -476,13 +549,13 @@ final class NativePlayer {
     if next == .playing { played = true }
     guard next != status else { return }
     status = next
-    events.onStatus(playerId: id, status: next, completion: ignoreReply)
+    live?.onStatus(playerId: id, status: next, completion: ignoreReply)
   }
 
   private func reportRate(_ rate: Double) {
     guard rate != reportedRate else { return }
     reportedRate = rate
-    events.onRate(playerId: id, rate: rate, completion: ignoreReply)
+    live?.onRate(playerId: id, rate: rate, completion: ignoreReply)
   }
 
   private func reportDuration(_ current: Int) {
@@ -491,7 +564,7 @@ final class NativePlayer {
     guard seconds.isFinite, seconds > 0, seconds != reportedDuration else { return }
     reportedDuration = seconds
     nowPlaying?.refreshPlayback()
-    events.onDuration(playerId: id, seconds: seconds, completion: ignoreReply)
+    live?.onDuration(playerId: id, seconds: seconds, completion: ignoreReply)
   }
 
   private func reportBuffered(_ current: Int) {
@@ -504,7 +577,7 @@ final class NativePlayer {
     }
     guard ranges != reportedRanges else { return }
     reportedRanges = ranges
-    events.onBuffered(playerId: id, ranges: ranges, completion: ignoreReply)
+    live?.onBuffered(playerId: id, ranges: ranges, completion: ignoreReply)
   }
 
   private func reportSize(_ current: Int) {
@@ -512,8 +585,8 @@ final class NativePlayer {
     let size = item.presentationSize
     guard size.width > 0, size.height > 0, size != reportedSize else { return }
     reportedSize = size
-    events.onSize(playerId: id, width: Int64(size.width.rounded()), height: Int64(size.height.rounded()),
-                  completion: ignoreReply)
+    live?.onSize(playerId: id, width: Int64(size.width.rounded()), height: Int64(size.height.rounded()),
+                 completion: ignoreReply)
   }
 
   private func itemFailed(_ failure: ItemFailure, generation current: Int) {
@@ -525,8 +598,8 @@ final class NativePlayer {
     if let code = failure.code { fields["code"] = code }
     log("item failed", fields)
     let message = failure.kind == .network ? "网络连接失败，请检查网络后重试" : "播放失败，请稍后重试"
-    events.onFailure(playerId: id, message: message, domain: failure.domain, code: failure.code.map { Int64($0) },
-                     formatRejected: failure.kind == .format, completion: ignoreReply)
+    live?.onFailure(playerId: id, message: message, domain: failure.domain, code: failure.code.map { Int64($0) },
+                    formatRejected: failure.kind == .format, completion: ignoreReply)
     updateStatus()
   }
 
@@ -548,7 +621,7 @@ final class NativePlayer {
   }
 
   private func pictureInPictureChanged(_ active: Bool) {
-    events.onPictureInPicture(playerId: id, active: active, completion: ignoreReply)
+    live?.onPictureInPicture(playerId: id, active: active, completion: ignoreReply)
   }
 
   /// Set while Dart keeps this player's closed page for the small window (PipKeeper).
@@ -557,7 +630,7 @@ final class NativePlayer {
   /// Without a kept page an off-screen restore ends at once instead of AVKit waiting 3 s; with one, the restore waits
   /// for the page Dart pushes back. A view still on screen completes the restore by itself (PlayerHostView).
   private func restoreRequested() -> Bool {
-    events.onPictureInPictureRestore(playerId: id, completion: ignoreReply)
+    live?.onPictureInPictureRestore(playerId: id, completion: ignoreReply)
     return restorable
   }
 

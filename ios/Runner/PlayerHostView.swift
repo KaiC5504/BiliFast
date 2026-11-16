@@ -109,16 +109,22 @@ final class PlayerHostView: UIView, AVPictureInPictureControllerDelegate {
     pip.stopPictureInPicture()
   }
 
-  func tearDown() {
+  /// The disposed player's first half: nothing of this view reaches Dart any more and it leaves the screen.
+  func retire() {
     stopPiP()
     finishRestore(false)
     pip?.delegate = nil
-    pip = nil
+    pip?.canStartPictureInPictureAutomaticallyFromInline = false
     onPiPActive = nil
     onRestore = nil
     onLog = nil
-    playerLayer.player = nil
-    removeFromSuperview()
+    PlayerTeardown.step("host out of window") { removeFromSuperview() }
+  }
+
+  /// The second half, once the page transition is over (PlayerRegistry).
+  func finishTeardown() {
+    PlayerTeardown.step("pip release") { pip = nil }
+    PlayerTeardown.step("layer release") { playerLayer.player = nil }
   }
 
   override func didMoveToWindow() {
