@@ -44,6 +44,7 @@ void main() {
   late FakeLoginGate gate;
   late List<FakePlayer> players;
   late List<PlaybackController> controllers;
+  late List<FakeEngine> engines;
   late Map<int, List<FeedCard>> pages;
 
   /// While set, a player asked for comes only once it completes; [createError] fails it instead.
@@ -56,6 +57,7 @@ void main() {
     gate = FakeLoginGate();
     players = [];
     controllers = [];
+    engines = [];
     pages = {
       1: [bigCard(_bv), ...smalls('a', 12)],
     };
@@ -88,9 +90,11 @@ void main() {
       if (createError case final error?) throw error;
       final player = FakePlayer();
       players.add(player);
+      final engine = FakeEngine();
+      engines.add(engine);
       final controller = PlaybackController(
         client: environment.client,
-        engine: FakeEngine(),
+        engine: engine,
         player: player,
         clock: ManualClock(10000).clock,
         now: () => now,
@@ -403,6 +407,27 @@ void main() {
     expect(controllers.single.idle, isFalse);
     await frames(tester, 30);
     expect(tester.widget<VideoPage>(find.byType(VideoPage)).route.playback?.controller, same(controllers.single));
+  });
+
+  testWidgets('paused while its player is still loading, the player comes in idle; shown again, awake', (tester) async {
+    createGate = Completer<void>();
+    await show(tester);
+    await frames(tester, 10);
+    expect(players, isEmpty, reason: 'held at the gate');
+    await tester.tap(find.byKey(ValueKey('home-tab-${HomeTab.mine.name}')));
+    await frames(tester, 2);
+    createGate!.complete();
+    await frames(tester, 20);
+    final controller = controllers.single;
+    expect(controller.idle, isTrue);
+    expect(player().forwardBuffers.last, const Duration(seconds: 1));
+    final token = engines.single.idles.last.token;
+    expect(engines.single.idles.last, (token: token, idle: true));
+
+    await tester.tap(find.byKey(ValueKey('home-tab-${HomeTab.home.name}')));
+    await frames(tester, 10);
+    expect(controller.idle, isFalse);
+    expect(engines.single.idles.last, (token: token, idle: false));
   });
 
   testWidgets('scrolled onto another big card, nothing starts until the list has rested a moment', (tester) async {

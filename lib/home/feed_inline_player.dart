@@ -379,7 +379,8 @@ class FeedInlinePlayback extends ChangeNotifier {
   static const _heldAhead = Duration(seconds: 1);
   static const _playingAhead = Duration(seconds: 8);
 
-  /// A held card keeps little in its engine session and its player, and fetches nothing ahead until it plays again.
+  /// A held card keeps little in its engine session and its player, and prefetches no more than a few seconds ahead
+  /// until it plays again.
   void _hold(PlaybackController controller, bool held) {
     controller.setIdle(held);
     _quietly(() => controller.player.setForwardBuffer(held ? _heldAhead : _playingAhead), 'buffer');
@@ -468,7 +469,7 @@ class FeedInlinePlayback extends ChangeNotifier {
     _logger.info(LogCategory.player, 'inline handed over', {'bvid': video.bvid, 'playing': _wanted});
     final playing = _wanted;
     _forget();
-    // The page sets its own forward buffer.
+    // Back in use; the page sets its own forward buffer.
     controller.setIdle(false);
     if (playing) {
       controller.holdAutoplay(false, play: true);
