@@ -775,30 +775,6 @@ class _Tag extends StatelessWidget {
   );
 }
 
-class UpBadge extends StatelessWidget {
-  const UpBadge({super.key});
-
-  @override
-  Widget build(BuildContext context) => Container(
-    height: BiliMetrics.upBadgeHeight,
-    padding: const EdgeInsets.symmetric(horizontal: 2),
-    alignment: Alignment.center,
-    decoration: BoxDecoration(
-      border: Border.all(color: BiliColors.secondaryText),
-      borderRadius: BorderRadius.circular(2.5),
-    ),
-    child: const Text(
-      'UP',
-      style: TextStyle(
-        fontSize: BiliMetrics.upBadgeText,
-        fontWeight: FontWeight.bold,
-        color: BiliColors.secondaryText,
-        height: 1,
-      ),
-    ),
-  );
-}
-
 /// A card's outline while the first page loads, a light band sweeping across it.
 class FeedCardSkeleton extends StatelessWidget {
   const FeedCardSkeleton({super.key});

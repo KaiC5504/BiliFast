@@ -336,7 +336,7 @@ void main() {
       tester,
     ) async {
       await show(tester, footerCard());
-      expect(find.byType(UpBadge), findsNothing);
+      expect(find.text('UP'), findsNothing);
       final picture = tester.widget<Image>(icon);
       expect((picture.image as AssetImage).assetName, 'assets/images/card/up_badge.png');
       expect((picture.width, picture.height), (40 / 3, 34 / 3));

@@ -599,8 +599,6 @@ abstract final class BiliMetrics {
   static const cardStatCentre = 13.0;
   static const cardStatTextDrop = 0.5;
   static const coverShadeHeight = 36.0;
-  static const upBadgeHeight = 12.0;
-  static const upBadgeText = 8.0;
   static const cardMoreTarget = 24.0;
 
   /// 01's ⋮ sits this far under the footer's middle, where the tag and the name are.
