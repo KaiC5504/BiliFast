@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:bili_core/danmaku.dart' show DanmakuFilterOptions;
 import 'package:flutter/widgets.dart';
 
@@ -21,7 +23,7 @@ final class PanelConfirm {
 }
 
 /// 弹幕设置 (port of BiliNative `DanmakuSettingsPanel.swift`): a right-side strip in landscape (07, 08, 24, 29), the
-/// light sheet in portrait (40, 41), each change showing at once through `ui.danmaku.settings`.
+/// light sheet in portrait (40, 41), each change showing at once through `ui.danmaku.settings` (字体大小 once it holds).
 class DanmakuSettingsPanel extends StatefulWidget {
   const DanmakuSettingsPanel({
     super.key,
@@ -122,8 +124,39 @@ enum _BlockType {
 }
 
 class _DanmakuSettingsPanelState extends State<DanmakuSettingsPanel> {
+  /// How long 字体大小 must hold under the finger before the danmaku take it.
+  static const scaleHold = Duration(milliseconds: 100);
+
   /// 查看更多 adds 字体大小 and 弹幕速度 to the landscape card until the panel closes.
   bool _expanded = false;
+
+  /// 字体大小 under the finger, not stored yet: each stored step re-lays every danmaku on screen, which empties it for
+  /// as long as the drag goes on, so the store hears only once the value holds [scaleHold] or the finger lifts.
+  double? _scaleDraft;
+  Timer? _scaleTimer;
+
+  @override
+  void dispose() {
+    _commitScale();
+    super.dispose();
+  }
+
+  void _dragScale(double scale) {
+    if (scale == (_scaleDraft ?? widget.ui.danmaku?.settings.value.scale)) return;
+    setState(() => _scaleDraft = scale);
+    _scaleTimer?.cancel();
+    _scaleTimer = Timer(scaleHold, _commitScale);
+  }
+
+  void _commitScale() {
+    _scaleTimer?.cancel();
+    _scaleTimer = null;
+    final scale = _scaleDraft;
+    final store = widget.ui.danmaku?.settings;
+    _scaleDraft = null;
+    if (scale == null || store == null) return;
+    store.update(store.value.copyWith(scale: scale));
+  }
 
   bool get _light => widget.light;
 
@@ -199,10 +232,9 @@ class _DanmakuSettingsPanelState extends State<DanmakuSettingsPanel> {
             describe: (position) => _percent(scale(position)),
             look: look,
             divider: true,
-            position: _share(settings.scale, DanmakuSettings.minScale, DanmakuSettings.maxScale),
-            onChanged: (position) {
-              if (scale(position) != settings.scale) store.update(settings.copyWith(scale: scale(position)));
-            },
+            position: _share(_scaleDraft ?? settings.scale, DanmakuSettings.minScale, DanmakuSettings.maxScale),
+            onChanged: (position) => _dragScale(scale(position)),
+            onChangeEnd: _commitScale,
           ),
         ),
         _Appear(
@@ -645,6 +677,7 @@ class _SliderRow extends StatelessWidget {
     required this.look,
     required this.position,
     required this.onChanged,
+    this.onChangeEnd,
     this.stops,
     this.divider = false,
   });
@@ -656,6 +689,9 @@ class _SliderRow extends StatelessWidget {
   final _Look look;
   final double position;
   final ValueChanged<double> onChanged;
+
+  /// The finger lifts, or an accessibility step is taken.
+  final VoidCallback? onChangeEnd;
   final int? stops;
 
   /// The hairline at its foot, when another slider follows.
@@ -667,6 +703,11 @@ class _SliderRow extends StatelessWidget {
   };
 
   double _nudged(double by) => (position + by).clamp(0.0, 1.0);
+
+  void _nudge(double by) {
+    onChanged(_nudged(by));
+    onChangeEnd?.call();
+  }
 
   @override
   Widget build(BuildContext context) => Container(
@@ -704,14 +745,15 @@ class _SliderRow extends StatelessWidget {
             value: describe(position),
             increasedValue: describe(_nudged(_step)),
             decreasedValue: describe(_nudged(-_step)),
-            onIncrease: () => onChanged(_nudged(_step)),
-            onDecrease: () => onChanged(_nudged(-_step)),
+            onIncrease: () => _nudge(_step),
+            onDecrease: () => _nudge(-_step),
             child: _Slider(
               key: ValueKey('danmaku-slider-$title'),
               position: position,
               stops: stops,
               look: look,
               onChanged: onChanged,
+              onChangeEnd: onChangeEnd,
             ),
           ),
         ),
@@ -721,12 +763,20 @@ class _SliderRow extends StatelessWidget {
 }
 
 class _Slider extends StatelessWidget {
-  const _Slider({super.key, required this.position, required this.look, required this.onChanged, this.stops});
+  const _Slider({
+    super.key,
+    required this.position,
+    required this.look,
+    required this.onChanged,
+    this.onChangeEnd,
+    this.stops,
+  });
 
   final double position;
   final int? stops;
   final _Look look;
   final ValueChanged<double> onChanged;
+  final VoidCallback? onChangeEnd;
 
   double _snap(double raw) {
     final stops = this.stops;
@@ -743,8 +793,11 @@ class _Slider extends StatelessWidget {
       return GestureDetector(
         behavior: HitTestBehavior.opaque,
         onTapDown: (details) => at(details.localPosition.dx),
+        onTapUp: (_) => onChangeEnd?.call(),
         onHorizontalDragStart: (details) => at(details.localPosition.dx),
         onHorizontalDragUpdate: (details) => at(details.localPosition.dx),
+        onHorizontalDragEnd: (_) => onChangeEnd?.call(),
+        onHorizontalDragCancel: onChangeEnd,
         child: TweenAnimationBuilder<double>(
           tween: Tween(end: position),
           duration: stops == null ? Duration.zero : _motion(context, const Duration(milliseconds: 150)),

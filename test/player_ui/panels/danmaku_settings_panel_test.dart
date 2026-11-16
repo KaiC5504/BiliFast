@@ -273,6 +273,90 @@ void main() {
       }
     });
 
+    group('字体大小 under a finger', () {
+      /// Puts a finger on the slider [share] along, the panel opened out; the stored scales are counted.
+      Future<(TestGesture, List<double>, Rect)> press(WidgetTester tester, SettingsRig rig, double share) async {
+        await tapKey(tester, 'danmaku-more');
+        await tester.ensureVisible(slider('字体大小'));
+        await tester.pumpAndSettle();
+        final stored = <double>[];
+        rig.store.addListener(() => stored.add(rig.settings.scale));
+        final box = tester.getRect(slider('字体大小'));
+        const inset = DanmakuPanelTheme.sliderThumbInset;
+        final at = Offset(box.left + inset + share * (box.width - 2 * inset), box.center.dy);
+        final gesture = await tester.startGesture(at);
+        return (gesture, stored, box);
+      }
+
+      /// One 1% step a frame, the finger never still.
+      Future<void> slide(WidgetTester tester, TestGesture gesture, Rect box, int steps) async {
+        const inset = DanmakuPanelTheme.sliderThumbInset;
+        final step = (box.width - 2 * inset) / 150;
+        for (var i = 0; i < steps; i++) {
+          await gesture.moveBy(Offset(step, 0));
+          await tester.pump(const Duration(milliseconds: 16));
+        }
+      }
+
+      testWidgets('a drag shows its value as it goes and stores it once the value holds 100 ms', (tester) async {
+        final rig = await pumpSettings(tester, landscape: true);
+        final (gesture, stored, box) = await press(tester, rig, 1 / 3);
+        await slide(tester, gesture, box, 30);
+        expect(stored, isEmpty, reason: 'the danmaku keep flying as they are');
+        expect(rig.settings.scale, 1);
+        final row = find.ancestor(of: slider('字体大小'), matching: find.byType(Stack)).first;
+        final shown = find.descendant(of: row, matching: find.textContaining('%'));
+        final value = tester.widget<Text>(shown).data!;
+        expect(int.parse(value.replaceAll('%', '')), inInclusiveRange(128, 132));
+
+        await tester.pump(const Duration(milliseconds: 60));
+        expect(stored, isEmpty);
+        await tester.pump(const Duration(milliseconds: 50));
+        expect(stored, hasLength(1));
+        expect('${(stored.single * 100).round()}%', value);
+
+        await tester.pump(const Duration(milliseconds: 300));
+        await gesture.up();
+        await tester.pumpAndSettle();
+        expect(stored, hasLength(1), reason: 'held still and let go: nothing new');
+      });
+
+      testWidgets('lifting the finger stores the value at once', (tester) async {
+        final rig = await pumpSettings(tester, landscape: true);
+        final (gesture, stored, box) = await press(tester, rig, 1 / 3);
+        await slide(tester, gesture, box, 30);
+        expect(stored, isEmpty);
+        await gesture.up();
+        await tester.pump();
+        expect(stored, hasLength(1));
+        expect(rig.settings.scale, closeTo(1.3, 0.02));
+        await tester.pumpAndSettle();
+        expect(stored, hasLength(1));
+      });
+
+      testWidgets('closing the panel mid-drag keeps the value under the finger', (tester) async {
+        final rig = await pumpSettings(tester, landscape: true);
+        final (gesture, stored, box) = await press(tester, rig, 1 / 3);
+        await slide(tester, gesture, box, 30);
+        rig.panels.close();
+        await tester.pumpAndSettle();
+        expect(stored, hasLength(1));
+        expect(rig.settings.scale, closeTo(1.3, 0.02));
+        await gesture.up();
+      });
+
+      testWidgets('an accessibility step is stored at once', (tester) async {
+        final rig = await pumpSettings(tester, landscape: true);
+        await tapKey(tester, 'danmaku-more');
+        final handle = tester.ensureSemantics();
+        final node = tester.getSemantics(find.ancestor(of: slider('字体大小'), matching: find.byType(Semantics)).first);
+        node.owner!.performAction(node.id, SemanticsAction.increase);
+        await tester.pump();
+        expect(rig.settings.scale, closeTo(1.075, 0.006));
+        handle.dispose();
+      });
+    });
+
     for (final (key, read) in <(String, bool Function(DanmakuSettings))>[
       ('fixed', (settings) => settings.filter.blockFixed),
       ('scroll', (settings) => settings.filter.blockScroll),
