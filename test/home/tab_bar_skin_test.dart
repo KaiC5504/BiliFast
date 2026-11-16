@@ -30,7 +30,14 @@ void main() {
 
   /// The bar at the bottom of a 440×956 page over a 34 pt home indicator, the page's taps counted; [load] decodes the
   /// skin's pictures first.
-  Future<void> show(WidgetTester tester, Skin? skin, {bool still = false, bool load = true, bool pad = false}) async {
+  Future<void> show(
+    WidgetTester tester,
+    Skin? skin, {
+    bool still = false,
+    bool load = true,
+    bool pad = false,
+    int messageBadge = 0,
+  }) async {
     if (pad) {
       showAsPad(tester);
     } else {
@@ -46,7 +53,7 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(
         theme: appTheme(),
-        home: _Host(skin: skin, still: still, onTap: taps.add, onPage: () => pageTaps++),
+        home: _Host(skin: skin, still: still, messageBadge: messageBadge, onTap: taps.add, onPage: () => pageTaps++),
       ),
     );
   }
@@ -403,6 +410,66 @@ void main() {
     semantics.dispose();
   });
 
+  group("消息's count (211)", () {
+    Finder count() => find.byKey(const ValueKey('home-tab-messages-count'));
+
+    testWidgets('none at 0', (tester) async {
+      await show(tester, null);
+      expect(count(), findsNothing);
+      expect(find.byType(TabCount), findsNothing);
+    });
+
+    for (final (badge, words) in [(7, '7'), (99, '99'), (120, '99+')]) {
+      testWidgets("$badge reads $words, white on red in a white ring, on the stock glyph's top right", (tester) async {
+        await show(tester, null, messageBadge: badge);
+        expect(find.descendant(of: count(), matching: find.text(words)), findsOneWidget);
+        final text = tester.widget<Text>(find.descendant(of: count(), matching: find.text(words)));
+        expect(text.style?.color, MessageTabTheme.countInk);
+        final place = tester.getRect(slot(HomeTab.messages));
+        final centre = tester.getCenter(count());
+        expect(centre.dx, moreOrLessEquals(place.center.dx + MessageTabTheme.countRight, epsilon: 0.01));
+        expect(centre.dy, moreOrLessEquals(_barTop + MessageTabTheme.countStockTop, epsilon: 0.01));
+        final size = tester.getSize(count());
+        expect(size.height, MessageTabTheme.count + 2 * MessageTabTheme.countRing);
+        expect(size.width, greaterThanOrEqualTo(size.height));
+        for (final tab in HomeTab.values.where((tab) => tab != HomeTab.messages)) {
+          expect(find.byKey(ValueKey('home-tab-${tab.name}-count')), findsNothing, reason: tab.label);
+        }
+      });
+    }
+
+    testWidgets('three figures make it wider than one', (tester) async {
+      await show(tester, null, messageBadge: 7);
+      final one = tester.getSize(count()).width;
+      await show(tester, null, messageBadge: 120);
+      expect(tester.getSize(count()).width, greaterThan(one));
+    });
+
+    testWidgets("over a 装扮's bar its middle sits 2.5/3 under the bar's top, over the icon, as 211's", (tester) async {
+      await show(tester, _pictures.skin(), messageBadge: 2);
+      expect(find.byType(SkinTabIcon), findsWidgets);
+      final place = tester.getRect(slot(HomeTab.messages));
+      final centre = tester.getCenter(count());
+      expect(centre.dx, moreOrLessEquals(place.center.dx + MessageTabTheme.countRight, epsilon: 0.01));
+      expect(centre.dy, moreOrLessEquals(_barTop + MessageTabTheme.countDressedTop, epsilon: 0.01));
+      expect(find.descendant(of: count(), matching: find.text('2')), findsOneWidget);
+    });
+
+    testWidgets('VoiceOver reads it with 消息, and a press on it still opens 消息', (tester) async {
+      final semantics = tester.ensureSemantics();
+      await show(tester, null, messageBadge: 7);
+      expect(tester.getSemantics(slot(HomeTab.messages)), isSemantics(label: '消息', value: '7', isButton: true));
+      await tester.tapAt(tester.getCenter(count()));
+      expect(taps, [HomeTab.messages]);
+      semantics.dispose();
+    });
+
+    testWidgets("the iPad's bar has no 消息, so no count", (tester) async {
+      await show(tester, null, pad: true, messageBadge: 7);
+      expect(find.byType(TabCount), findsNothing);
+    });
+  });
+
   group('the decode gate', () {
     testWidgets('stock until the picture and the icons have decoded, then dressed', (tester) async {
       imageCache
@@ -449,10 +516,17 @@ void main() {
 
 /// The page with the bar on its bottom, selecting what's tapped as `MainShell` does.
 class _Host extends StatefulWidget {
-  const _Host({required this.skin, required this.still, required this.onTap, required this.onPage});
+  const _Host({
+    required this.skin,
+    required this.still,
+    required this.onTap,
+    required this.onPage,
+    this.messageBadge = 0,
+  });
 
   final Skin? skin;
   final bool still;
+  final int messageBadge;
   final ValueChanged<HomeTab> onTap;
   final VoidCallback onPage;
 
@@ -482,6 +556,7 @@ class _HostState extends State<_Host> {
           child: HomeTabBar(
             selected: _selected,
             skin: widget.skin,
+            messageBadge: widget.messageBadge,
             onTap: (tab) {
               widget.onTap(tab);
               if (tab == HomeTab.home || tab == HomeTab.follow || tab == HomeTab.mine) setState(() => _selected = tab);

@@ -96,4 +96,42 @@ void main() {
     await tester.pumpWidget(const Center(child: SizedBox.square(dimension: 44, child: HomeTabIcon(HomeTab.messages))));
     expect(tester.takeException(), isNull);
   });
+
+  test('the red count reads its number up to 99, then 99+', () {
+    expect(TabCount.label(1), '1');
+    expect(TabCount.label(99), '99');
+    expect(TabCount.label(100), '99+');
+    expect(TabCount.label(120), '99+');
+  });
+
+  testWidgets(
+    'the red count: a red stadium in a white ring, 12 tall inside it, never narrower than tall; nothing at 0',
+    (tester) async {
+      await tester.pumpWidget(
+        const Directionality(
+          textDirection: TextDirection.ltr,
+          child: Center(child: TabCount(0)),
+        ),
+      );
+      expect(tester.getSize(find.byType(TabCount)), Size.zero);
+
+      final (bytes, width) = await _render(
+        tester,
+        const Directionality(textDirection: TextDirection.ltr, child: TabCount(7)),
+      );
+      const outer = MessageTabTheme.count + 2 * MessageTabTheme.countRing;
+      expect(width, greaterThanOrEqualTo((outer * 3).round()));
+      expect(bytes.lengthInBytes ~/ 4 ~/ width, (outer * 3).round());
+      var red = 0;
+      for (var i = 0; i < bytes.lengthInBytes; i += 4) {
+        final r = bytes.getUint8(i), g = bytes.getUint8(i + 1), b = bytes.getUint8(i + 2);
+        if (r == (MessageTabTheme.countFill.r * 255).round() &&
+            g == (MessageTabTheme.countFill.g * 255).round() &&
+            b == (MessageTabTheme.countFill.b * 255).round()) {
+          red++;
+        }
+      }
+      expect(red, greaterThan(200), reason: 'the stadium is red');
+    },
+  );
 }

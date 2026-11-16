@@ -8153,6 +8153,173 @@ abstract final class HotListTheme {
 /// The bottom bar's 消息 (196, 211, 212) and the tab's badge (214). Filled by 消息's builder.
 abstract final class MessageTabTheme {
   static const page = BiliColors.card;
+
+  /// The header (196) as 关注's, but its 44 pt row whole under the 62 pt status bar (106 pt down): the 装扮's `head_bg`
+  /// cut as 首页's top cuts it, or a white bar (no screenshot). 消息 centred on the row, 17 pt semibold; the APK's broom
+  /// (`brush_clear_line`, its ink 18.67 wide) centred 68 in from the right and ⋮ (`more_vertical_fill`) 24 in, both
+  /// in the title's ink (#000 over 196's 装扮).
+  static const barRow = 44.0;
+  static const bar = BiliColors.card;
+  static const titleText = 17.0;
+  static const titleWeight = FontWeight.w600;
+  static const titleInk = BiliColors.text;
+
+  /// 196's 消息 sits half a point under the row's middle.
+  static const titleDrop = 0.5;
+  static const broomCentreRight = 68.0;
+  static const moreCentreRight = 24.0;
+  static const buttonTarget = 40.0;
+
+  /// The three entries (196): 48 pt #F7F9F9 squares with 12 corners, their tops 20 under the header, centred 127.33
+  /// apart about the screen's middle, each glyph in its colour centred in its square (the thumb 2/3 higher); the 13 pt
+  /// labels' ink centred 13.83 under the squares. The list starts 101.67 under the header.
+  static const entryTop = 20.0;
+  static const entrySquare = 48.0;
+  static const entryRadius = 12.0;
+  static const entryFill = Color(0xFFF7F9F9);
+  static const entryPitch = 382 / 3;
+  static const entryLabelText = 13.0;
+  static const entryLabelLine = 18.0;
+  static const entryLabelCentre = 40 / 3;
+  static const entryLabelInk = BiliColors.text;
+  static const entries = 305 / 3;
+
+  /// 回复与@'s bubble and 收到喜欢's thumb are the APK's icon-font glyphs, cut at 3× to their ink widths; 新增粉丝's bust
+  /// has no glyph there and is drawn, 21 × 24.67.
+  static const replyInk = Color(0xFF45D9A7);
+  static const likeInk = Color(0xFFFF679A);
+  static const likeRise = 2 / 3;
+  static const fansWidth = 21.0;
+  static const fansHeight = 74 / 3;
+  static const fansInk = Color(0xFF40C5F1);
+
+  /// A session (196): 71 tall. The 40 pt face 15.67 in, centred; under a pendant frame the face shrinks to 36 and the
+  /// frame is 1.75 times that. The name (16 pt, pink for 大会员) and the last message (13 pt grey, one line, cut 58
+  /// short of the edge) start 71.33 in, their ink's middles 25.17 and 48.17 under the row's top; the date (10 pt grey)
+  /// on the name's middle ends 16.67 from the edge. A 0.5 #E3E5E7 hairline closes the row from the text's left. The
+  /// lines' boxes sit a third of a point higher, where the system font draws its ink.
+  static const row = 71.0;
+  static const face = 40.0;
+  static const faceLeft = 47 / 3;
+  static const pendantFace = 36.0;
+  static const pendantScale = CommentRowTheme.pendantScale;
+  static const textLeft = 214 / 3;
+  static const nameText = 16.0;
+  static const nameLine = 22.0;
+  static const nameCentre = 149 / 6;
+  static const name = BiliColors.text;
+  static const vipName = BiliColors.pink;
+  static const nameGap = 8.0;
+  static const lastText = 13.0;
+  static const lastLine = 18.0;
+  static const lastCentre = 143 / 3;
+  static const lastRight = 58.0;
+  static const last = BiliColors.secondaryText;
+  static const dateText = 10.0;
+  static const dateLine = 14.0;
+  static const dateRight = 50 / 3;
+  static const date = BiliColors.secondaryText;
+  static const hairline = 0.5;
+  static const hairlineInk = BiliColors.divider;
+
+  /// A face's badge (196): a 12 pt disc in a 1 pt white ring, the disc's edges on the face's right and bottom: the
+  /// verify bolt (yellow a person, #40C5F1 an organisation), else 大会员's pink 大.
+  static const badge = 12.0;
+  static const badgeRing = 1.0;
+  static const badgeRim = Color(0xFFFFFFFF);
+  static const badgePerson = IntroTheme.badgePerson;
+  static const badgeOrganisation = Color(0xFF40C5F1);
+  static const vipFill = BiliColors.pink;
+  static const vipText = 8.0;
+  static const vipInk = Color(0xFFFFFFFF);
+
+  /// A notice box's face (196): the pink disc with its white glyph. 服务通知's three squares and diamond (18 pt across)
+  /// and 社区中心's bubbles (21.5 × 20.5) are drawn, traced on 196; 系统通知 and 创作助手 take the APK's own faces'
+  /// glyphs (`ic_im_system_notice`, `ic_im_up_assistant`) cut out of their blue discs.
+  static const boxFill = BiliColors.pink;
+  static const boxGlyph = Color(0xFFFFFFFF);
+
+  /// The page's states (no screenshot): 关注's words and buttons, the empty picture of 我的好友 over them; the TV and
+  /// the messages 96 under the entries.
+  static const stateTop = 96.0;
+  static const emptyPicture = FriendsTheme.emptyPicture;
+  static const emptyGap = 12.0;
+  static const reloadScroll = Duration(milliseconds: 300);
+  static const reloadHeader = Duration(milliseconds: 200);
+  static const reloadCollapse = Duration(milliseconds: 100);
+
+  /// The count on a place of the bottom bar (211's 关注): white numbers, 10 pt regular, on a #E13C3C stadium 12 tall
+  /// and 13.67 wide for one digit, in a 1 pt white ring; 99+ past 99. Over a 装扮's bar its middle is 44/3 right of
+  /// the place's middle and 2.5/3 under the bar's top. The stock bar has no screenshot: there it sits on the glyph's
+  /// top right corner, the same distance right and on the glyph's top. The entries and sessions draw the same count
+  /// (no screenshot) with its middle on the square's corner and on the face's top right.
+  static const count = 12.0;
+  static const countRing = 1.0;
+  static const countPadX = 3.75;
+  static const countText = 10.0;
+  static const countWeight = FontWeight.w400;
+  static const countFill = Color(0xFFE13C3C);
+  static const countInk = Color(0xFFFFFFFF);
+  static const countRim = Color(0xFFFFFFFF);
+  static const countRight = 44 / 3;
+  static const countDressedTop = 2.5 / 3;
+  static const countStockTop = HomeTabBarTheme.iconCentre - TabIconTheme.size / 2;
+  static const countFaceInset = 5.0;
+
+  /// 一键已读's alert (211): 280 wide with 8 corners over black at 0.6, centred; 一键已读 20 pt semibold with its middle
+  /// 30.33 down, the question 17 pt #61666D 58.67 down; a 2/3 #E3E5E7 rule 93 down; 取消 and pink 清除 20 pt in a 44
+  /// row, each 4 further out than its half's middle.
+  static const alertWidth = 280.0;
+  static const alertRadius = 8.0;
+  static const alertDim = Color(0x99000000);
+  static const alertFill = BiliColors.card;
+  static const alertTitleText = 20.0;
+  static const alertTitleWeight = FontWeight.w600;
+  static const alertTitleLine = 26.0;
+  static const alertTitleCentre = 91 / 3;
+  static const alertTitle = BiliColors.text;
+  static const alertMessageText = 17.0;
+  static const alertMessageLine = 22.0;
+  static const alertMessageCentre = 176 / 3;
+  static const alertMessage = Color(0xFF61666D);
+  static const alertBody = 93.0;
+  static const alertRule = 2 / 3;
+  static const alertRuleInk = BiliColors.divider;
+  static const alertButton = 44.0;
+  static const alertButtonText = 20.0;
+  static const alertSpread = 8.0;
+  static const alertCancel = BiliColors.text;
+  static const alertAction = BiliColors.pink;
+  static const alertPressed = BiliColors.pressedFill;
+  static const alertMotion = Duration(milliseconds: 200);
+  static const alertStartScale = 1.1;
+
+  /// ⋮'s sheet (212): #F6F7F8 with 12 corners over black at 0.32, its 30 × 3 #C5C6C6 grabber 8 down; a white card 16
+  /// in at 19 down with square corners, eight 52 rows split by 0.5 #E3E5E7 rules from the words' left; the glyphs
+  /// (#18191C, the APK's icon font where it has them, else drawn) centred 26 into the card, the 18 pt words and the
+  /// rules from 60.33, the words' ink 0.92 under the row's middle; 24 under the card over the home indicator.
+  static const sheetFill = BiliColors.softGrey;
+  static const sheetRadius = 12.0;
+  static const sheetDim = Color(0x52000000);
+  static const sheetIn = Duration(milliseconds: 280);
+  static const sheetOut = Duration(milliseconds: 220);
+  static const grabberTop = 8.0;
+  static const grabberWidth = 30.0;
+  static const grabberHeight = 3.0;
+  static const grabberInk = Color(0xFFC5C6C6);
+  static const cardTop = 19.0;
+  static const cardInset = 16.0;
+  static const card = BiliColors.card;
+  static const cardBottom = 24.0;
+  static const sheetRow = 52.0;
+  static const sheetRule = 0.5;
+  static const sheetRuleInk = BiliColors.divider;
+  static const sheetGlyphCentre = 26.0;
+  static const sheetTextLeft = 181 / 3 - cardInset;
+  static const sheetTextDrop = 1.25;
+  static const sheetText = 18.0;
+  static const sheetInk = BiliColors.text;
+  static const sheetPressed = Color(0x0A000000);
 }
 
 /// 回复与@, 收到喜欢 and 新增粉丝 (197-199, 213, 214). Filled by their builder.
