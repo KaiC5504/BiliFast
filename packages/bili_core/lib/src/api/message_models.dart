@@ -1,4 +1,4 @@
-/// 消息's lists: the red counts, 回复与@, 收到喜欢, the 私信 sessions and their messages, and the 消息设置 switches.
+/// 消息's lists: the red counts, 回复与@, 收到喜欢, the 私信 sessions and their messages, and the 消息设置 pickers.
 /// The website's calls with the web login's cookies (`/x/msgfeed/…`, `api.vc.bilibili.com`'s session and IM calls).
 library;
 

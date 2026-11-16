@@ -11,7 +11,8 @@ const _systemNoticePageSize = 20;
 final _chatDeviceIds = Expando<String>('chat dev_id');
 
 /// 消息's calls on the website's endpoints, with the web login's cookies: the red counts, the msgfeed lists, the
-/// 私信 sessions and messages, 系统通知, and 消息设置. Each is asked as message.bilibili.com asks it (2026-11).
+/// 私信 sessions and messages, 系统通知, and 消息设置. Each is asked as message.bilibili.com asks it (2026-11),
+/// unless its own doc says otherwise.
 extension BiliClientMessage on BiliClient {
   /// `/x/msgfeed/unread`.
   Future<FeedUnread> msgfeedUnread() => get(
