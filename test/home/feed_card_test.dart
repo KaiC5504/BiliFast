@@ -6,18 +6,27 @@ import 'dart:ui' as ui;
 
 import 'package:bili_core/api.dart';
 import 'package:bili_core/logic.dart' show CountFormat;
+import 'package:bilifast/app/zoom_back_route.dart';
 import 'package:bilifast/home/feed_card.dart';
 import 'package:bilifast/shared/cover_placeholder.dart';
 import 'package:bilifast/shared/cover_preset.dart';
 import 'package:bilifast/shared/image_disk_cache.dart';
 import 'package:bilifast/shared/remote_image.dart';
 import 'package:bilifast/shared/theme.dart';
+import 'package:bilifast/space/uploader_tap.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart' show RenderParagraph;
 import 'package:flutter_test/flutter_test.dart';
 
+import '../support/look_alike.dart';
+import '../support/stand_in_fonts.dart';
 import '../support/system_font.dart';
+import '../video/mixed_lines.dart' show appTheme;
 import 'feed_fakes.dart';
+
+/// From the UP icon's ink to the name's layout box. 01 has 17 px from ink to ink; the name's first glyph ("4") sets
+/// its ink a little into its box.
+const _upNameGap = 5.0;
 
 Future<Uint8List> _coverPng() async {
   final recorder = ui.PictureRecorder();
@@ -278,6 +287,192 @@ void main() {
         await tester.pump();
       }
       await tester.runAsync(() => folder.delete(recursive: true));
+    });
+  });
+
+  group("the footer's uploader", () {
+    FeedCard footerCard({String? reason, bool vertical = false, int mid = 7}) => FeedCard(
+      aid: 1,
+      bvid: 'BV1footer',
+      cid: 1,
+      title: '超震撼的 8K 视频用于 OLED 显示测试',
+      cover: '',
+      duration: 794,
+      views: 1930,
+      danmaku: 0,
+      ownerName: '4K杜比视界Relaxation',
+      ownerMid: mid,
+      ownerFace: 'https://i0.hdslb.com/bfs/face/up.jpg',
+      reason: reason,
+      isVertical: vertical,
+    );
+
+    /// The card on 01's 211 pt column inside a page's [UploaderTap], which records each uploader it is asked to open.
+    Future<({List<UploaderRef> opened, List<ZoomSource> videos})> show(WidgetTester tester, FeedCard shown) async {
+      _asPhone(tester);
+      final opened = <UploaderRef>[];
+      final videos = <ZoomSource>[];
+      await tester.pumpWidget(
+        MaterialApp(
+          home: UploaderTap(
+            open: opened.add,
+            child: Align(
+              alignment: Alignment.topLeft,
+              child: SizedBox(
+                width: 211,
+                child: FeedCardView(card: shown, onOpen: videos.add, onWatchLater: () {}),
+              ),
+            ),
+          ),
+        ),
+      );
+      return (opened: opened, videos: videos);
+    }
+
+    final icon = find.byKey(const ValueKey('card-up-icon'));
+    final name = find.text('4K杜比视界Relaxation');
+
+    testWidgets("a plain card shows the official UP icon in the name's grey, not a drawn box, where 01 has it", (
+      tester,
+    ) async {
+      await show(tester, footerCard());
+      expect(find.byType(UpBadge), findsNothing);
+      final picture = tester.widget<Image>(icon);
+      expect((picture.image as AssetImage).assetName, 'assets/images/card/up_badge.png');
+      expect((picture.width, picture.height), (40 / 3, 34 / 3));
+      expect((picture.color, picture.colorBlendMode), (BiliColors.secondaryText, BlendMode.srcIn));
+      final card = tester.getRect(find.byType(FeedCardView));
+      final drawn = tester.getRect(icon);
+      expect(drawn.left - card.left, moreOrLessEquals(28 / 3), reason: "01's ink starts 28 px into the card");
+      expect(
+        card.bottom - drawn.center.dy,
+        moreOrLessEquals(FeedCardSize.footerHeight / 2 - 1 / 3),
+        reason: "01's ink is 1 px under the footer's middle",
+      );
+      expect(name, findsOneWidget);
+    });
+
+    testWidgets('a reason tag stands in place of the uploader: the tag, then nothing until ⋮ (01, 2万点赞)', (
+      tester,
+    ) async {
+      await show(tester, footerCard(reason: '2万点赞'));
+      expect(find.text('2万点赞'), findsOneWidget);
+      expect(name, findsNothing);
+      expect(icon, findsNothing);
+      expect(find.byKey(const ValueKey('card-uploader')), findsNothing);
+      expect(find.byKey(const ValueKey('card-more')), findsOneWidget);
+    });
+
+    testWidgets('a 竖屏 card keeps the name after its tag, with no UP icon (01, cards 1 and 3)', (tester) async {
+      await show(tester, footerCard(vertical: true));
+      expect(find.text('竖屏'), findsOneWidget);
+      expect(name, findsOneWidget);
+      expect(icon, findsNothing);
+      expect(tester.getRect(name).left, greaterThan(tester.getRect(find.text('竖屏')).right));
+    });
+
+    for (final vertical in [false, true]) {
+      testWidgets('${vertical ? 'on a 竖屏 card ' : ''}a tap on the name opens the uploader as drawn, and not the '
+          'video', (tester) async {
+        final shown = await show(tester, footerCard(vertical: vertical));
+        await tester.tap(name);
+        await tester.pump();
+        expect(shown.videos, isEmpty);
+        expect([for (final up in shown.opened) (up.mid, up.name, up.face)], [
+          (7, '4K杜比视界Relaxation', 'https://i0.hdslb.com/bfs/face/up.jpg'),
+        ]);
+        if (!vertical) {
+          await tester.tap(icon);
+          await tester.pump();
+          expect(shown.opened, hasLength(2), reason: 'the UP icon is part of the same tap');
+          expect(shown.videos, isEmpty);
+        }
+      });
+    }
+
+    testWidgets("a finger held on the name doesn't shrink the card, as one on the title does", (tester) async {
+      final shown = await show(tester, footerCard());
+      double scale() => tester.widget<AnimatedScale>(find.byType(AnimatedScale)).scale;
+
+      final onName = await tester.startGesture(tester.getCenter(name));
+      await tester.pump(const Duration(milliseconds: 300));
+      expect(scale(), 1);
+      await onName.up();
+      await tester.pumpAndSettle();
+      expect(shown.opened, hasLength(1));
+
+      final onTitle = await tester.startGesture(tester.getCenter(find.text(footerCard().title)));
+      await tester.pump(const Duration(milliseconds: 300));
+      expect(scale(), BiliMetrics.pressedScale);
+      await onTitle.up();
+      await tester.pumpAndSettle();
+      expect(shown.videos, hasLength(1));
+      expect(shown.opened, hasLength(1));
+    });
+
+    testWidgets('an uploader with no mid opens nothing: the name is part of the card and opens the video', (
+      tester,
+    ) async {
+      final shown = await show(tester, footerCard(mid: 0));
+      expect(find.byKey(const ValueKey('card-uploader')), findsNothing);
+      expect(find.byKey(const ValueKey('card-uploader-semantics')), findsNothing);
+      await tester.tap(name);
+      await tester.pump();
+      expect(shown.opened, isEmpty);
+      expect(shown.videos, hasLength(1));
+    });
+
+    testWidgets("the uploader is its own accessibility button, named by the name, so ghosthand can press it", (
+      tester,
+    ) async {
+      final semantics = tester.ensureSemantics();
+      final shown = await show(tester, footerCard());
+      expect(
+        tester.getSemantics(find.byKey(const ValueKey('card-uploader-semantics'))),
+        isSemantics(label: '4K杜比视界Relaxation', isButton: true, hasTapAction: true),
+      );
+      tester.semantics.tap(find.semantics.byLabel('4K杜比视界Relaxation'));
+      await tester.pump();
+      expect(shown.opened.single.mid, 7);
+      expect(shown.videos, isEmpty);
+      semantics.dispose();
+    });
+
+    testWidgets('look-alike: the footer under the system font against 01 (BILIFAST_SHOTS)', (tester) async {
+      final saved = BiliFonts.family;
+      addTearDown(() => BiliFonts.family = saved);
+      await tester.runAsync(loadSystemFontStandIns);
+      await tester.runAsync(loadIconFonts);
+      showAsPhone(tester);
+      BiliFonts.family = BiliFonts.system;
+      const boundary = ValueKey('shot');
+      // 01's second column: the card's left edge 669 px in, its column 633 px wide.
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: appTheme(),
+          home: Material(
+            color: BiliColors.pageGrey,
+            child: Align(
+              alignment: Alignment.topLeft,
+              child: RepaintBoundary(
+                key: boundary,
+                child: SizedBox(
+                  width: 211,
+                  child: FeedCardView(card: footerCard(), onOpen: (_) {}, onWatchLater: () {}),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.runAsync(() => precacheImage(const AssetImage('assets/images/card/up_badge.png'), tester.element(icon)));
+      await tester.pump();
+      final card = tester.getRect(find.byType(FeedCardView));
+      final drawn = tester.getRect(icon);
+      expect(drawn.left - card.left, moreOrLessEquals(28 / 3));
+      expect(tester.getRect(name).left - drawn.right, moreOrLessEquals(_upNameGap));
+      final shots = Platform.environment['BILIFAST_SHOTS'];
+      if (shots != null) await saveShot(tester, find.byKey(boundary), '$shots/01-card-footer-ours.png');
     });
   });
 

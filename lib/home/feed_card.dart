@@ -11,6 +11,7 @@ import '../shared/cover_placeholder.dart';
 import '../shared/cover_preset.dart';
 import '../shared/remote_image.dart';
 import '../shared/theme.dart';
+import '../space/uploader_tap.dart';
 import '../video/video_route.dart';
 import 'feed_dislike.dart';
 import 'feed_model.dart' show CardDislike;
@@ -99,6 +100,10 @@ class FeedCardView extends StatefulWidget {
 class _FeedCardViewState extends State<FeedCardView> {
   bool _pressed = false;
 
+  /// A finger on the uploader: the card's own tap still sees it (and may pass its press-down deadline), but it neither
+  /// shrinks the card nor opens the video.
+  bool _onUploader = false;
+
   static const _title = TextStyle(
     fontSize: BiliMetrics.cardTitleText,
     color: BiliColors.text,
@@ -107,7 +112,16 @@ class _FeedCardViewState extends State<FeedCardView> {
   static const _owner = TextStyle(fontSize: BiliMetrics.cardFooterText, color: BiliColors.secondaryText, height: 1);
 
   void _press(bool pressed) {
+    if (pressed && _onUploader) return;
     if (_pressed != pressed) setState(() => _pressed = pressed);
+  }
+
+  /// The footer shows the uploader unless a reason tag stands in its place (01's 2万点赞); a 竖屏 tag keeps it.
+  static bool _showsUploader(FeedCard card) => card.reason?.isNotEmpty != true;
+
+  VoidCallback? _uploaderTap(FeedCard card) {
+    if (card.ownerMid <= 0 || !_showsUploader(card)) return null;
+    return () => openUploader(context, UploaderRef(mid: card.ownerMid, name: card.ownerName, face: card.ownerFace));
   }
 
   Future<void> _more() async {
@@ -167,11 +181,27 @@ class _FeedCardViewState extends State<FeedCardView> {
   Widget _card(BuildContext context, ZoomSource source) {
     final card = widget.card;
     final scaler = MediaQuery.textScalerOf(context);
+    final openUploader = _uploaderTap(card);
     // Passthrough keeps the grid's tight size on the card.
     return Stack(
       fit: StackFit.passthrough,
       children: [
-        _body(context, card, scaler, source),
+        _body(context, card, scaler, source, openUploader),
+        // The uploader's own element, for the same reason as ⋮'s below; it spans the footer up to ⋮.
+        if (openUploader != null)
+          Positioned(
+            left: BiliMetrics.cardInset,
+            right: BiliMetrics.cardMoreTarget,
+            bottom: 0,
+            height: FeedCardSize.footerHeight,
+            child: Semantics(
+              key: const ValueKey('card-uploader-semantics'),
+              container: true,
+              button: true,
+              label: card.ownerName,
+              onTap: openUploader,
+            ),
+          ),
         // ⋮'s own element, over the footer's ⋮: inside the card's excluded subtree it could only be a custom action,
         // which Windows UIA (and so ghosthand) doesn't offer. Touches pass through it to the ⋮ under it.
         Positioned(
@@ -191,7 +221,7 @@ class _FeedCardViewState extends State<FeedCardView> {
     );
   }
 
-  Widget _body(BuildContext context, FeedCard card, TextScaler scaler, ZoomSource source) {
+  Widget _body(BuildContext context, FeedCard card, TextScaler scaler, ZoomSource source, VoidCallback? openUploader) {
     // One element for VoiceOver, named by the title, with 稍后再看 as its action.
     return Semantics(
       button: true,
@@ -245,17 +275,13 @@ class _FeedCardViewState extends State<FeedCardView> {
                         padding: const EdgeInsets.only(left: BiliMetrics.cardInset),
                         child: Row(
                           children: [
-                            _Badge(card: card),
-                            const SizedBox(width: 4),
-                            Expanded(
-                              child: Text(
-                                card.ownerName,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: _owner,
-                                strutStyle: BiliFonts.strutOf(context, _owner),
-                              ),
-                            ),
+                            if (card.reason case final reason? when reason.isNotEmpty) ...[
+                              _Tag(reason),
+                              const Spacer(),
+                            ] else ...[
+                              if (card.isVertical) ...[const _Tag('竖屏'), const SizedBox(width: 4)],
+                              Expanded(child: _uploader(context, card, openUploader)),
+                            ],
                             GestureDetector(
                               key: const ValueKey('card-more'),
                               behavior: HitTestBehavior.opaque,
@@ -281,6 +307,43 @@ class _FeedCardViewState extends State<FeedCardView> {
               ),
             ),
           ),
+        ),
+      ),
+    );
+  }
+
+  /// The UP icon (none beside a 竖屏 tag) and the name, one tap to the space, only as wide as they are drawn.
+  Widget _uploader(BuildContext context, FeedCard card, VoidCallback? open) {
+    final name = Text(
+      card.ownerName,
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
+      style: _owner,
+      strutStyle: BiliFonts.strutOf(context, _owner),
+    );
+    final drawn = card.isVertical
+        ? name
+        : Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const _UpIcon(),
+              const SizedBox(width: _UpIcon.gap),
+              Flexible(child: name),
+            ],
+          );
+    if (open == null) return Align(alignment: Alignment.centerLeft, child: drawn);
+    void lift() => _onUploader = false;
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: Listener(
+        onPointerDown: (_) => _onUploader = true,
+        onPointerUp: (_) => lift(),
+        onPointerCancel: (_) => lift(),
+        child: GestureDetector(
+          key: const ValueKey('card-uploader'),
+          behavior: HitTestBehavior.opaque,
+          onTap: open,
+          child: SizedBox(height: FeedCardSize.footerHeight, child: Center(widthFactor: 1, child: drawn)),
         ),
       ),
     );
@@ -667,18 +730,32 @@ class _StatText extends StatelessWidget {
       Transform.translate(offset: const Offset(0, BiliMetrics.cardStatTextDrop), child: Text(text));
 }
 
-class _Badge extends StatelessWidget {
-  const _Badge({required this.card});
+/// The official UP icon (`ic_info_uploader_name`, cut to its ink), in the name's grey. On 01 its ink starts [lead]
+/// past the card's inset and 17 px before the name's first glyph's ink ([gap] to the name's box), and sits [drop]
+/// under the footer's middle, where the name's glyphs are centred.
+class _UpIcon extends StatelessWidget {
+  const _UpIcon();
 
-  final FeedCard card;
+  static const lead = 4 / 3;
+  static const gap = 5.0;
+  static const drop = 1 / 3;
 
   @override
-  Widget build(BuildContext context) {
-    final reason = card.reason;
-    if (reason != null && reason.isNotEmpty) return _Tag(reason);
-    if (card.isVertical) return const _Tag('竖屏');
-    return const UpBadge();
-  }
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.only(left: lead),
+    child: Transform.translate(
+      offset: const Offset(0, drop),
+      child: Image.asset(
+        'assets/images/card/up_badge.png',
+        key: const ValueKey('card-up-icon'),
+        width: 40 / 3,
+        height: 34 / 3,
+        color: BiliColors.secondaryText,
+        colorBlendMode: BlendMode.srcIn,
+        excludeFromSemantics: true,
+      ),
+    ),
+  );
 }
 
 class _Tag extends StatelessWidget {
