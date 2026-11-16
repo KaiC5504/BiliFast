@@ -212,7 +212,7 @@ class _VipMark extends StatelessWidget {
         style: messageStyle(
           MessageTabTheme.vipText,
           MessageTabTheme.vipInk,
-          weight: FontWeight.w700,
+          weight: MessageTabTheme.vipWeight,
         ).copyWith(height: 1),
       ),
     ),

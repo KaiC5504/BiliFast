@@ -8284,7 +8284,7 @@ abstract final class HotListTheme {
   static const brandMark = Color(0xFFFFFFFF);
 }
 
-/// The bottom bar's 消息 (196, 211, 212) and the tab's badge (214). Filled by 消息's builder.
+/// The bottom bar's 消息 (196, 211, 212) and the tab's badge (211). Filled by 消息's builder.
 abstract final class MessageTabTheme {
   static const page = BiliColors.card;
 
@@ -8306,7 +8306,8 @@ abstract final class MessageTabTheme {
 
   /// The three entries (196): 48 pt #F7F9F9 squares with 12 corners, their tops 20 under the header, centred 127.33
   /// apart about the screen's middle, each glyph in its colour centred in its square (the thumb 2/3 higher); the 13 pt
-  /// labels' ink centred 13.83 under the squares. The list starts 101.67 under the header.
+  /// labels' ink centred 13.83 under the squares, their line box a third of a point higher, as the sessions' lines.
+  /// The list starts 101.67 under the header.
   static const entryTop = 20.0;
   static const entrySquare = 48.0;
   static const entryRadius = 12.0;
@@ -8314,7 +8315,7 @@ abstract final class MessageTabTheme {
   static const entryPitch = 382 / 3;
   static const entryLabelText = 13.0;
   static const entryLabelLine = 18.0;
-  static const entryLabelCentre = 40 / 3;
+  static const entryLabelCentre = 27 / 2;
   static const entryLabelInk = BiliColors.text;
   static const entries = 305 / 3;
 
@@ -8346,7 +8347,7 @@ abstract final class MessageTabTheme {
   static const nameGap = 8.0;
   static const lastText = 13.0;
   static const lastLine = 18.0;
-  static const lastCentre = 143 / 3;
+  static const lastCentre = 287 / 6;
   static const lastRight = 58.0;
   static const last = BiliColors.secondaryText;
   static const dateText = 10.0;
@@ -8365,11 +8366,12 @@ abstract final class MessageTabTheme {
   static const badgeOrganisation = Color(0xFF40C5F1);
   static const vipFill = BiliColors.pink;
   static const vipText = 8.0;
+  static const vipWeight = FontWeight.w700;
   static const vipInk = Color(0xFFFFFFFF);
 
   /// A notice box's face (196): the pink disc with its white glyph. 服务通知's three squares and diamond (18 pt across)
-  /// and 社区中心's bubbles (21.5 × 20.5) are drawn, traced on 196; 系统通知 and 创作助手 take the APK's own faces'
-  /// glyphs (`ic_im_system_notice`, `ic_im_up_assistant`) cut out of their blue discs.
+  /// and 社区中心's bubbles (21.5 × 20.5) are drawn, traced on 196; 系统通知 and 创作助手, in no screenshot, are the
+  /// APK's own faces as they are (`ic_im_system_notice`, `ic_im_up_assistant`, white on blue discs).
   static const boxFill = BiliColors.pink;
   static const boxGlyph = Color(0xFFFFFFFF);
 
@@ -8449,6 +8451,11 @@ abstract final class MessageTabTheme {
   static const sheetRule = 0.5;
   static const sheetRuleInk = BiliColors.divider;
   static const sheetGlyphCentre = 26.0;
+
+  /// 212 has 防骚扰和互动人群设置's ink centred 1.5 right of the column and 应援团消息助手's 1 higher than its row's
+  /// middle.
+  static const sheetHarassmentShift = 1.5;
+  static const sheetFanClubRise = 1.0;
   static const sheetTextLeft = 181 / 3 - cardInset;
   static const sheetTextDrop = 1.25;
   static const sheetText = 18.0;

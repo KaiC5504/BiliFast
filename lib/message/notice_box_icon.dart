@@ -3,7 +3,8 @@ import 'package:flutter/widgets.dart';
 
 import '../shared/theme.dart';
 
-/// A notice box's round pink face (196's 服务通知 and 社区中心, 200's bubbles), [size] across.
+/// A notice box's round face, [size] across: 196's pink 服务通知 and 社区中心 (200's bubbles), and the APK's own blue
+/// 系统通知 and 创作助手, which no screenshot shows.
 class NoticeBoxIcon extends StatelessWidget {
   const NoticeBoxIcon(this.box, {super.key, required this.size});
 
@@ -13,19 +14,18 @@ class NoticeBoxIcon extends StatelessWidget {
   @override
   Widget build(BuildContext context) => SizedBox.square(
     dimension: size,
-    child: DecoratedBox(
-      decoration: const BoxDecoration(color: MessageTabTheme.boxFill, shape: BoxShape.circle),
-      child: switch (box) {
-        NoticeBox.service || NoticeBox.community => CustomPaint(painter: _BoxGlyphPainter(box)),
-        NoticeBox.system => _apkGlyph('assets/images/message/tab_box_system.png'),
-        NoticeBox.creator => _apkGlyph('assets/images/message/tab_box_creator.png'),
-      },
-    ),
+    child: switch (box) {
+      NoticeBox.service || NoticeBox.community => DecoratedBox(
+        decoration: const BoxDecoration(color: MessageTabTheme.boxFill, shape: BoxShape.circle),
+        child: CustomPaint(painter: _BoxGlyphPainter(box)),
+      ),
+      NoticeBox.system => _apkFace('assets/images/message/tab_box_system.png'),
+      NoticeBox.creator => _apkFace('assets/images/message/tab_box_creator.png'),
+    },
   );
 
-  /// The APK's face glyph, drawn over the whole disc as its own face places it.
-  static Widget _apkGlyph(String asset) =>
-      Image.asset(asset, fit: BoxFit.fill, color: MessageTabTheme.boxGlyph, excludeFromSemantics: true);
+  /// The APK's face as it is, its disc filling the picture.
+  static Widget _apkFace(String asset) => Image.asset(asset, fit: BoxFit.fill, excludeFromSemantics: true);
 }
 
 /// 196's white glyphs, traced in fortieths of the disc.

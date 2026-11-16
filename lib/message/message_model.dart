@@ -69,9 +69,12 @@ class MessageModel extends ChangeNotifier {
   int? _next;
   bool _hasMore = false;
   Object? _error;
+  bool _nextFailed = false;
 
   /// 消息 has asked for the list in this run, so a login asks its first page again.
   bool _sessionsWanted = false;
+
+  Future<void>? _readingAll;
 
   /// The counts as last asked.
   MessageUnread get unread => _unread;
@@ -79,11 +82,12 @@ class MessageModel extends ChangeNotifier {
   /// 消息设置's 消息提醒: the red badges show at all.
   bool get badgeOn => _prefs.badgeOn;
 
+  /// Throws when it couldn't be saved; it holds for this run all the same.
   Future<void> setBadgeOn(bool on) async {
     if (on == _prefs.badgeOn) return;
-    _prefs.badgeOn = on;
+    final saving = _prefs.setBadgeOn(on);
     _notify();
-    await _prefs.settle();
+    await saving;
   }
 
   /// The number on 消息's tab: [unread]'s total, 0 while [badgeOn] is off or logged out.
@@ -99,6 +103,9 @@ class MessageModel extends ChangeNotifier {
 
   /// The session list's last failure, null once a load succeeds.
   Object? get error => _error;
+
+  /// [error] is a next page's, which [retryMore] asks again; a first page's goes to [refresh].
+  bool get nextPageFailed => _error != null && _nextFailed;
 
   bool get _loggedIn => environment.account is LoggedIn;
 
@@ -138,8 +145,12 @@ class MessageModel extends ChangeNotifier {
     try {
       answer = await api.unread();
     } catch (error) {
-      if (_current(generation)) {
-        _logger.warn(LogCategory.api, 'message unread failed', {'error': searchLogReason(error)});
+      if (!_current(generation)) return;
+      _logger.warn(LogCategory.api, 'message unread failed', {'error': searchLogReason(error)});
+      // The login is gone on Bilibili's side, whatever the app still holds: the badge mustn't keep its numbers.
+      if (error is BiliError && error.needsLogin && _unread != const MessageUnread()) {
+        _unread = const MessageUnread();
+        _notify();
       }
       return;
     }
@@ -159,11 +170,14 @@ class MessageModel extends ChangeNotifier {
   }
 
   /// The session list's first page and the counts, as 消息 shows or is pulled. A first page already out answers for
-  /// this one; a next page out is waited for first, so one session call is out at a time.
-  Future<void> refresh() async {
-    if (_disposed || !_loggedIn) return;
+  /// this one; a next page out is waited for first, so one session call is out at a time. False when nothing was
+  /// asked: the account doesn't read logged in yet, and the list is asked once it does.
+  Future<bool> refresh() async {
+    if (_disposed) return false;
     _sessionsWanted = true;
+    if (!_loggedIn) return false;
     await Future.wait([refreshUnread(force: true), _refreshSessions()]);
+    return true;
   }
 
   Future<void> _refreshSessions() async {
@@ -175,11 +189,21 @@ class MessageModel extends ChangeNotifier {
     return _askSessions(first: true);
   }
 
-  /// The next page of sessions; nothing while one is out, at the end, or after a failure until [refresh] succeeds.
+  /// The next page of sessions; nothing while one is out, at the end, or after a failure until [refresh] succeeds
+  /// or [retryMore] is asked.
   Future<void> loadMore() {
     if (_disposed || !_loggedIn || !_hasMore || _error != null) return Future.value();
     if (_sessionCall case final running?) return running;
     return _askSessions(first: false);
+  }
+
+  /// The footer's 点击重试 after a next page failed: that page again.
+  Future<void> retryMore() {
+    if (_disposed || !nextPageFailed) return Future.value();
+    _error = null;
+    final more = loadMore();
+    _notify();
+    return more;
   }
 
   Future<void> _askSessions({required bool first}) {
@@ -224,6 +248,7 @@ class MessageModel extends ChangeNotifier {
         'error': searchLogReason(error),
       });
       _error = error;
+      _nextFailed = !first;
     }
     if (first) _loading = false;
     _notify();
@@ -246,15 +271,18 @@ class MessageModel extends ChangeNotifier {
 
   /// [session] was opened: it is acked up to its newest message and its count goes to 0. The list's own copy of it
   /// counts over the one given; 系统通知's count is [MessageUnread.system], its box not being in the list. The count
-  /// drops at once; a failed ack is logged and leaves it so.
+  /// drops at once; a failed ack is logged and keeps the count at 0.
+  ///
+  /// A message newer than the list's copy is acked too. Its count was never in the list, so once the ack is through
+  /// the 私信 count is asked again while it shows any.
   Future<void> chatOpened(ChatSession session) async {
     if (_disposed || !_loggedIn) return;
     final index = _indexOf(session);
     final listed = index < 0 ? session : _sessions[index];
     final system = session.box == NoticeBox.system;
     final count = system ? math.max(listed.unread, _unread.system) : listed.unread;
-    if (count <= 0) return;
     final seqno = math.max(session.maxSeqno, listed.maxSeqno);
+    if (count <= 0 && seqno <= listed.ackSeqno) return;
     if (index >= 0) _sessions[index] = listed.copyWith(unread: 0, ackSeqno: seqno);
     if (system) {
       _read(_unread.copyWith(system: 0), const {_Count.system}, listChanged: index >= 0);
@@ -266,14 +294,25 @@ class MessageModel extends ChangeNotifier {
       await api.read(listed, seqno: seqno);
     } catch (error) {
       if (_current(generation)) _logger.warn(LogCategory.api, 'message read failed', {'error': searchLogReason(error)});
+      return;
     }
+    if (!system && count <= 0 && _current(generation) && _unread.chat > 0) await _recount(generation);
   }
 
-  /// 一键已读 (211): once Bilibili accepts it, every count and every session's goes to 0. Throws when it doesn't,
-  /// the counts left as they were.
-  Future<void> readAll() async {
-    if (_disposed || !_loggedIn) return;
-    final generation = _generation;
+  /// 一键已读 (211): once Bilibili accepts it, every count and every listed session's goes to 0, then the counts are
+  /// asked again: it reaches only the first page of sessions, so what is left past it shows again. Throws when it
+  /// is refused, the counts left as they were. One while another is out sends nothing and answers with it.
+  Future<void> readAll() {
+    if (_disposed || !_loggedIn) return Future.value();
+    if (_readingAll case final running?) return running;
+    late final Future<void> call;
+    call = _readAll(_generation).whenComplete(() {
+      if (identical(_readingAll, call)) _readingAll = null;
+    });
+    return _readingAll = call;
+  }
+
+  Future<void> _readAll(int generation) async {
     try {
       await api.readAll();
     } catch (error) {
@@ -285,6 +324,14 @@ class MessageModel extends ChangeNotifier {
       if (_sessions[i].unread > 0) _sessions[i] = _sessions[i].copyWith(unread: 0, ackSeqno: _sessions[i].maxSeqno);
     }
     _read(const MessageUnread(), _Count.values.toSet(), listChanged: true);
+    await _recount(generation);
+  }
+
+  /// The counts asked after a read here. A call already out was asked before it, so its answer is held down to what
+  /// the read left and a new call follows.
+  Future<void> _recount(int generation) async {
+    if (_unreadCall case final running?) await running;
+    if (_current(generation)) await _askUnread();
   }
 
   /// The counts [read] were read here and now stand at [counts].
@@ -353,6 +400,8 @@ class MessageModel extends ChangeNotifier {
     _next = null;
     _hasMore = false;
     _error = null;
+    _nextFailed = false;
+    _readingAll = null;
   }
 
   bool _current(int generation) => generation == _generation && !_disposed;

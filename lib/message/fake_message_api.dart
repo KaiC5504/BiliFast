@@ -6,8 +6,10 @@ import '../video/fake_page_api.dart' show FakePageApi;
 import 'message_api.dart';
 
 /// Made-up answers for tests and `--fake-account` on the PC: no call leaves the machine. Lists page by [pageSize];
-/// writes change what later reads answer. [calls] lists what was asked, in order (never a message's text);
-/// [failures] makes a call throw, [holds] keeps it waiting; both are keyed by the method's name.
+/// writes change what later reads answer, and reads clear [counts] as the website's lists presumably do: the first
+/// page of 回复我的, @我的 or 收到的赞 its count, an ack its session's (系统通知's all of [MessageUnread.system]).
+/// [calls] lists what was asked, in order (never a message's text); [failures] makes a call throw, [holds] keeps it
+/// waiting; both are keyed by the method's name.
 class FakeMessageApi implements MessageApi {
   FakeMessageApi({
     this.counts = const MessageUnread(),
@@ -33,8 +35,8 @@ class FakeMessageApi implements MessageApi {
        };
 
   /// The `--fake-account` demo, dated back from [now]: 2 replies, 1 @, 1 like and 3 私信 unread; 回复与@, 收到喜欢 and
-  /// 新增粉丝 with each kind of row; 服务通知's and 社区中心's cards, eight people's chats and 系统通知. Names are 演示…,
-  /// every text made up, faces and pictures empty so nothing is fetched. The video rows are the PC's
+  /// 新增粉丝 with each kind of row; 服务通知's, 社区中心's and 创作助手's cards, eight people's chats and 系统通知. Names
+  /// are 演示…, every text made up, faces and pictures empty so nothing is fetched. The video rows are the PC's
   /// `--fake-notify-tap` video, the first on FakePageApi's demo thread; the post rows are FakeDynamicApi's first post.
   factory FakeMessageApi.demo({DateTime? now, int pageSize = 20}) {
     final demo = _Demo(now ?? DateTime.now());
@@ -109,25 +111,24 @@ class FakeMessageApi implements MessageApi {
   Future<MessageUnread> unread() => _answer('unread', 'unread', () => counts);
 
   @override
-  Future<NoticePage<ReplyNotice>> replies({NoticeCursor? cursor}) => _answer(
-    'replies',
-    'replies ${cursor?.id ?? 0}',
-    () => _notices(replyList, cursor, (item) => item.id, (item) => item.time),
-  );
+  Future<NoticePage<ReplyNotice>> replies({NoticeCursor? cursor}) =>
+      _answer('replies', 'replies ${cursor?.id ?? 0}', () {
+        if (cursor == null) counts = counts.copyWith(reply: 0);
+        return _notices(replyList, cursor, (item) => item.id, (item) => item.time);
+      });
 
   @override
-  Future<NoticePage<ReplyNotice>> mentions({NoticeCursor? cursor}) => _answer(
-    'mentions',
-    'mentions ${cursor?.id ?? 0}',
-    () => _notices(mentionList, cursor, (item) => item.id, (item) => item.time),
-  );
+  Future<NoticePage<ReplyNotice>> mentions({NoticeCursor? cursor}) =>
+      _answer('mentions', 'mentions ${cursor?.id ?? 0}', () {
+        if (cursor == null) counts = counts.copyWith(at: 0);
+        return _notices(mentionList, cursor, (item) => item.id, (item) => item.time);
+      });
 
   @override
-  Future<NoticePage<LikeNotice>> likes({NoticeCursor? cursor}) => _answer(
-    'likes',
-    'likes ${cursor?.id ?? 0}',
-    () => _notices(likeList, cursor, (item) => item.id, (item) => item.time),
-  );
+  Future<NoticePage<LikeNotice>> likes({NoticeCursor? cursor}) => _answer('likes', 'likes ${cursor?.id ?? 0}', () {
+    if (cursor == null) counts = counts.copyWith(like: 0);
+    return _notices(likeList, cursor, (item) => item.id, (item) => item.time);
+  });
 
   @override
   Future<void> deleteNotice(NoticeFeed feed, int id) => _answer('deleteNotice', 'deleteNotice ${feed.name} $id', () {
@@ -193,8 +194,15 @@ class FakeMessageApi implements MessageApi {
   Future<void> read(ChatSession session, {required int seqno}) =>
       _answer('read', 'read ${session.talkerId} $seqno', () {
         reads.add((talkerId: session.talkerId, seqno: seqno));
+        if (session.box == NoticeBox.system) {
+          counts = counts.copyWith(system: 0);
+          return;
+        }
         final index = sessionList.indexWhere((each) => each.talkerId == session.talkerId);
-        if (index >= 0) sessionList[index] = sessionList[index].copyWith(unread: 0, ackSeqno: seqno);
+        if (index < 0) return;
+        final unread = sessionList[index].unread;
+        counts = counts.copyWith(chat: (counts.chat - unread).clamp(0, counts.chat));
+        sessionList[index] = sessionList[index].copyWith(unread: 0, ackSeqno: seqno);
       });
 
   @override
@@ -266,6 +274,7 @@ class _Demo {
   static const riceCake = 508;
   static const service = 9101;
   static const community = 9102;
+  static const creator = 9103;
 
   /// BV13as367Ebh's.
   static const _aid = 117614407850785;
@@ -517,6 +526,23 @@ class _Demo {
         ),
       NoticeBox.community.label,
       box: NoticeBox.community,
+    ),
+    _Person(
+      _Chat(creator)
+        ..notice(
+          '演示稿件审核通过',
+          '你的演示稿件「第六话 | 出发」已通过审核，快去看看吧',
+          ago(days: 9),
+          links: const [(text: '查看稿件', uri: _videoUri)],
+        )
+        ..notice(
+          '演示创作周报',
+          '上周你的演示稿件新增播放 1.2万，新增粉丝 36，继续加油～',
+          ago(days: 7),
+          links: const [(text: '查看详情', uri: _link)],
+        ),
+      NoticeBox.creator.label,
+      box: NoticeBox.creator,
     ),
     _Person(
       _Chat(sheep)

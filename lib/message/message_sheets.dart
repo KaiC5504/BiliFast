@@ -30,7 +30,7 @@ enum MessageSheetChoice {
   final String label;
 }
 
-/// ⋮ on 消息 (212): 消息设置 opens its page; 社区中心, 服务通知 and 创作助手 their sessions in [sessions] (暂未开放 while the
+/// ⋮ on 消息 (212): 消息设置 opens its page; 社区中心, 服务通知 and 创作助手 their sessions in [sessions] (暂无消息 while the
 /// list has none), 系统通知 its own list; the rest say 暂未开放. [now] dates 系统通知's stand-in session.
 Future<void> showMessageMoreSheet(
   BuildContext context, {
@@ -71,7 +71,7 @@ Future<void> showMessageMoreSheet(
       return;
     }
   }
-  showToast(context, '暂未开放');
+  showToast(context, '暂无消息');
 }
 
 class _AlertRoute extends PopupRoute<bool> {
@@ -154,7 +154,7 @@ class _ReadAllAlert extends StatelessWidget {
                   MessageTabTheme.alertTitleLine,
                 ),
                 line(
-                  '是否清除全部新消息提醒?',
+                  '是否清除全部新消息提醒？',
                   messageStyle(
                     MessageTabTheme.alertMessageText,
                     MessageTabTheme.alertMessage,
@@ -426,7 +426,7 @@ class _SheetRowState extends State<_SheetRow> {
 }
 
 /// A row's glyph at its ink's size: the APK's icon font's where it has one (cut at 3× to 212's width), else traced
-/// on 212.
+/// on 212. Two sit off the column's middle as 212 has them.
 class _SheetGlyph extends StatelessWidget {
   const _SheetGlyph(this.choice);
 
@@ -442,16 +442,24 @@ class _SheetGlyph extends StatelessWidget {
       MessageSheetChoice.creator => 'creator',
       MessageSheetChoice.harassment || MessageSheetChoice.community || MessageSheetChoice.service => null,
     };
+    final Widget glyph;
     if (asset != null) {
-      return Image.asset(
+      glyph = Image.asset(
         'assets/images/message/tab_sheet_$asset.png',
         scale: 3,
         color: MessageTabTheme.sheetInk,
         excludeFromSemantics: true,
       );
+    } else {
+      final painter = _LineGlyphPainter(choice);
+      glyph = CustomPaint(size: painter.box / 3, painter: painter);
     }
-    final painter = _LineGlyphPainter(choice);
-    return CustomPaint(size: painter.box / 3, painter: painter);
+    final shift = switch (choice) {
+      MessageSheetChoice.harassment => const Offset(MessageTabTheme.sheetHarassmentShift, 0),
+      MessageSheetChoice.fanClub => const Offset(0, -MessageTabTheme.sheetFanClubRise),
+      _ => null,
+    };
+    return shift == null ? glyph : Transform.translate(offset: shift, child: glyph);
   }
 }
 

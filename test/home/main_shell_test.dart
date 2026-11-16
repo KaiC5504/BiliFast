@@ -40,11 +40,12 @@ void main() {
     http = FeedHttp()..pages[1] = [for (var i = 0; i < 20; i++) feedItem('BV1c$i')];
   });
 
-  /// The shell at 440×956 over a 34 pt home indicator; [phone] makes it KaiC's iPhone at 3× under the system font.
-  /// [messages] builds 消息's model in place of the app's.
+  /// The shell at [size] (440×956 unless given) over a 34 pt home indicator; [phone] makes it KaiC's iPhone at 3×
+  /// under the system font. [messages] builds 消息's model in place of the app's.
   Future<void> show(
     WidgetTester tester, {
     bool phone = false,
+    Size size = const Size(440, 956),
     MessageModel Function(AppEnvironment environment)? messages,
   }) async {
     if (phone) {
@@ -54,7 +55,7 @@ void main() {
       showAsPhone(tester);
     } else {
       tester.view
-        ..physicalSize = const Size(440, 956)
+        ..physicalSize = size
         ..devicePixelRatio = 1
         ..padding = const FakeViewPadding(bottom: 34)
         ..viewPadding = const FakeViewPadding(bottom: 34);
@@ -312,6 +313,18 @@ void main() {
     expectSelected(tester, HomeTab.messages);
   });
 
+  testWidgets('the iPad has no 消息: the shell starts no counts, and a show request changes nothing', (tester) async {
+    late _Messages model;
+    await show(tester, size: const Size(834, 1194), messages: (environment) => model = _Messages(environment));
+    await settle(tester);
+    expect(model.starts, 0);
+    model.requestShow();
+    await settle(tester);
+    expect(tester.widget<MessagePage>(find.byType(MessagePage, skipOffstage: false)).active, isFalse);
+    expect(find.byType(HomePage), findsOneWidget);
+    expect(model.refreshes, 0);
+  });
+
   testWidgets('+ says 暂未开放 and changes nothing, from either tab', (tester) async {
     await show(tester);
     await settle(tester, 40);
@@ -434,5 +447,8 @@ class _Messages extends MessageModel {
   void start() => starts++;
 
   @override
-  Future<void> refresh() async => refreshes++;
+  Future<bool> refresh() async {
+    refreshes++;
+    return true;
+  }
 }
