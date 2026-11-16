@@ -36,12 +36,13 @@ import 'feed_inline_player.dart';
 import 'feed_model.dart';
 import 'home_header.dart';
 import 'hot/hot_list.dart';
+import 'live/live_tab.dart';
 import 'tab_bar_icons.dart' show SkinDecodeGate;
 
-/// 首页 (01, 204, port of HomeView.swift): the avatar and the search entry, the tab row, and 推荐's feed and 热门 side
-/// by side as pages, swiped between or chosen in the row, above the bottom bar `MainShell` holds. The iPad has 推荐
-/// alone under its one row. The entry opens 搜索 with the default word; the avatar opens its page (49), with 设置,
-/// the shortcuts and the last of 最近打开.
+/// 首页 (01, 204, 205, port of HomeView.swift): the avatar and the search entry, the tab row, and 直播, 推荐's feed and
+/// 热门 side by side as pages, swiped between or chosen in the row, opening on 推荐, above the bottom bar `MainShell`
+/// holds. The iPad has 推荐 alone under its one row. The entry opens 搜索 with the default word; the avatar opens its
+/// page (49), with 设置, the shortcuts and the last of 最近打开.
 class HomePage extends StatefulWidget {
   const HomePage({super.key, this.developerPage, this.initialLink, this.reloads, this.skin});
 
@@ -88,13 +89,18 @@ class _HomePageState extends State<HomePage> {
   /// How far 推荐 is scrolled, which folds the header's top row away (121).
   final _feedOffset = ValueNotifier<double>(0);
 
-  /// 推荐 (page 0) and 热门 (page 1); [_pagePosition] follows the slide, [_shownPage] is the one holding most of the
-  /// screen, whose list folds the header and takes 首页's taps.
-  final _pages = PageController();
-  final _pagePosition = ValueNotifier<double>(0);
-  int _shownPage = 0;
+  /// 直播 (page 0), 推荐 (page 1) and 热门 (page 2); [_pagePosition] follows the slide, [_shownPage] is the one holding
+  /// most of the screen, whose list folds the header and takes 首页's taps.
+  static const _livePage = 0;
+  static const _feedPage = 1;
+  static const _hotPage = 2;
+  final _pages = PageController(initialPage: _feedPage);
+  final _pagePosition = ValueNotifier<double>(_feedPage.toDouble());
+  int _shownPage = _feedPage;
   final _hotOffset = ValueNotifier<double>(0);
   final _hotReloads = _Reloads();
+  final _liveOffset = ValueNotifier<double>(0);
+  final _liveReloads = _Reloads();
   late final _opener = LinkOpener(onPushed: (pushed) => unawaited(_visit(pushed)));
   bool _opening = false;
 
@@ -176,14 +182,16 @@ class _HomePageState extends State<HomePage> {
     _pagePosition.dispose();
     _hotOffset.dispose();
     _hotReloads.dispose();
+    _liveOffset.dispose();
+    _liveReloads.dispose();
     super.dispose();
   }
 
   void _pageMoved() {
     if (!_pages.hasClients || !_pages.position.hasContentDimensions) return;
-    final page = _pages.page ?? 0;
-    _pagePosition.value = page.clamp(0.0, 1.0);
-    final shown = page.round().clamp(0, 1);
+    final page = _pages.page ?? _feedPage.toDouble();
+    _pagePosition.value = page.clamp(0.0, 2.0);
+    final shown = page.round().clamp(_livePage, _hotPage);
     if (shown == _shownPage) return;
     if (SchedulerBinding.instance.schedulerPhase == SchedulerPhase.persistentCallbacks) {
       SchedulerBinding.instance.addPostFrameCallback((_) {
@@ -302,10 +310,13 @@ class _HomePageState extends State<HomePage> {
 
   /// 首页's tap reloads the page on screen.
   void _reload() {
-    if (_shownPage == 1 && !FormFactor.of(context).isPad) {
-      _hotReloads.request();
-    } else {
-      unawaited(_grid.currentState?.reload());
+    switch (FormFactor.of(context).isPad ? _feedPage : _shownPage) {
+      case _livePage:
+        _liveReloads.request();
+      case _hotPage:
+        _hotReloads.request();
+      default:
+        unawaited(_grid.currentState?.reload());
     }
   }
 
@@ -410,7 +421,8 @@ class _HomePageState extends State<HomePage> {
     final pad = FormFactor.of(context).isPad;
     // 首页 shown: MainShell stills the places out of sight.
     final placeShown = TickerMode.valuesOf(context).enabled;
-    final hotShown = !pad && _shownPage == 1;
+    final hotShown = !pad && _shownPage == _hotPage;
+    final liveShown = !pad && _shownPage == _livePage;
     final feed = _FeedGrid(
       key: _grid,
       feed: _feed!,
@@ -443,7 +455,11 @@ class _HomePageState extends State<HomePage> {
                     face: _environment.face,
                     searchWord: _searchWord,
                     // Each page keeps its own scroll; the header folds by the one on screen.
-                    feedOffset: hotShown ? _hotOffset : _feedOffset,
+                    feedOffset: hotShown
+                        ? _hotOffset
+                        : liveShown
+                        ? _liveOffset
+                        : _feedOffset,
                     page: _pagePosition,
                     onPage: _turnTo,
                     onAvatar: _openAvatarPage,
@@ -457,10 +473,18 @@ class _HomePageState extends State<HomePage> {
                       : PageView(
                           key: const ValueKey('home-pages'),
                           controller: _pages,
-                          // Nothing lies left of 推荐 or right of 热门 to bounce into.
+                          // Nothing lies left of 直播 or right of 热门 to bounce into.
                           physics: const ClampingScrollPhysics(),
                           children: [
-                            _HomeTabPage(shown: !hotShown, child: feed),
+                            _HomeTabPage(
+                              shown: liveShown,
+                              child: LiveTab(
+                                active: placeShown && liveShown,
+                                scrollOffset: _liveOffset,
+                                reloads: _liveReloads,
+                              ),
+                            ),
+                            _HomeTabPage(shown: !hotShown && !liveShown, child: feed),
                             _HomeTabPage(
                               shown: hotShown,
                               child: HotList(
@@ -511,8 +535,8 @@ class _HomePageState extends State<HomePage> {
   }
 }
 
-/// 推荐 or 热门 as a page, kept alive off screen, where it is still and out of Hero flights as MainShell keeps a hidden
-/// place: 推荐's big card pauses as it does under 我的, and neither page's covers fly to a pushed page.
+/// 直播, 推荐 or 热门 as a page, kept alive off screen, where it is still and out of Hero flights as MainShell keeps a
+/// hidden place: 推荐's big card pauses as it does under 我的, and no page's covers fly to a pushed page.
 class _HomeTabPage extends StatefulWidget {
   const _HomeTabPage({required this.shown, required this.child});
 

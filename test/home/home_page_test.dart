@@ -2063,17 +2063,17 @@ void main() {
       http.pages[1] = twenty();
       await show(tester);
       await settle(tester);
-      expect(pages(tester).page, 0);
+      expect(pages(tester).page, 1);
       expect(find.byType(HotList, skipOffstage: false), findsNothing, reason: 'not built until reached');
       feedScroll(tester).jumpTo(300);
       await settle(tester);
 
       await swipe(tester, -300);
-      expect(pages(tester).page, 1);
+      expect(pages(tester).page, 2);
       expect(find.byType(HotList), findsOneWidget);
       final hotState = tester.state(find.byType(HotList));
       await swipe(tester, 300);
-      expect(pages(tester).page, 0);
+      expect(pages(tester).page, 1);
       expect(feedScroll(tester).pixels, 300, reason: '推荐 kept where it was');
       expect(find.byType(HotList), findsNothing, reason: 'off screen');
       await swipe(tester, -300);
