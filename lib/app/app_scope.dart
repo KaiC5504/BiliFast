@@ -16,6 +16,7 @@ import '../devtools/log_files.dart';
 import '../devtools/log_forwarder.dart';
 import '../dynamic/dynamic_api.dart';
 import '../dynamic/dynamic_like_book.dart';
+import '../dynamic/follow_tab/follow_badge.dart';
 import '../favourites/favourites_api.dart';
 import '../home/recent_store.dart';
 import '../live/fake_live_api.dart';
@@ -213,6 +214,7 @@ class AppServices {
     this._messages,
     this._liveApi,
     MessagePrefs? messagePrefs,
+    FollowBaselines? followBaselines,
     MeProfileStore? meProfile,
     this._skinApi,
     this.skinFolder,
@@ -249,6 +251,7 @@ class AppServices {
        searchHistory = searchHistory ?? SearchHistoryStore.memory(),
        meProfile = meProfile ?? MeProfileStore.memory(),
        messagePrefs = messagePrefs ?? MessagePrefs.memory(),
+       followBaselines = followBaselines ?? FollowBaselines.memory(),
        danmakuSettings = danmakuSettings ?? DanmakuSettingsStore.memory() {
     this.blockRules =
         blockRules ?? BlockRuleStore(api: this.pageApi, isLoggedIn: () => environment.account is LoggedIn);
@@ -303,6 +306,7 @@ class AppServices {
     environment.logins.removeListener(_loggedIn);
     _historyFlusher.dispose();
     _madeMessages?.dispose();
+    _madeFollowBadge?.dispose();
   }
 
   final AppEnvironment environment;
@@ -368,6 +372,18 @@ class AppServices {
 
   /// 消息设置's 消息提醒, kept on the phone (`message_prefs.json`).
   final MessagePrefs messagePrefs;
+
+  FollowBadge? _madeFollowBadge;
+
+  /// 关注's count on the bottom bar, made on first use.
+  late final FollowBadge followBadge = _madeFollowBadge = FollowBadge(
+    api: dynamicApi,
+    environment: environment,
+    baselines: followBaselines,
+  );
+
+  /// What [followBadge] counts from, kept on the phone (`follow_badge.json`).
+  final FollowBaselines followBaselines;
 
   /// The account 我的 last showed, kept on the phone (`me.json`) so a launch draws it at once.
   final MeProfileStore meProfile;

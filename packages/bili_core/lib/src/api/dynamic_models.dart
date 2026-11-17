@@ -318,11 +318,20 @@ final class DynamicItem {
 
 /// A page of posts; [offset] goes with the next ask, which stops once [hasMore] is false or a page comes back empty.
 final class DynamicPage {
-  const DynamicPage({required this.items, this.offset = '', this.hasMore = false, this.skipped = const {}});
+  const DynamicPage({
+    required this.items,
+    this.offset = '',
+    this.hasMore = false,
+    this.skipped = const {},
+    this.updateBaseline = '',
+  });
 
   final List<DynamicItem> items;
   final String offset;
   final bool hasMore;
+
+  /// `update_baseline`: the newest post the page knows of, which `feed/all/update` counts from; empty when absent.
+  final String updateBaseline;
 
   /// Items dropped while decoding, by `type`, and reposts whose original was reduced to its kind, by `orig:<type>`,
   /// for the log.

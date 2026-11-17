@@ -89,6 +89,7 @@ class HomeTabBar extends StatelessWidget {
     this.onPartition,
     this.skin,
     this.messageBadge = 0,
+    this.followBadge = 0,
   });
 
   final HomeTab selected;
@@ -102,6 +103,9 @@ class HomeTabBar extends StatelessWidget {
 
   /// 消息's red count (211); none at 0. The iPad's bar has no 消息.
   final int messageBadge;
+
+  /// 关注's red count (238), drawn as [messageBadge]; none at 0.
+  final int followBadge;
 
   /// Whether [skin] dresses the bar: its picture, both label colours and all five icons each way. Without any of
   /// them the bar stays stock.
@@ -159,7 +163,11 @@ class HomeTabBar extends StatelessWidget {
               selected: tab == selected,
               icon: (selected) => HomeTabIcon(tab, selected: selected),
               onTap: () => onTap(tab),
-              count: tab == HomeTab.messages ? messageBadge : 0,
+              count: switch (tab) {
+                HomeTab.messages => messageBadge,
+                HomeTab.follow => followBadge,
+                _ => 0,
+              },
             ),
         ];
 

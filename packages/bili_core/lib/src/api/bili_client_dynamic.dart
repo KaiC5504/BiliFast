@@ -36,6 +36,9 @@ extension BiliClientDynamic on BiliClient {
     decode: DynamicDecode.page,
   );
 
+  /// How many posts of every kind 全部 has past [baseline] (a first page's [DynamicPage.updateBaseline]).
+  Future<int> dynamicUpdateCount({required String baseline}) => throw UnimplementedError();
+
   /// 最常访问: the portal for the first page, then uplist with [offset].
   Future<DynamicUpList> dynamicUps({String? offset}) => offset == null || offset.isEmpty
       ? get(

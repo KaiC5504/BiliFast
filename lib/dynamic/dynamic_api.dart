@@ -4,6 +4,9 @@ import 'package:bili_core/api.dart';
 abstract interface class DynamicApi {
   Future<DynamicPage> feed(DynamicFeedType type, {String? offset});
 
+  /// 关注's count on the bottom bar (238): posts of every kind since [baseline].
+  Future<int> updateCount(String baseline);
+
   Future<DynamicUpList> ups({String? offset});
 
   Future<DynamicPage> spacePosts(int mid, {String? offset});
@@ -29,6 +32,9 @@ class ClientDynamicApi implements DynamicApi {
 
   @override
   Future<DynamicPage> feed(DynamicFeedType type, {String? offset}) => _client.dynamicFeed(type: type, offset: offset);
+
+  @override
+  Future<int> updateCount(String baseline) => _client.dynamicUpdateCount(baseline: baseline);
 
   @override
   Future<DynamicUpList> ups({String? offset}) => _client.dynamicUps(offset: offset);

@@ -26,6 +26,7 @@ import 'devtools/developer_page.dart';
 import 'devtools/log_files.dart';
 import 'devtools/log_forwarder.dart';
 import 'dynamic/fake_dynamic_api.dart';
+import 'dynamic/follow_tab/follow_badge.dart';
 import 'favourites/fake_favourites_api.dart';
 import 'home/main_shell.dart';
 import 'home/recent_store.dart';
@@ -92,6 +93,7 @@ Future<void> main(List<String> args) async {
   final CodecMemory codecMemory;
   final MeProfileStore meProfile;
   final MessagePrefs messagePrefs;
+  final FollowBaselines followBaselines;
   final HistoryOutbox historyOutbox;
   try {
     environment = await (Platform.isWindows
@@ -106,6 +108,7 @@ Future<void> main(List<String> args) async {
     codecMemory = await CodecMemory.load(codecMemoryPath());
     meProfile = await MeProfileStore.load(supportFilePath('me.json'));
     messagePrefs = await MessagePrefs.load(supportFilePath('message_prefs.json'));
+    followBaselines = await FollowBaselines.load(supportFilePath('follow_badge.json'));
     historyOutbox = await HistoryOutbox.load(supportFilePath('history_outbox.json'));
   } catch (error, stack) {
     // Without this the launch screen would stay up with nothing to say why.
@@ -182,6 +185,7 @@ Future<void> main(List<String> args) async {
     dynamicApi: fakeAccount ? FakeDynamicApi.demo() : null,
     meProfile: meProfile,
     messagePrefs: messagePrefs,
+    followBaselines: followBaselines,
     skinApi: fakeAccount ? FakeSkinApi.demo() : null,
     // The demo skin keeps a folder of its own, so a later run never starts from it.
     skinFolder: supportFilePath(fakeAccount ? 'skins_fake' : 'skins'),

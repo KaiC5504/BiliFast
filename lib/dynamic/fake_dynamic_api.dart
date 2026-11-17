@@ -45,6 +45,9 @@ class FakeDynamicApi implements DynamicApi {
   final Map<int, List<DynamicPage>> spacePages;
   final int pageSize;
 
+  /// What [updateCount] answers.
+  int newPosts = 0;
+
   final calls = <String>[];
   final failures = <String, Object>{};
   final holds = <String, Completer<void>>{};
@@ -67,7 +70,12 @@ class FakeDynamicApi implements DynamicApi {
     final end = (start + pageSize).clamp(0, all.length);
     final page = start >= all.length ? const <DynamicItem>[] : all.sublist(start, end);
     final hasMore = end < all.length;
-    return DynamicPage(items: page, offset: hasMore ? 'p${end ~/ pageSize}' : '', hasMore: hasMore);
+    return DynamicPage(
+      items: page,
+      offset: hasMore ? 'p${end ~/ pageSize}' : '',
+      hasMore: hasMore,
+      updateBaseline: start == 0 && page.isNotEmpty ? page.first.id : '',
+    );
   }
 
   @override
@@ -76,6 +84,9 @@ class FakeDynamicApi implements DynamicApi {
     'feed ${type.rawValue} offset=${offset ?? ''}',
     () => _page(type == DynamicFeedType.video ? videoPosts : posts, offset),
   );
+
+  @override
+  Future<int> updateCount(String baseline) => _answer('updateCount', 'updateCount $baseline', () => newPosts);
 
   @override
   Future<DynamicUpList> ups({String? offset}) =>
