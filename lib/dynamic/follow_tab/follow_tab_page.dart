@@ -7,6 +7,7 @@ import 'package:flutter/services.dart';
 
 import '../../app/app_environment.dart';
 import '../../app/app_scope.dart';
+import '../../app/form_factor.dart';
 import '../../home/feed_inline_player.dart';
 import '../../home/tab_bar_icons.dart' show SkinDecodeGate;
 import '../../shared/loading_tv.dart';
@@ -33,7 +34,8 @@ class FollowTabPage extends StatefulWidget {
   final bool active;
   final FaceSheetController faceSheet;
 
-  /// Notifies for each tap on the bar's 关注 while 关注 shows: the list goes back to the top and refreshes.
+  /// Notifies for each tap on the bar's 关注 while 关注 shows, and as 关注 is opened over its count: the list goes back
+  /// to the top and refreshes.
   final Listenable? reloads;
 
   /// The equipped 装扮: with a `head_bg` it dresses the header.
@@ -90,7 +92,12 @@ class _FollowTabPageState extends State<FollowTabPage> with SkinRefreshRoom {
     _services = AppScope.of(context);
     _environment = _services.environment..addListener(_accountChanged);
     _signedOut = _loggedOut;
-    _model = FollowTabModel(api: _services.dynamicApi, mid: () => _environment.mid)..addListener(_modelChanged);
+    _model = FollowTabModel(
+      api: _services.dynamicApi,
+      mid: () => _environment.mid,
+      // The iPad's bar draws no count on 动态, so its 全部 hands nothing on.
+      onBaseline: FormFactor.of(context).isPad ? null : _services.followBadge.seen,
+    )..addListener(_modelChanged);
     if (widget.active) _start();
   }
 
@@ -178,7 +185,11 @@ class _FollowTabPageState extends State<FollowTabPage> with SkinRefreshRoom {
   /// no post shown the list's own TV stands for it, and a first load still out answers for it (a double tap on the
   /// first show asks once).
   Future<void> _reload() async {
-    if (_refreshing != null || _loggedOut) return;
+    if (_loggedOut) return;
+    // Asked while still hidden, 关注 is being opened over its count, which goes from 全部's newest post: 全部 is
+    // asked again under 视频 too.
+    if (!widget.active && _model!.type == DynamicFeedType.video) unawaited(_model!.all.reload());
+    if (_refreshing != null) return;
     if (!_started) {
       _start();
       return;

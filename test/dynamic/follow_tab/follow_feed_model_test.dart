@@ -221,6 +221,28 @@ void main() {
       expect(asked, [null, 'a', null, 'a']);
       expect([for (final item in feed.items) item.id], ['p0', 'p1', 'p2', 'p3', 'p4', 'p5']);
     });
+
+    test("a first page's baseline is handed on, the first show's and each reload's; a later page's never", () async {
+      final handed = <String>[];
+      final baselines = ['b1', 'b2', ''];
+      var firsts = 0;
+      final feed = FollowFeed(
+        name: 'all',
+        load: (offset) async => offset == null
+            ? DynamicPage(items: posts(2), offset: 'a', hasMore: true, updateBaseline: baselines[firsts++])
+            : DynamicPage(items: posts(2, from: 2), offset: 'b', hasMore: true, updateBaseline: 'later'),
+        onBaseline: handed.add,
+        logger: logger,
+      );
+      await feed.start();
+      expect(handed, ['b1']);
+      await feed.loadMore();
+      expect(handed, ['b1'], reason: 'a later page never');
+      await feed.reload();
+      expect(handed, ['b1', 'b2']);
+      await feed.reload();
+      expect(handed, ['b1', 'b2'], reason: 'a page without one hands nothing');
+    });
   });
 
   group('FollowTabModel', () {
@@ -237,6 +259,23 @@ void main() {
         ..select(DynamicFeedType.video);
       await pumpEventQueue();
       expect(api.calls, ['ups offset=', 'feed all offset=', 'feed video offset=', 'bangumi page=1']);
+    });
+
+    test("全部's first pages hand their baseline on; 视频's never", () async {
+      final handed = <String>[];
+      final api = FakeDynamicApi(posts: posts(12), videoPosts: posts(4, from: 100), upList: faces);
+      final model = FollowTabModel(api: api, mid: () => 12345, onBaseline: handed.add, logger: logger);
+      addTearDown(model.dispose);
+      await model.start();
+      expect(handed, ['p0']);
+      model.select(DynamicFeedType.video);
+      await pumpEventQueue();
+      await model.refresh();
+      expect(api.calls.where((call) => call.startsWith('feed video')), hasLength(2));
+      expect(handed, ['p0']);
+      model.select(DynamicFeedType.all);
+      await model.refresh();
+      expect(handed, ['p0', 'p0']);
     });
 
     test('a face opened loses its dot for the run; signing out forgets everything', () async {

@@ -5,6 +5,7 @@ import 'package:bili_core/devlog.dart';
 import 'package:bilifast/account/keychain_store.dart';
 import 'package:bilifast/app/app_environment.dart';
 import 'package:bilifast/app/app_scope.dart';
+import 'package:bilifast/dynamic/fake_dynamic_api.dart';
 import 'package:bilifast/home/feed_card.dart';
 import 'package:bilifast/home/home_page.dart';
 import 'package:bilifast/home/home_tab_bar.dart';
@@ -24,6 +25,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import '../app/fake_keychain.dart';
+import '../dynamic/follow_tab/follow_fixtures.dart' show BadgeServices, RecordingFollowBadge, faces, posts;
 import '../playback/fakes.dart';
 import '../support/look_alike.dart';
 import '../support/stand_in_fonts.dart';
@@ -35,13 +37,18 @@ const _screen = ValueKey('screen');
 
 void main() {
   late FeedHttp http;
+  late FakeDynamicApi dynamicApi;
+
+  /// 关注's count in the shell [show] last built.
+  late RecordingFollowBadge badge;
 
   setUp(() {
     http = FeedHttp()..pages[1] = [for (var i = 0; i < 20; i++) feedItem('BV1c$i')];
+    dynamicApi = FakeDynamicApi(posts: posts(30), upList: faces);
   });
 
   /// The shell at [size] (440×956 unless given) over a 34 pt home indicator; [phone] makes it KaiC's iPhone at 3×
-  /// under the system font. [messages] builds 消息's model in place of the app's.
+  /// under the system font. [messages] builds 消息's model in place of the app's; 关注's count is [badge].
   Future<void> show(
     WidgetTester tester, {
     bool phone = false,
@@ -70,12 +77,15 @@ void main() {
     await environment.refreshAccount();
     final playback = AppPlayback(() => throw StateError('no playback here'));
     addTearDown(playback.dispose);
-    final services = AppServices(
+    badge = RecordingFollowBadge(environment);
+    final services = BadgeServices(
+      badge: badge,
       environment: environment,
       playback: playback,
       recents: await RecentStore.load(null, logger: logger),
       searchApi: FakeSearchApi(defaultWord: '崩铁新版本即将上线'),
       meApi: FakeMeApi.demo(),
+      dynamicApi: dynamicApi,
       loginGate: FakeLoginGate(),
       messageApi: FakeMessageApi(),
       messages: messages?.call(environment),
@@ -323,6 +333,80 @@ void main() {
     expect(tester.widget<MessagePage>(find.byType(MessagePage, skipOffstage: false)).active, isFalse);
     expect(find.byType(HomePage), findsOneWidget);
     expect(model.refreshes, 0);
+  });
+
+  testWidgets("the bar's 关注 count follows the badge: none at 0, and none while 关注 shows", (tester) async {
+    await show(tester);
+    await settle(tester);
+    expect(badge.starts, 1, reason: 'the shell starts the count once');
+    final count = find.byKey(const ValueKey('home-tab-follow-count'));
+    expect(count, findsNothing);
+
+    badge.show(3);
+    await tester.pump();
+    expect(find.descendant(of: count, matching: find.text('3')), findsOneWidget);
+    expect(find.byKey(const ValueKey('home-tab-messages-count')), findsNothing);
+
+    badge.show(0);
+    await tester.pump();
+    expect(count, findsNothing);
+
+    await tapTab(tester, HomeTab.follow);
+    await settle(tester);
+    badge.show(5);
+    await tester.pump();
+    expect(count, findsNothing, reason: '关注 shows');
+
+    await tapTab(tester, HomeTab.home);
+    await settle(tester);
+    expect(find.descendant(of: count, matching: find.text('5')), findsOneWidget);
+    expect((badge.starts, badge.clears), (1, 0));
+  });
+
+  testWidgets('关注 opened over its count clears it and asks the list again; opened at 0 it only shows it', (
+    tester,
+  ) async {
+    await show(tester);
+    await settle(tester);
+    badge.show(4);
+    await tester.pump();
+    await tapTab(tester, HomeTab.follow);
+    expect((badge.clears, badge.count), (1, 0));
+    await settle(tester);
+    expect(dynamicApi.calls, ['ups offset=', 'feed all offset='], reason: 'its first show loads once');
+
+    await tapTab(tester, HomeTab.home);
+    await settle(tester);
+    await tapTab(tester, HomeTab.follow);
+    await settle(tester);
+    expect(dynamicApi.calls, hasLength(2), reason: 'shown as it was');
+    expect(badge.clears, 1);
+
+    await tapTab(tester, HomeTab.home);
+    await settle(tester);
+    badge.show(2);
+    await tester.pump();
+    await tapTab(tester, HomeTab.follow);
+    expect(badge.clears, 2);
+    await settle(tester);
+    expect(dynamicApi.calls.sublist(2), ['ups offset=', 'feed all offset=']);
+    expect(find.byKey(const ValueKey('home-tab-follow-count')), findsNothing);
+    expect(badge.baselines, ['p0', 'p0']);
+  });
+
+  testWidgets("the iPad's bar draws no 关注 count: the shell starts none, and 动态 hands no baseline on", (tester) async {
+    await show(tester, size: const Size(834, 1194));
+    await settle(tester);
+    expect(badge.starts, 0);
+    badge.show(5);
+    await tester.pump();
+    expect(find.byType(TabCount), findsNothing);
+
+    await tapTab(tester, HomeTab.follow);
+    await settle(tester);
+    expect(dynamicApi.calls, contains('feed all offset='));
+    expect(badge.baselines, isEmpty);
+    expect(badge.clears, 0);
   });
 
   testWidgets('+ says 暂未开放 and changes nothing, from either tab', (tester) async {

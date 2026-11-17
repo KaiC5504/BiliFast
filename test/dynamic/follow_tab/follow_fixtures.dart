@@ -5,6 +5,7 @@ import 'package:bilifast/account/login_gate.dart';
 import 'package:bilifast/app/app_environment.dart';
 import 'package:bilifast/app/app_scope.dart';
 import 'package:bilifast/dynamic/fake_dynamic_api.dart';
+import 'package:bilifast/dynamic/follow_tab/follow_badge.dart';
 import 'package:bilifast/home/main_shell.dart';
 import 'package:bilifast/home/recent_store.dart';
 import 'package:bilifast/me/fake_me_api.dart';
@@ -63,14 +64,69 @@ final class PagedUpsApi extends FakeDynamicApi {
   }
 }
 
+/// 关注's count as the test sets it ([show]), counting what the shell and the page ask of it; it asks Bilibili nothing.
+final class RecordingFollowBadge extends FollowBadge {
+  RecordingFollowBadge(AppEnvironment environment) : super(api: FakeDynamicApi(), environment: environment);
+
+  int starts = 0;
+  int clears = 0;
+  final baselines = <String>[];
+  int _count = 0;
+
+  void show(int count) {
+    _count = count;
+    notifyListeners();
+  }
+
+  @override
+  int get count => _count;
+
+  @override
+  void start() => starts++;
+
+  @override
+  Future<void> refresh({bool force = false}) async {}
+
+  @override
+  void seen(String baseline) => baselines.add(baseline);
+
+  @override
+  void clear() {
+    clears++;
+    show(0);
+  }
+}
+
+/// The app's services with [badge] as 关注's count.
+final class BadgeServices extends AppServices {
+  BadgeServices({
+    required this.badge,
+    required super.environment,
+    required super.playback,
+    required super.recents,
+    super.searchApi,
+    super.meApi,
+    super.dynamicApi,
+    super.messageApi,
+    super.messages,
+    super.loginGate,
+  });
+
+  final FollowBadge badge;
+
+  @override
+  FollowBadge get followBadge => badge;
+}
+
 /// What the test's shell runs on.
 final class ShellRig {
-  ShellRig({required this.api, required this.http, required this.gate, required this.services});
+  ShellRig({required this.api, required this.http, required this.gate, required this.services, required this.badge});
 
   final FakeDynamicApi api;
   final FeedHttp http;
   final FakeLoginGate gate;
   final AppServices services;
+  final RecordingFollowBadge badge;
 }
 
 /// The bottom bar's shell at 440×956 (over a 34 pt home indicator and a 62 pt status bar), or as KaiC's iPhone at 3×
@@ -109,7 +165,9 @@ Future<ShellRig> showShell(
   addTearDown(playback.dispose);
   final gate = FakeLoginGate();
   final dynamicApi = api ?? FakeDynamicApi(posts: posts(30), upList: faces);
-  final services = AppServices(
+  final badge = RecordingFollowBadge(environment);
+  final services = BadgeServices(
+    badge: badge,
     environment: environment,
     playback: playback,
     recents: await RecentStore.load(null, logger: logger),
@@ -133,7 +191,7 @@ Future<ShellRig> showShell(
       home: MainShell(skin: skins),
     ),
   );
-  return ShellRig(api: dynamicApi, http: http, gate: gate, services: services);
+  return ShellRig(api: dynamicApi, http: http, gate: gate, services: services, badge: badge);
 }
 
 /// Lets answers land and frames run, without waiting on endless animations.

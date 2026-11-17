@@ -11,11 +11,15 @@ import '../dynamic_api.dart';
 /// for a refresh that drops a next page still out; it stops at `has_more` false, an empty offset, or a page that adds
 /// no post it doesn't already have.
 class FollowFeed extends ChangeNotifier {
-  FollowFeed({required this.name, required this.load, Logger? logger}) : _logger = logger ?? Logger.shared;
+  FollowFeed({required this.name, required this.load, this.onBaseline, Logger? logger})
+    : _logger = logger ?? Logger.shared;
 
   /// What the log calls it: `all`, `video` or `space`.
   final String name;
   final Future<DynamicPage> Function(String? offset) load;
+
+  /// Handed each first page's `update_baseline` that has one, never a later page's.
+  final void Function(String baseline)? onBaseline;
   final Logger _logger;
 
   List<DynamicItem> _items = const [];
@@ -117,6 +121,7 @@ class FollowFeed extends ChangeNotifier {
       _isEnd = !page.hasMore || page.offset.isEmpty || fresh.isEmpty;
       _error = null;
       _needsLogin = false;
+      if (replacing && page.updateBaseline.isNotEmpty) onBaseline?.call(page.updateBaseline);
       _logger.info(LogCategory.api, 'dynamic feed', {
         'type': name,
         'count': page.items.length,
@@ -163,12 +168,15 @@ class FollowFeed extends ChangeNotifier {
 }
 
 /// The 关注 tab's lists: 全部 and 视频 (each kept while the other shows), 最常访问's faces and, on 视频, 我的追番 · 追剧.
-/// Faces opened in the face sheet lose their dot for the run.
+/// Faces opened in the face sheet lose their dot for the run. [onBaseline] is handed 全部's first page's baseline each
+/// time one lands, for 关注's count on the bar.
 class FollowTabModel extends ChangeNotifier {
-  FollowTabModel({required this.api, required this.mid, Logger? logger}) : _logger = logger ?? Logger.shared {
+  FollowTabModel({required this.api, required this.mid, void Function(String baseline)? onBaseline, Logger? logger})
+    : _logger = logger ?? Logger.shared {
     all = FollowFeed(
       name: DynamicFeedType.all.rawValue,
       load: (offset) => api.feed(DynamicFeedType.all, offset: offset),
+      onBaseline: onBaseline,
       logger: _logger,
     )..addListener(notifyListeners);
     video = FollowFeed(

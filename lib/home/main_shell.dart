@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import '../app/app_scope.dart';
 import '../app/form_factor.dart';
 import '../dynamic/follow_tab/face_sheet.dart';
+import '../dynamic/follow_tab/follow_badge.dart';
 import '../dynamic/follow_tab/follow_tab_page.dart';
 import '../me/me_page.dart';
 import '../message/message_model.dart';
@@ -20,8 +21,8 @@ import 'home_tab_bar.dart';
 /// The bottom bar's places: 首页, 关注, 消息 and 我的 kept alive side by side, the bar under them (01, 02, 127). A bar dressed
 /// by the equipped 装扮 lies over the pages' bottom instead, so they show behind its picture (109, 110). 关注's face
 /// sheet lies over everything, the bar included (139), and a sideloaded install's launch alert over that. 消息's
-/// counts start with the shell; their total is the bar's badge (211), and a tapped 私信 notification shows 消息. The
-/// iPad has no 消息.
+/// counts start with the shell; their total is the bar's badge (211), and a tapped 私信 notification shows 消息. 关注's
+/// count (238) starts with it too, and isn't drawn while 关注 shows. The iPad has no 消息 and no count on 动态.
 class MainShell extends StatefulWidget {
   const MainShell({super.key, this.developerPage, this.initialLink, @visibleForTesting this.skin});
 
@@ -44,17 +45,27 @@ class _MainShellState extends State<MainShell> {
   final _faceSheet = FaceSheetController();
   HomeTab _tab = HomeTab.home;
   MessageModel? _messages;
+  FollowBadge? _followBadge;
+
+  /// What the bar's counts follow: 消息's, and on the phone 关注's.
+  late Listenable _counts;
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
     if (_messages != null) return;
-    final messages = _messages = AppScope.of(context).messages;
-    // The iPad's bar has no 消息: nothing asks its counts, and a tapped 私信 notification only opens the app.
+    final services = AppScope.of(context);
+    final messages = _messages = services.messages;
+    _counts = messages;
+    // The iPad's bar has no 消息 and no count on 动态: nothing asks for either, and a tapped 私信 notification only
+    // opens the app.
     if (FormFactor.of(context).isPad) return;
     messages
       ..start()
       ..showRequests.addListener(_showMessages);
+    final followBadge = _followBadge = services.followBadge;
+    followBadge.start();
+    _counts = Listenable.merge([messages, followBadge]);
   }
 
   @override
@@ -75,7 +86,8 @@ class _MainShellState extends State<MainShell> {
   }
 
   /// 首页 again on 首页 refreshes 推荐, and 关注 again on 关注 its list, closing the face sheet first (a guess: no
-  /// recording); coming back from another place only shows it, where it was.
+  /// recording); coming back from another place only shows it, where it was. 关注 opened over its count also clears
+  /// the count and refreshes its list.
   void _tapped(HomeTab tab) {
     switch (tab) {
       case HomeTab.home when _tab == HomeTab.home:
@@ -88,6 +100,10 @@ class _MainShellState extends State<MainShell> {
       case HomeTab.home || HomeTab.follow || HomeTab.messages || HomeTab.mine:
         if (tab == _tab) return;
         _faceSheet.close();
+        if (tab == HomeTab.follow && (_followBadge?.count ?? 0) > 0) {
+          _followBadge!.clear();
+          _followReloads.request();
+        }
         setState(() => _tab = tab);
       case HomeTab.post:
         showToast(context, '暂未开放');
@@ -168,13 +184,14 @@ class _MainShellState extends State<MainShell> {
             right: 0,
             bottom: 0,
             child: ListenableBuilder(
-              listenable: _messages!,
+              listenable: _counts,
               builder: (context, _) => HomeTabBar(
                 selected: _tab,
                 onTap: _tapped,
                 onPartition: () => showToast(context, '暂未开放'),
                 skin: skin,
                 messageBadge: _messages!.badge,
+                followBadge: follow ? 0 : _followBadge?.count ?? 0,
               ),
             ),
           ),
