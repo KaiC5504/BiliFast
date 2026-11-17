@@ -17,6 +17,7 @@ class FakeDynamicApi implements DynamicApi {
     this.bangumiList = const [],
     this.spacePages = const {},
     this.pageSize = 10,
+    this.newPosts = 0,
   }) : videoPosts = videoPosts ?? [for (final post in posts) if (post.major is DynamicVideo) post];
 
   /// The `--fake-account` demo: one post of every kind the screenshots show, pictures and faces empty so nothing is
@@ -32,6 +33,7 @@ class FakeDynamicApi implements DynamicApi {
     bangumiList: [
       for (var i = 0; i < 6; i++) FollowedBangumi(seasonId: 70 + i, title: '演示番剧 第${i + 1}季', cover: '', progress: '全${12 + i}话'),
     ],
+    newPosts: 3,
   );
 
   final List<DynamicItem> posts;
@@ -46,7 +48,7 @@ class FakeDynamicApi implements DynamicApi {
   final int pageSize;
 
   /// What [updateCount] answers.
-  int newPosts = 0;
+  int newPosts;
 
   final calls = <String>[];
   final failures = <String, Object>{};
