@@ -166,6 +166,7 @@ Future<ShellRig> showShell(
   final gate = FakeLoginGate();
   final dynamicApi = api ?? FakeDynamicApi(posts: posts(30), upList: faces);
   final badge = RecordingFollowBadge(environment);
+  addTearDown(badge.dispose);
   final services = BadgeServices(
     badge: badge,
     environment: environment,

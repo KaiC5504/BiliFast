@@ -78,6 +78,7 @@ void main() {
     final playback = AppPlayback(() => throw StateError('no playback here'));
     addTearDown(playback.dispose);
     badge = RecordingFollowBadge(environment);
+    addTearDown(badge.dispose);
     final services = BadgeServices(
       badge: badge,
       environment: environment,

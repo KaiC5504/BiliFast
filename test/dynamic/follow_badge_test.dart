@@ -258,23 +258,52 @@ void main() {
       final badge = await make();
       badge.start();
       await idle();
-      api.failures['updateCount'] = const BiliAPIError(code: -352, message: '演示：风控的原话');
-      await badge.refresh(force: true);
-      expect(badge.count, 3);
-      expect(logged(), contains('follow badge failed'));
-      expect(logged(), contains('api -352'));
-      expect(logged(), isNot(contains('风控的原话')));
-
       api.failures['updateCount'] = const SocketException(
         'https://api.bilibili.com/x/polymer/web-dynamic/v1/feed/all/update?update_baseline=b1',
       );
       await badge.refresh(force: true);
       expect(badge.count, 3);
+      expect(logged(), contains('follow badge failed'));
       expect(logged(), contains('SocketException'));
       expect(logged(), isNot(contains('polymer')));
       expect(logged(), isNot(contains('update_baseline')));
+
+      api.failures['updateCount'] = const BiliAPIError(code: -352, message: '演示：风控的原话');
+      await badge.refresh(force: true);
+      expect(badge.count, 3);
+      expect(logged(), contains('api -352'));
+      expect(logged(), isNot(contains('风控的原话')));
       expect(answered(), [3], reason: 'a failure is no answer');
     });
+
+    for (final (name, failure) in [
+      ('-352', const BiliAPIError(code: -352, message: '')),
+      ('-412', const BiliAPIError(code: -412, message: '')),
+      ('HTTP 412', const BiliHTTPError(412)),
+    ]) {
+      test('risk control ($name) holds every ask for 6 h, forced, on a return or a login', () async {
+        final badge = await make();
+        badge.start();
+        await idle();
+        api.failures['updateCount'] = failure;
+        await badge.refresh(force: true);
+        final asked = api.calls.length;
+        api.failures.remove('updateCount');
+
+        clock = clock.add(const Duration(hours: 5, minutes: 59));
+        await badge.refresh(force: true);
+        backToApp();
+        await idle();
+        expect(badge.count, 3, reason: 'risk control keeps the count');
+        environment.logIn();
+        await idle();
+        expect(api.calls.length, asked);
+
+        clock = clock.add(const Duration(minutes: 1));
+        await badge.refresh(force: true);
+        expect(api.calls.length, asked + 1);
+      });
+    }
   });
 
   group('seen and clear', () {
@@ -543,6 +572,16 @@ void main() {
         expect(jsonDecode(File(blocked).readAsStringSync()), {'1': 'b2'});
       },
     );
+
+    test('a rename that fails is logged without the path its message names', () async {
+      Directory(path).createSync();
+      File('$path${Platform.pathSeparator}inside').writeAsStringSync('');
+      final store = await FollowBaselines.load(path, logger: logger);
+      await expectLater(store.set(1, 'b1'), throwsA(isA<FileSystemException>()));
+      expect(logged(), contains('follow baselines not saved'));
+      expect(logged(), isNot(contains('follow_badge')));
+      expect(logged(), isNot(contains(folder.path.split(Platform.pathSeparator).last)));
+    });
 
     test('an unreadable file is set aside as .bad and starts empty, its text never logged', () async {
       File(path).writeAsStringSync('{"1": "secret-baselin');

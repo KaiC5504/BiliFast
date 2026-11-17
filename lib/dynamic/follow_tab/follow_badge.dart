@@ -82,10 +82,11 @@ class FollowBaselines {
     }
   }
 
-  /// The error without the text that failed: a FormatException's toString quotes it.
+  /// The error without the text that failed (a FormatException's toString quotes it) or a path (a rename's message
+  /// names its target).
   static String _reason(Object error) => switch (error) {
     FormatException(:final message) => message,
-    FileSystemException(:final message, :final osError) => osError == null ? message : '$message: $osError',
+    FileSystemException(:final osError?) => 'os error ${osError.errorCode}',
     _ => '${error.runtimeType}',
   };
 
@@ -129,7 +130,8 @@ class FollowBadge extends ChangeNotifier {
   /// The account as it last settled; unknown only until the launch's check answers.
   Account _account;
 
-  /// Bumped by every login and logout, [seen] and [clear], so an answer asked before is dropped.
+  /// Bumped by a logout, an expired login, a login over another account, [seen] and [clear], so an answer asked
+  /// before is dropped.
   int _generation = 0;
 
   bool _started = false;
@@ -141,6 +143,11 @@ class FollowBadge extends ChangeNotifier {
 
   Future<void>? _call;
   DateTime? _lastAsked;
+
+  /// Risk control answered: nothing is asked before then, as the background check holds on the same answers.
+  DateTime? _heldUntil;
+
+  static const riskHold = Duration(hours: 6);
 
   /// The number on 关注's place; 0 logged out or before a baseline.
   int get count {
@@ -182,6 +189,7 @@ class FollowBadge extends ChangeNotifier {
     final mid = environment.mid;
     final baseline = _baseline;
     if (_disposed || mid == null || baseline == null) return Future.value();
+    if (_heldUntil case final until? when _now().isBefore(until)) return Future.value();
     _lastAsked = _now();
     late final Future<void> call;
     call = _fetch(_generation, mid, baseline).whenComplete(() {
@@ -199,12 +207,18 @@ class FollowBadge extends ChangeNotifier {
       _logger.warn(LogCategory.api, 'follow badge failed', {'error': searchLogReason(error)});
       // The login is gone on Bilibili's side, whatever the app still holds: the badge mustn't keep its number.
       if (error is BiliError && error.needsLogin) _show(null);
+      if (_riskControl(error)) _heldUntil = _now().add(riskHold);
       return;
     }
     if (!_current(generation)) return;
     _logger.info(LogCategory.api, 'follow badge', {'count': answer});
     _show((mid: mid, count: answer));
   }
+
+  static bool _riskControl(Object error) => switch (error) {
+    BiliAPIError(code: -352 || -412) || BiliHTTPError(status: 412) => true,
+    _ => false,
+  };
 
   void _show(({int mid, int count})? answer) {
     final before = count;
