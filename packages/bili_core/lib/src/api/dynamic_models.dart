@@ -440,7 +440,14 @@ abstract final class DynamicDecode {
       offset: _string(data.map['offset']),
       hasMore: data.flag('has_more'),
       skipped: skipped,
+      updateBaseline: _string(data.map['update_baseline']),
     );
+  }
+
+  /// `feed/all/update`'s `update_num`, never below zero.
+  static int updateCount(Object? json) {
+    final count = JsonObject.from(json, 'dynamic update').count('update_num');
+    return count > 0 ? count : 0;
   }
 
   /// The detail's `data.item`.

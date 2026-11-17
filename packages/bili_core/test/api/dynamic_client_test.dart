@@ -10,6 +10,7 @@ import 'fixtures.dart';
 
 const navPath = '/x/web-interface/nav';
 const feedPath = '/x/polymer/web-dynamic/v1/feed/all';
+const updatePath = '/x/polymer/web-dynamic/v1/feed/all/update';
 const spacePath = '/x/polymer/web-dynamic/v1/feed/space';
 const detailPath = '/x/polymer/web-dynamic/v1/detail';
 const portalPath = '/x/polymer/web-dynamic/v1/portal';
@@ -100,6 +101,24 @@ void main() {
     expect(http.query(firstAsk)['features'], contains('itemOpusStyle'));
     expect(http.query(nextAsk)['type'], 'video');
     expect(http.query(nextAsk)['offset'], '1100000000000000099');
+  });
+
+  test('关注 counts 全部 past the baseline on feed/all/update, unsigned, with the web login', () async {
+    http.routes[updatePath] = (200, '{"code":0,"message":"0","ttl":1,"data":{"update_num":2}}');
+    expect(await client.dynamicUpdateCount(baseline: '1100000000000000001'), 2);
+    final request = http.requestsTo(updatePath).single;
+    expect(request.method, 'GET');
+    expect(request.url.host, 'api.bilibili.com');
+    expect(http.query(request), {'type': 'all', 'update_baseline': '1100000000000000001', 'web_location': '333.1365'});
+    expect(request.headers['Cookie'], contains('SESSDATA=MADE-UP-SESSION'));
+  });
+
+  test('a refused count throws its code', () async {
+    http.routes[updatePath] = (200, '{"code":-101,"message":"账号未登录","ttl":1}');
+    await expectLater(
+      client.dynamicUpdateCount(baseline: '1100000000000000001'),
+      throwsA(const BiliError.api(code: -101, message: '账号未登录')),
+    );
   });
 
   test('a space feed is signed and sends the website fingerprint fields', () async {

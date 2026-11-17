@@ -35,6 +35,19 @@ void main() {
       expect(page.hasMore, isTrue);
     });
 
+    test('keeps update_baseline as the string id it comes as', () {
+      expect(page.updateBaseline, '1100000000000000001');
+    });
+
+    test('a baseline sent as a number reads as its digits', () {
+      expect(DynamicDecode.page({'update_baseline': 1100000000000000001}).updateBaseline, '1100000000000000001');
+    });
+
+    test('a page without update_baseline, or with it empty, has an empty baseline', () {
+      expect(DynamicDecode.page({'offset': '1100000000000000099'}).updateBaseline, '');
+      expect(pageOf('feed_space').updateBaseline, '');
+    });
+
     test('drops an item that will not decode and counts it by type, without failing the page', () {
       expect(page.items.map((item) => item.id), [
         '1100000000000000001',
@@ -331,6 +344,26 @@ void main() {
       expect((post.stat.forward, post.stat.comment, post.stat.like), (0, 0, 12));
       expect(post.stat.liked, isTrue);
       expect(post.menu, isEmpty);
+    });
+  });
+
+  group('the update count', () {
+    test('reads update_num sent as a number', () {
+      expect(DynamicDecode.updateCount({'update_num': 4}), 4);
+    });
+
+    test('reads update_num sent as a string', () {
+      expect(decoded('feed_all', DynamicDecode.updateCount), 3);
+      expect(DynamicDecode.updateCount({'update_num': '12'}), 12);
+    });
+
+    test('is 0 without update_num', () {
+      expect(DynamicDecode.updateCount(<String, Object?>{}), 0);
+    });
+
+    test('is 0 below zero', () {
+      expect(DynamicDecode.updateCount({'update_num': -1}), 0);
+      expect(DynamicDecode.updateCount({'update_num': '-3'}), 0);
     });
   });
 

@@ -37,7 +37,12 @@ extension BiliClientDynamic on BiliClient {
   );
 
   /// How many posts of every kind 全部 has past [baseline] (a first page's [DynamicPage.updateBaseline]).
-  Future<int> dynamicUpdateCount({required String baseline}) => throw UnimplementedError();
+  Future<int> dynamicUpdateCount({required String baseline}) => get(
+    '/x/polymer/web-dynamic/v1/feed/all/update',
+    query: {'type': DynamicFeedType.all.rawValue, 'update_baseline': baseline, 'web_location': '333.1365'},
+    signed: false,
+    decode: DynamicDecode.updateCount,
+  );
 
   /// 最常访问: the portal for the first page, then uplist with [offset].
   Future<DynamicUpList> dynamicUps({String? offset}) => offset == null || offset.isEmpty
