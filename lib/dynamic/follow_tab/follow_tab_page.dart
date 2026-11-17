@@ -28,15 +28,25 @@ import 'follow_top.dart';
 /// paged, pulled to refresh. It loads the first time it is shown. A face opens the face sheet ([faceSheet], drawn by
 /// `MainShell` over the bar too); video cards play muted where they settle while 关注 is shown with nothing over it.
 class FollowTabPage extends StatefulWidget {
-  const FollowTabPage({super.key, required this.active, required this.faceSheet, this.reloads, this.skin});
+  const FollowTabPage({
+    super.key,
+    required this.active,
+    required this.faceSheet,
+    this.reloads,
+    this.countReloads,
+    this.skin,
+  });
 
   /// 关注 is the tab shown.
   final bool active;
   final FaceSheetController faceSheet;
 
-  /// Notifies for each tap on the bar's 关注 while 关注 shows, and as 关注 is opened over its count: the list goes back
-  /// to the top and refreshes.
+  /// Notifies for each tap on the bar's 关注 while 关注 shows: the list goes back to the top and refreshes.
   final Listenable? reloads;
+
+  /// Notifies as 关注 is opened over its count: as [reloads], and 全部 is asked again under 视频 too, since the count
+  /// goes from 全部's newest post.
+  final Listenable? countReloads;
 
   /// The equipped 装扮: with a `head_bg` it dresses the header.
   final Skin? skin;
@@ -82,6 +92,7 @@ class _FollowTabPageState extends State<FollowTabPage> with SkinRefreshRoom {
   void initState() {
     super.initState();
     widget.reloads?.addListener(_reload);
+    widget.countReloads?.addListener(_reloadOverCount);
     widget.faceSheet.addListener(_sheetChanged);
   }
 
@@ -108,6 +119,10 @@ class _FollowTabPageState extends State<FollowTabPage> with SkinRefreshRoom {
       oldWidget.reloads?.removeListener(_reload);
       widget.reloads?.addListener(_reload);
     }
+    if (!identical(oldWidget.countReloads, widget.countReloads)) {
+      oldWidget.countReloads?.removeListener(_reloadOverCount);
+      widget.countReloads?.addListener(_reloadOverCount);
+    }
     if (!identical(oldWidget.faceSheet, widget.faceSheet)) {
       oldWidget.faceSheet.removeListener(_sheetChanged);
       widget.faceSheet.addListener(_sheetChanged);
@@ -118,6 +133,7 @@ class _FollowTabPageState extends State<FollowTabPage> with SkinRefreshRoom {
   @override
   void dispose() {
     widget.reloads?.removeListener(_reload);
+    widget.countReloads?.removeListener(_reloadOverCount);
     widget.faceSheet.removeListener(_sheetChanged);
     _environment.removeListener(_accountChanged);
     _paging.dispose();
@@ -181,15 +197,17 @@ class _FollowTabPageState extends State<FollowTabPage> with SkinRefreshRoom {
     if (failure != null && mounted) showToast(context, failure);
   }
 
+  void _reloadOverCount() {
+    if (_loggedOut) return;
+    if (_model!.type == DynamicFeedType.video) unawaited(_model!.all.reload());
+    unawaited(_reload());
+  }
+
   /// 关注 tapped while shown, as 首页's: back to the top, then the TV held open there until the refresh is done. With
   /// no post shown the list's own TV stands for it, and a first load still out answers for it (a double tap on the
   /// first show asks once).
   Future<void> _reload() async {
-    if (_loggedOut) return;
-    // Asked while still hidden, 关注 is being opened over its count, which goes from 全部's newest post: 全部 is
-    // asked again under 视频 too.
-    if (!widget.active && _model!.type == DynamicFeedType.video) unawaited(_model!.all.reload());
-    if (_refreshing != null) return;
+    if (_refreshing != null || _loggedOut) return;
     if (!_started) {
       _start();
       return;

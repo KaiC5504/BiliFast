@@ -41,6 +41,7 @@ class MainShell extends StatefulWidget {
 class _MainShellState extends State<MainShell> {
   final _reloads = _Reloads();
   final _followReloads = _Reloads();
+  final _followCountReloads = _Reloads();
   final _messageReloads = _Reloads();
   final _faceSheet = FaceSheetController();
   HomeTab _tab = HomeTab.home;
@@ -73,6 +74,7 @@ class _MainShellState extends State<MainShell> {
     _messages?.showRequests.removeListener(_showMessages);
     _reloads.dispose();
     _followReloads.dispose();
+    _followCountReloads.dispose();
     _messageReloads.dispose();
     _faceSheet.dispose();
     super.dispose();
@@ -102,7 +104,7 @@ class _MainShellState extends State<MainShell> {
         _faceSheet.close();
         if (tab == HomeTab.follow && (_followBadge?.count ?? 0) > 0) {
           _followBadge!.clear();
-          _followReloads.request();
+          _followCountReloads.request();
         }
         setState(() => _tab = tab);
       case HomeTab.post:
@@ -162,7 +164,13 @@ class _MainShellState extends State<MainShell> {
                   ),
                   _Place(
                     shown: follow,
-                    child: FollowTabPage(active: follow, faceSheet: _faceSheet, reloads: _followReloads, skin: skin),
+                    child: FollowTabPage(
+                      active: follow,
+                      faceSheet: _faceSheet,
+                      reloads: _followReloads,
+                      countReloads: _followCountReloads,
+                      skin: skin,
+                    ),
                   ),
                   _Place(
                     shown: messages,
