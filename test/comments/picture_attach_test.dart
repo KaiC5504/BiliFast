@@ -135,6 +135,17 @@ void main() {
       expect(picker.calls.length, 1);
     });
 
+    test('asks for library access before the picker opens, and not with no room', () async {
+      final order = <String>[];
+      final picker = FakePicker(() async {
+        order.add('pick');
+        return [];
+      });
+      await pickPictures(limit: 9, picker: picker, askAccess: () async => order.add('ask'));
+      await pickPictures(limit: 0, picker: picker, askAccess: () async => order.add('ask'));
+      expect(order, ['ask', 'pick']);
+    });
+
     test('a cancel is nothing, with no failure', () async {
       final pick = await pickPictures(limit: 9, picker: FakePicker(() async => []));
       expect(pick.pictures, isEmpty);

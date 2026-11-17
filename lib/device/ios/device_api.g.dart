@@ -549,6 +549,26 @@ class DeviceHostApi {
     )
     ;
   }
+
+  /// Asks iOS for the whole photo library (PHPhotoLibrary's read-write), as the official app holds for its own
+  /// picture grid (220). iOS's picker needs no access, so the answer changes nothing; iOS asks only once.
+  Future<void> requestPhotoAccess() async {
+    final pigeonVar_channelName = 'dev.flutter.pigeon.bilifast.DeviceHostApi.requestPhotoAccess$pigeonVar_messageChannelSuffix';
+    final pigeonVar_channel = BasicMessageChannel<Object?>(
+      pigeonVar_channelName,
+      pigeonChannelCodec,
+      binaryMessenger: pigeonVar_binaryMessenger,
+    );
+    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(null);
+    final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
+
+    _extractReplyValueOrThrow(
+        pigeonVar_replyList,
+        pigeonVar_channelName,
+        isNullValid: true,
+    )
+    ;
+  }
 }
 
 abstract class DeviceEventApi {

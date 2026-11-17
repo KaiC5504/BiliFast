@@ -226,6 +226,9 @@ protocol DeviceHostApi {
   /// Sets the home screen's icon; null goes back to the primary one. iOS shows its own alert after a change. Throws
   /// when iOS refuses (no alternate icons on this device, or an unknown name).
   func setAlternateIconName(name: String?) async throws
+  /// Asks iOS for the whole photo library (PHPhotoLibrary's read-write), as the official app holds for its own
+  /// picture grid (220). iOS's picker needs no access, so the answer changes nothing; iOS asks only once.
+  func requestPhotoAccess() async throws
 }
 
 /// Generated setup class from Pigeon to handle messages through the `binaryMessenger`.
@@ -556,6 +559,23 @@ class DeviceHostApiSetup {
       }
     } else {
       setAlternateIconNameChannel.setMessageHandler(nil)
+    }
+    /// Asks iOS for the whole photo library (PHPhotoLibrary's read-write), as the official app holds for its own
+    /// picture grid (220). iOS's picker needs no access, so the answer changes nothing; iOS asks only once.
+    let requestPhotoAccessChannel = FlutterBasicMessageChannel(name: "dev.flutter.pigeon.bilifast.DeviceHostApi.requestPhotoAccess\(channelSuffix)", binaryMessenger: binaryMessenger, codec: codec)
+    if let api = api {
+      requestPhotoAccessChannel.setMessageHandler { _, reply in
+        Task { @MainActor in
+          do {
+            try await api.requestPhotoAccess()
+            reply(wrapResult(nil))
+          } catch {
+            reply(wrapError(error))
+          }
+        }
+      }
+    } else {
+      requestPhotoAccessChannel.setMessageHandler(nil)
     }
   }
 }

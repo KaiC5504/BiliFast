@@ -89,6 +89,11 @@ abstract class DeviceHostApi {
   /// when iOS refuses (no alternate icons on this device, or an unknown name).
   @async
   void setAlternateIconName(String? name);
+
+  /// Asks iOS for the whole photo library (PHPhotoLibrary's read-write), as the official app holds for its own
+  /// picture grid (220). iOS's picker needs no access, so the answer changes nothing; iOS asks only once.
+  @async
+  void requestPhotoAccess();
 }
 
 @FlutterApi()

@@ -335,6 +335,19 @@ void main() {
       expect(picker.fullMetadata, [false]);
     });
 
+    test('asks for library access before a library pick, not before the camera', () async {
+      final asked = <ImageSource>[];
+      for (final source in [ImageSource.gallery, ImageSource.camera]) {
+        final picker = _Picker(() async {
+          asked.add(source);
+          return null;
+        });
+        var askedFirst = false;
+        await pickFolderCover(source, picker: picker, askAccess: () async => askedFirst = asked.isEmpty);
+        expect(askedFirst, source == ImageSource.gallery, reason: '$source');
+      }
+    });
+
     test('a picture comes back with its name, or cover.jpg without an extension', () async {
       final named = await pickFolderCover(
         ImageSource.camera,

@@ -1,4 +1,5 @@
 import 'dart:convert' show ascii, latin1;
+import 'dart:io' show Platform;
 import 'dart:typed_data';
 
 import 'package:bili_core/devlog.dart';
@@ -7,6 +8,7 @@ import 'package:flutter/services.dart' show PlatformException;
 import 'package:flutter/widgets.dart';
 import 'package:image_picker/image_picker.dart';
 
+import '../device/ios/device_api.g.dart';
 import '../shared/theme.dart';
 import 'composer_model.dart';
 
@@ -29,9 +31,25 @@ class PicturePick {
   final PickFailure? failure;
 }
 
-/// The composer's ⊕: up to [limit] pictures from the photo library, without asking for library access.
-Future<PicturePick> pickPictures({required int limit, ImagePicker? picker}) async {
+/// Library access as the official app holds it, asked before a library pick; nothing off iOS. Any failure is
+/// logged and the pick goes on, since iOS's picker needs no access.
+Future<void> askPhotoAccess() async {
+  if (!Platform.isIOS) return;
+  try {
+    await DeviceHostApi().requestPhotoAccess();
+  } catch (error) {
+    Logger.shared.warn(LogCategory.ui, 'photo access ask failed', {'error': '${error.runtimeType}'});
+  }
+}
+
+/// The composer's ⊕: up to [limit] pictures from the photo library, after [askAccess].
+Future<PicturePick> pickPictures({
+  required int limit,
+  ImagePicker? picker,
+  Future<void> Function() askAccess = askPhotoAccess,
+}) async {
   if (limit <= 0) return const PicturePick([]);
+  await askAccess();
   final List<XFile> files;
   try {
     files = await (picker ?? ImagePicker()).pickMultiImage(

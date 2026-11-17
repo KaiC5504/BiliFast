@@ -10,7 +10,7 @@ import 'package:image_picker/image_picker.dart';
 
 import '../app/swipe_back_route.dart';
 import '../comments/composer_model.dart' show PickedPicture;
-import '../comments/picture_attach.dart' show PickFailure, withoutLocation;
+import '../comments/picture_attach.dart' show PickFailure, askPhotoAccess, withoutLocation;
 import '../history/history_glyphs.dart' show HistoryBackPainter;
 import '../home/feed_model.dart' show requestFailureMessage;
 import '../shared/menu.dart' show PressHighlight;
@@ -44,8 +44,13 @@ Future<FavFolder?> openNewFolder(BuildContext context, {required CreateFolder cr
       ),
     );
 
-/// 封面's picture from the library or the camera, without asking for library access.
-Future<CoverPick> pickFolderCover(ImageSource source, {ImagePicker? picker}) async {
+/// 封面's picture from the library (after [askAccess]) or the camera.
+Future<CoverPick> pickFolderCover(
+  ImageSource source, {
+  ImagePicker? picker,
+  Future<void> Function() askAccess = askPhotoAccess,
+}) async {
+  if (source == ImageSource.gallery) await askAccess();
   final XFile? file;
   try {
     file = await (picker ?? ImagePicker()).pickImage(

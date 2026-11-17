@@ -1,4 +1,5 @@
 import Flutter
+import Photos
 import UIKit
 import UserNotifications
 
@@ -222,6 +223,10 @@ final class DeviceHostApiImpl: DeviceHostApi {
 
   func setAlternateIconName(name: String?) async throws {
     try await Self.setIcon(name)
+  }
+
+  func requestPhotoAccess() async throws {
+    _ = await PHPhotoLibrary.requestAuthorization(for: .readWrite)
   }
 
   @MainActor private static func setIcon(_ name: String?) async throws {
