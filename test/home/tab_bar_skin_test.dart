@@ -37,6 +37,7 @@ void main() {
     bool load = true,
     bool pad = false,
     int messageBadge = 0,
+    int followBadge = 0,
   }) async {
     if (pad) {
       showAsPad(tester);
@@ -53,7 +54,14 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(
         theme: appTheme(),
-        home: _Host(skin: skin, still: still, messageBadge: messageBadge, onTap: taps.add, onPage: () => pageTaps++),
+        home: _Host(
+          skin: skin,
+          still: still,
+          messageBadge: messageBadge,
+          followBadge: followBadge,
+          onTap: taps.add,
+          onPage: () => pageTaps++,
+        ),
       ),
     );
   }
@@ -470,6 +478,44 @@ void main() {
     });
   });
 
+  group("关注's count (238), drawn as 消息's", () {
+    Finder count() => find.byKey(const ValueKey('home-tab-follow-count'));
+
+    testWidgets('none at 0', (tester) async {
+      await show(tester, null, messageBadge: 2);
+      expect(count(), findsNothing);
+    });
+
+    testWidgets("on the stock bar, on the glyph's top right, beside 消息's own", (tester) async {
+      await show(tester, null, followBadge: 3, messageBadge: 2);
+      expect(find.descendant(of: count(), matching: find.text('3')), findsOneWidget);
+      final place = tester.getRect(slot(HomeTab.follow));
+      final centre = tester.getCenter(count());
+      expect(centre.dx, moreOrLessEquals(place.center.dx + MessageTabTheme.countRight, epsilon: 0.01));
+      expect(centre.dy, moreOrLessEquals(_barTop + MessageTabTheme.countStockTop, epsilon: 0.01));
+      final messages = find.byKey(const ValueKey('home-tab-messages-count'));
+      expect(find.descendant(of: messages, matching: find.text('2')), findsOneWidget);
+      for (final tab in [HomeTab.home, HomeTab.post, HomeTab.mine]) {
+        expect(find.byKey(ValueKey('home-tab-${tab.name}-count')), findsNothing, reason: tab.label);
+      }
+    });
+
+    testWidgets("over a 装扮's bar its middle sits 2.5/3 under the bar's top, as 238's", (tester) async {
+      await show(tester, _pictures.skin(), followBadge: 3);
+      expect(find.byType(SkinTabIcon), findsWidgets);
+      final place = tester.getRect(slot(HomeTab.follow));
+      final centre = tester.getCenter(count());
+      expect(centre.dx, moreOrLessEquals(place.center.dx + MessageTabTheme.countRight, epsilon: 0.01));
+      expect(centre.dy, moreOrLessEquals(_barTop + MessageTabTheme.countDressedTop, epsilon: 0.01));
+      expect(find.descendant(of: count(), matching: find.text('3')), findsOneWidget);
+    });
+
+    testWidgets("the iPad's 动态 draws none", (tester) async {
+      await show(tester, null, pad: true, followBadge: 3);
+      expect(find.byType(TabCount), findsNothing);
+    });
+  });
+
   group('the decode gate', () {
     testWidgets('stock until the picture and the icons have decoded, then dressed', (tester) async {
       imageCache
@@ -522,11 +568,13 @@ class _Host extends StatefulWidget {
     required this.onTap,
     required this.onPage,
     this.messageBadge = 0,
+    this.followBadge = 0,
   });
 
   final Skin? skin;
   final bool still;
   final int messageBadge;
+  final int followBadge;
   final ValueChanged<HomeTab> onTap;
   final VoidCallback onPage;
 
@@ -557,6 +605,7 @@ class _HostState extends State<_Host> {
             selected: _selected,
             skin: widget.skin,
             messageBadge: widget.messageBadge,
+            followBadge: widget.followBadge,
             onTap: (tab) {
               widget.onTap(tab);
               if (tab == HomeTab.home || tab == HomeTab.follow || tab == HomeTab.mine) setState(() => _selected = tab);

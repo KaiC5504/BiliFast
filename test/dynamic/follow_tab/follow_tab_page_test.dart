@@ -700,6 +700,84 @@ void main() {
     semantics.dispose();
   });
 
+  testWidgets("全部's first page hands its baseline to 关注's count, on the first show and each refresh; 视频's never", (
+    tester,
+  ) async {
+    final api = FakeDynamicApi(posts: posts(30), videoPosts: posts(12, from: 100), upList: faces);
+    final rig = await showShell(tester, api: api);
+    await tapTab(tester, HomeTab.follow);
+    await settle(tester);
+    expect(rig.badge.baselines, ['p0']);
+
+    await tapTab(tester, HomeTab.follow);
+    await settle(tester);
+    expect(rig.badge.baselines, ['p0', 'p0']);
+
+    await tester.tap(find.byKey(const ValueKey('follow-switch-video')));
+    await settle(tester);
+    await tapTab(tester, HomeTab.follow);
+    await settle(tester);
+    expect(rig.api.calls.where((call) => call.startsWith('feed video')), hasLength(2));
+    expect(rig.api.calls.where((call) => call == 'feed all offset='), hasLength(2), reason: '视频 refreshes alone');
+    expect(rig.badge.baselines, ['p0', 'p0']);
+  });
+
+  testWidgets('opened over its count, 关注 goes back to the top and refreshes as a tap while shown does', (tester) async {
+    final rig = await showShell(tester);
+    await tapTab(tester, HomeTab.follow);
+    await settle(tester);
+    await tester.drag(find.byKey(const ValueKey('follow-list')), const Offset(0, -600));
+    await settle(tester);
+    expect(listScroll(tester).pixels, greaterThan(300));
+    await tapTab(tester, HomeTab.home);
+    await settle(tester);
+
+    rig.badge.show(2);
+    await tester.pump();
+    rig.api.holds['feed'] = Completer<void>();
+    final before = rig.api.calls.length;
+    await tapTab(tester, HomeTab.follow);
+    await settle(tester, 12);
+    expect(rig.badge.clears, 1);
+    expect(listScroll(tester).pixels, 0);
+    expect(find.byKey(const ValueKey('follow-reload')), findsOneWidget);
+    expect(rig.api.calls.sublist(before), ['ups offset=', 'feed all offset=']);
+
+    rig.api.holds.remove('feed')!.complete();
+    await settle(tester);
+    expect(find.byKey(const ValueKey('follow-reload')), findsNothing);
+    expect(rig.badge.baselines, ['p0', 'p0']);
+  });
+
+  testWidgets('opened over its count while 视频 shows, 关注 asks 全部 again too, so its baseline moves', (tester) async {
+    final api = FakeDynamicApi(posts: posts(30), videoPosts: posts(12, from: 100), upList: faces);
+    final rig = await showShell(tester, api: api);
+    await tapTab(tester, HomeTab.follow);
+    await settle(tester);
+    await tester.tap(find.byKey(const ValueKey('follow-switch-video')));
+    await settle(tester);
+    await tapTab(tester, HomeTab.home);
+    await settle(tester);
+    final before = rig.api.calls.length;
+
+    await tapTab(tester, HomeTab.follow);
+    await settle(tester);
+    expect(rig.api.calls.length, before, reason: 'at 0 it only shows');
+
+    await tapTab(tester, HomeTab.home);
+    await settle(tester);
+    rig.badge.show(3);
+    await tester.pump();
+    await tapTab(tester, HomeTab.follow);
+    await settle(tester);
+    expect(
+      rig.api.calls.sublist(before),
+      unorderedEquals(['feed all offset=', 'ups offset=', 'feed video offset=', 'bangumi page=1']),
+    );
+    expect(rig.badge.baselines, ['p0', 'p0']);
+    expect(find.text('post p100'), findsOneWidget, reason: '视频 still shows');
+  });
+
   testWidgets('logging out while 关注 shows with the face sheet open closes it, empties the tab for the login prompt '
       'and asks nothing', (tester) async {
     final rig = await showShell(tester);
