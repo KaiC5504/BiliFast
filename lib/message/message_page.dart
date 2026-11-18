@@ -320,7 +320,9 @@ class _MessagePageState extends State<MessagePage> with SkinRefreshRoom, Widgets
   /// goes by 首页's measure where the skin cuts it the same way (with a tab picture), else by 关注's.
   Widget _page(BuildContext context, Skin? head) {
     _still = MediaQuery.disableAnimationsOf(context);
-    final light = head != null && (head.headTabBg != null ? head.lightStatusHome : head.lightStatusFollow);
+    final light = head == null
+        ? BiliTheme.dark
+        : (head.headTabBg != null ? head.lightStatusHome : head.lightStatusFollow);
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: light ? SystemUiOverlayStyle.light : SystemUiOverlayStyle.dark,
       child: Material(
@@ -509,6 +511,7 @@ class _Header extends StatelessWidget {
   Widget build(BuildContext context) {
     final head = skin?.headBg;
     final ink = skin?.color ?? MessageTabTheme.titleInk;
+    final glyphInk = skin?.color ?? MessageTabTheme.buttonInk;
     Widget button(String key, String label, double centreRight, String asset, VoidCallback onTap) => Positioned(
       right: centreRight - MessageTabTheme.buttonTarget / 2,
       bottom: 0,
@@ -518,7 +521,7 @@ class _Header extends StatelessWidget {
         key: ValueKey(key),
         label: label,
         onTap: onTap,
-        child: Center(child: Image.asset(asset, scale: 3, color: ink, excludeFromSemantics: true)),
+        child: Center(child: Image.asset(asset, scale: 3, color: glyphInk, excludeFromSemantics: true)),
       ),
     );
     return SizedBox(

@@ -49,6 +49,9 @@ class _DynamicRichTextState extends State<DynamicRichText> {
   late int _units;
   bool _large = false;
 
+  /// The runs carry the link colour of the mode they were made in.
+  bool _builtDark = BiliTheme.dark;
+
   /// The last cut, kept while nothing that decides it changes.
   Object? _cutFor;
   int? _cut;
@@ -91,6 +94,7 @@ class _DynamicRichTextState extends State<DynamicRichText> {
   }
 
   void _build() {
+    _builtDark = BiliTheme.dark;
     _disposeRecognizers();
     _cutFor = null;
     _more = widget.onMore == null ? null : (TapGestureRecognizer()..onTap = () => widget.onMore?.call());
@@ -285,6 +289,7 @@ class _DynamicRichTextState extends State<DynamicRichText> {
 
   @override
   Widget build(BuildContext context) {
+    if (_builtDark != BiliTheme.dark) _build();
     final style = DefaultTextStyle.of(context).style.merge(widget.style);
     final strut = _large ? null : BiliFonts.strut(style);
     return LayoutBuilder(

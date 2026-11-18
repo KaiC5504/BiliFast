@@ -291,7 +291,9 @@ class _FollowTabPageState extends State<FollowTabPage> with SkinRefreshRoom {
         (ModalRoute.isCurrentOf(context) ?? true) &&
         !widget.faceSheet.isOpen;
     return AnnotatedRegion<SystemUiOverlayStyle>(
-      value: head != null && head.lightStatusFollow ? SystemUiOverlayStyle.light : SystemUiOverlayStyle.dark,
+      value: (head == null ? BiliTheme.dark : head.lightStatusFollow)
+          ? SystemUiOverlayStyle.light
+          : SystemUiOverlayStyle.dark,
       child: Material(
         color: BiliColors.card,
         child: Column(

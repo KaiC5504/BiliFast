@@ -284,7 +284,7 @@ class _ChatPageState extends State<ChatPage> {
     final composer = model.isPerson;
     final settings = model.settings;
     return AnnotatedRegion<SystemUiOverlayStyle>(
-      value: SystemUiOverlayStyle.dark,
+      value: BiliTheme.dark ? SystemUiOverlayStyle.light : SystemUiOverlayStyle.dark,
       // Pushed on a plain page route with no Material above it, words would otherwise take the app's fallback style.
       child: DefaultTextStyle(
         style: chatStyle(MessageChatTheme.bubbleText, MessageChatTheme.text),

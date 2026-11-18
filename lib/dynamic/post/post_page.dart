@@ -411,7 +411,7 @@ class _DynamicPostPageState extends State<DynamicPostPage> {
         if (!didPop) _closeComments();
       },
       child: AnnotatedRegion<SystemUiOverlayStyle>(
-        value: SystemUiOverlayStyle.dark,
+        value: BiliTheme.dark ? SystemUiOverlayStyle.light : SystemUiOverlayStyle.dark,
         // A tap on the status bar scrolls the post to its top; nothing else on the page takes the controller.
         child: PrimaryScrollController(
           controller: _threadOpen ? _noScroll : _scroll,

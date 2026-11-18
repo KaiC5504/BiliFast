@@ -59,7 +59,7 @@ final class FollowingBarLook {
   static FollowingBarLook get stock => FollowingBarLook(
     fill: FollowingListTheme.bar,
     ink: FollowingListTheme.barInk,
-    lightStatus: false,
+    lightStatus: BiliTheme.dark,
   );
 
   factory FollowingBarLook.of(Skin? skin) {

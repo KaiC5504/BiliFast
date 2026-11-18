@@ -18,7 +18,8 @@ typedef _T = MessageSettingsTheme;
 final class MessageSettingsBarLook {
   const MessageSettingsBarLook({required this.fill, required this.ink, required this.lightStatus});
 
-  static MessageSettingsBarLook get stock => MessageSettingsBarLook(fill: _T.bar, ink: _T.barInk, lightStatus: false);
+  static MessageSettingsBarLook get stock =>
+      MessageSettingsBarLook(fill: _T.bar, ink: _T.barInk, lightStatus: BiliTheme.dark);
 
   factory MessageSettingsBarLook.of(Skin? skin) {
     final page = skin?.equip.colors.colorSecondPage;

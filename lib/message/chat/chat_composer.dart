@@ -87,7 +87,6 @@ class ChatComposer extends StatelessWidget {
                       keyboardType: TextInputType.multiline,
                       textInputAction: TextInputAction.newline,
                       inputFormatters: [_ReturnSends(onSend)],
-                      keyboardAppearance: Brightness.light,
                       // Under the emote panel the field keeps its caret with no keyboard (219).
                       readOnly: showingEmotes,
                       showCursor: true,

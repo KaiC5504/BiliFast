@@ -67,7 +67,7 @@ class VerifyBadgePainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     final side = size.shortestSide;
     final centre = size.center(Offset.zero);
-    canvas.drawCircle(centre, side / 2, Paint()..color = DynamicPostTheme.badgeBolt);
+    canvas.drawCircle(centre, side / 2, Paint()..color = DynamicPostTheme.page);
     final disc = verify == DynamicVerify.organisation
         ? DynamicPostTheme.badgeOrganisation
         : DynamicPostTheme.badgePersonal;
