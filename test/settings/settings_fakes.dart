@@ -4,6 +4,7 @@ import 'package:bili_core/devlog.dart';
 import 'package:bilifast/account/login_gate.dart';
 import 'package:bilifast/app/app_environment.dart';
 import 'package:bilifast/app/app_scope.dart';
+import 'package:bilifast/app/appearance.dart';
 import 'package:bilifast/devtools/log_files.dart';
 import 'package:bilifast/home/recent_store.dart';
 import 'package:bilifast/notify/notify_host.dart';
@@ -173,6 +174,7 @@ class SettingsWorld {
     ImageDiskCache? imageCache,
     AppIconHost? appIcons,
     NotifyHost? notify,
+    AppearanceModel? appearance,
   }) async {
     final environment = FakeEnvironment(account);
     final gate = FakeLoginGate();
@@ -201,6 +203,7 @@ class SettingsWorld {
       logFiles: logFiles,
       appIcons: appIcons,
       notify: notify,
+      appearance: appearance,
     );
     return SettingsWorld._(services, environment, gate, logFiles, engine, shared, memory);
   }

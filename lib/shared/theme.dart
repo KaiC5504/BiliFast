@@ -2434,6 +2434,13 @@ abstract final class MeTheme {
   static const topPitch = 40.67;
   static const topGlyphBox = 24.0;
   static const topGlyphStroke = 1.5;
+
+  /// 日间模式's ☀ (251): a ring 7.1 to the stroke's middle, a hair thinner than the other glyphs, and six dots 2
+  /// across, 10 out at every 60° from the side.
+  static const sunRing = 7.1;
+  static const sunStroke = 1.45;
+  static const sunDot = 1.0;
+  static const sunRays = 10.0;
   static Color get topGlyph => tone(0xFF61666D, 0xFFA2A7AE);
   static const castDot = 1.1;
   static const topTapHeight = 44.0;
@@ -2453,8 +2460,9 @@ abstract final class MeTheme {
   static const vipDisc = 16.0;
   static const vipRing = 2.0;
   static const vipPendantInset = 3.0;
-  static Color get vipDiscFill => BiliColors.pink;
-  static Color get vipDiscInk => tone(0xFFFFFFFF, 0xFF17181A);
+  /// The disc keeps the light pink and white 大 in dark (251), as do the LV badge, the pill and 会员中心's text.
+  static const vipDiscFill = Color(0xFFFF6699);
+  static const vipDiscInk = Color(0xFFFFFFFF);
   static Color get vipRingInk => tone(0xFFFFFFFF, 0xFF17181A);
   static const vipDiscStroke = 1.6;
 
@@ -2491,7 +2499,7 @@ abstract final class MeTheme {
     Color(0xFFED672A),
     Color(0xFFE3524E),
   ];
-  static Color get levelInk => tone(0xFFFFFFFF, 0xFF17181A);
+  static const levelInk = Color(0xFFFFFFFF);
 
   static const vipLabelTop = 90.0;
   static const vipLabelHeight = 14.0;
@@ -2500,8 +2508,8 @@ abstract final class MeTheme {
   static const vipLabelWeight = FontWeight.w600;
 
   /// The pill after the level (年度大会员), a darker pink than the accent.
-  static Color get vipLabelFill => tone(0xFFFF548C, 0xFFFF548C); // night?
-  static Color get vipLabelInk => tone(0xFFFFFFFF, 0xFF17181A);
+  static const vipLabelFill = Color(0xFFFF548C);
+  static const vipLabelInk = Color(0xFFFFFFFF);
 
   /// The B币 line's middle below the safe area.
   static const coinsCentre = 121.2;
@@ -2538,7 +2546,8 @@ abstract final class MeTheme {
   static const cardHeight = 54.0;
   static const cardInset = 12.0;
   static const cardRadius = 8.0;
-  static Color get card => tone(0xFFFFECF1, 0xFF2F1A22);
+  /// Dark is 251's, a little lighter than the palette's Pi1 night (#2F1A22).
+  static Color get card => tone(0xFFFFECF1, 0xFF37232C);
   static const cardLineCentre = 18.0;
   static const cardTitleGap = 4.0;
   static const cardTitleText = 14.0;
@@ -2555,7 +2564,7 @@ abstract final class MeTheme {
   static const cardButtonHeight = 30.0;
   static const cardButtonText = 14.0;
   static Color get cardButtonFill => BiliColors.pink;
-  static Color get cardButtonInk => tone(0xFFFFFFFF, 0xFF17181A);
+  static const cardButtonInk = Color(0xFFFFFFFF);
 
   /// A 大会员's card coming in once the profile answers; the header's height follows at the same pace.
   static const cardFade = Duration(milliseconds: 250);
@@ -2569,7 +2578,8 @@ abstract final class MeTheme {
   static const shortcutIconCentre = 26.0;
   static const shortcutLabelCentre = 51.4;
   static const shortcutHeight = 72.0;
-  static Color get shortcutGlyph => tone(0xFF2CA1DD, 0xFF2CA1DD); // night?
+  /// No dark screenshot shows them; 251's pink glyphs keep about their light ink, so the blue keeps its own.
+  static const shortcutGlyph = Color(0xFF2CA1DD);
   static const shortcutText = 12.0;
   static Color get shortcutLabel => BiliColors.text;
 
@@ -2584,31 +2594,25 @@ abstract final class MeTheme {
   static const serviceGlyphBox = 30.0;
   static const serviceGlyphStroke = 1.5;
   /// 106's glyphs differ a little (sRGB): 听视频's is pinker than 联系客服's and 设置's.
-  static Color get serviceGlyph => tone(0xFFF9739D, 0xFFF9739D); // night?
-  static Color get listenGlyph => tone(0xFFFD679D, 0xFFFD679D); // night?
+  static Color get serviceGlyph => tone(0xFFF9739D, 0xFFE96D97);
+  static Color get listenGlyph => tone(0xFFFD679D, 0xFFF06294);
   static const serviceTextLeft = 60.5;
   static const serviceText = 14.0;
   static Color get serviceLabel => BiliColors.text;
-  static Color get serviceChevron => tone(0xFF999999, 0xFF999999); // night?
+  static Color get serviceChevron => tone(0xFF999999, 0xFF919191);
   static const bottomPad = 24.0;
 
   /// The equipped 装扮 (109): its picture fills the width from the screen's top to the list's, and its last
   /// [skinFade] (the card and the band under it) whitens into the list. The stops are the white's measured over the
-  /// picture's dark edges, which give the same curve at every column.
+  /// picture's dark edges, which give the same curve at every column. Dark fades into its page the same way (252).
   static const skinFade = 62.0;
   static const skinFadeStops = [0.0, 0.086, 0.333, 0.538, 0.634, 1.0];
-  static const skinFadeColors = [
-    Color(0x00FFFFFF),
-    Color(0x1CFFFFFF),
-    Color(0x4DFFFFFF),
-    Color(0xCCFFFFFF),
-    Color(0xE6FFFFFF),
-    Color(0xFFFFFFFF),
-  ];
+  static const _skinFadeAlphas = [0x00, 0x1C, 0x4D, 0xCC, 0xE6, 0xFF];
+  static List<Color> get skinFadeColors => [for (final alpha in _skinFadeAlphas) background.withAlpha(alpha)];
 
   /// The text and icons over the picture when the skin asks for light text but names no colour. 109's are this
   /// white, at 87's places and sizes; the counts' rules go.
-  static Color get skinLightInk => tone(0xFFFFFFFF, 0xFF17181A);
+  static const skinLightInk = Color(0xFFFFFFFF);
 }
 
 /// The swipe back from a 推荐 card (03, 04 in local/differences, measured frame by frame): the page shrinks into a
@@ -3466,7 +3470,7 @@ abstract final class SettingsTheme {
   static const confirmWidth = 280.0;
   static const confirmRadius = 8.0;
   static const confirmDim = Color(0xB3000000);
-  static Color get confirm => BiliColors.card;
+  static Color get confirm => tone(0xFFFFFFFF, 0xFF242628);
   static const confirmTitleText = 16.0;
   static const confirmTitleLine = 22.0;
   static const confirmTitleWeight = FontWeight.w500;
@@ -8104,8 +8108,8 @@ abstract final class SettingsListTheme {
   static const switchBorder = 4 / 3;
   static const switchRight = 23 / 3;
   static Color get switchOn => BiliColors.pink;
-  static Color get switchOff => tone(0xFFC5C5C7, 0xFFC5C5C7); // night?
-  static Color get switchKnob => BiliColors.card;
+  static Color get switchOff => tone(0xFFC5C5C7, 0xFF525357);
+  static Color get switchKnob => tone(0xFFFFFFFF, 0xFFD7D9DB);
 
   /// A switch row with a second line (172-174): 177 px from hairline to hairline; the switch's middle sits a little
   /// above the row's, a one-line row's a little above too.
@@ -8157,6 +8161,12 @@ abstract final class SettingsListTheme {
   /// to, 订阅/预约通知 2 (one is between its second and third rows; ours goes at the end), 关注通知, 其他通知 and the
   /// last none.
   static const pushGroupEnd = 1 / 3;
+}
+
+/// 深色设置 (249): its one switch row, 175 px over a 2 px hairline where the playback pages' are 176 over 1.
+abstract final class DarkModeTheme {
+  static const rowHeight = 175 / 3;
+  static const rule = 2 / 3;
 }
 
 /// 首页's tab row (204): 直播 推荐 热门 动画 影视, 推荐 and 热门 side by side as pages. Filled by the tab row's builder.

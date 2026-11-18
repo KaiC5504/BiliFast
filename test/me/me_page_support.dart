@@ -9,6 +9,7 @@ import 'package:bilifast/account/keychain_store.dart';
 import 'package:bilifast/account/login_gate.dart';
 import 'package:bilifast/app/app_environment.dart';
 import 'package:bilifast/app/app_scope.dart';
+import 'package:bilifast/app/appearance.dart';
 import 'package:bilifast/app/route_observer.dart';
 import 'package:bilifast/friends/friends_route.dart';
 import 'package:bilifast/home/recent_store.dart';
@@ -168,7 +169,8 @@ class MeHarness {
 }
 
 /// 我的 above a 83 pt stand-in for the bottom bar, as MainShell lays it out (the page's bottom padding taken off), on
-/// KaiC's iPhone at [pixelRatio]; wrapped in a RepaintBoundary keyed `screen`.
+/// KaiC's iPhone at [pixelRatio]; wrapped in a RepaintBoundary keyed `screen`. [dark] starts it in 深色模式; the app
+/// redraws on the services' [AppearanceModel] as BiliFastApp does.
 Future<MeHarness> showMe(
   WidgetTester tester, {
   MeView view = const MeShown(kaiProfile, kaiCounts),
@@ -182,7 +184,9 @@ Future<MeHarness> showMe(
   WidgetBuilder? developerPage,
   bool checkAccount = false,
   Skin? skin,
+  bool dark = false,
 }) async {
+  BiliTheme.dark = dark;
   tester.view
     ..physicalSize = const Size(440, 956) * pixelRatio
     ..devicePixelRatio = pixelRatio
@@ -211,6 +215,7 @@ Future<MeHarness> showMe(
     pageApi: FakePageApi(),
     spaceApi: FakeSpaceApi(),
     meApi: FakeMeApi.demo(),
+    appearance: AppearanceModel.memory(dark: dark),
   );
   final shownTab = ValueNotifier(active);
   addTearDown(shownTab.dispose);
@@ -223,37 +228,40 @@ Future<MeHarness> showMe(
   final friends = <FriendsTab>[];
 
   await tester.pumpWidget(
-    MaterialApp(
-      theme: theme,
-      navigatorObservers: [pageRoutes],
-      builder: (context, child) => RepaintBoundary(
-        key: const ValueKey('screen'),
-        child: AppScope(services: services, child: child!),
-      ),
-      home: Scaffold(
-        backgroundColor: MeTheme.background,
-        body: Column(
-          children: [
-            Expanded(
-              child: ValueListenableBuilder(
-                valueListenable: shownTab,
-                builder: (context, active, _) => MediaQuery.removePadding(
-                  context: context,
-                  removeBottom: true,
-                  child: MePage(
-                    active: active,
-                    developerPage: developerPage,
-                    model: model,
-                    skin: skins,
-                    openLink: record,
-                    canOpenLink: (_) async => officialAppThere,
-                    openFriends: (_, {required tab}) async => friends.add(tab),
+    AppearanceRedraw(
+      model: services.appearance,
+      builder: (context) => MaterialApp(
+        theme: theme,
+        navigatorObservers: [pageRoutes],
+        builder: (context, child) => RepaintBoundary(
+          key: const ValueKey('screen'),
+          child: AppScope(services: services, child: child!),
+        ),
+        home: Scaffold(
+          backgroundColor: MeTheme.background,
+          body: Column(
+            children: [
+              Expanded(
+                child: ValueListenableBuilder(
+                  valueListenable: shownTab,
+                  builder: (context, active, _) => MediaQuery.removePadding(
+                    context: context,
+                    removeBottom: true,
+                    child: MePage(
+                      active: active,
+                      developerPage: developerPage,
+                      model: model,
+                      skin: skins,
+                      openLink: record,
+                      canOpenLink: (_) async => officialAppThere,
+                      openFriends: (_, {required tab}) async => friends.add(tab),
+                    ),
                   ),
                 ),
               ),
-            ),
-            const SizedBox(height: 83),
-          ],
+              const SizedBox(height: 83),
+            ],
+          ),
         ),
       ),
     ),
