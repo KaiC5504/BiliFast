@@ -84,6 +84,12 @@ class FakeMessageApi implements MessageApi {
   /// Sessions marked read, in order.
   final reads = <({int talkerId, int seqno})>[];
 
+  /// 置顶 (on) and 取消置顶, in order.
+  final tops = <({int talkerId, bool on})>[];
+
+  /// Sessions taken off the list with 删除, by talker, in order.
+  final removed = <int>[];
+
   final follows = <({int mid, bool on})>[];
   final pushes = <({int talkerId, bool on})>[];
 
@@ -157,15 +163,17 @@ class FakeMessageApi implements MessageApi {
     );
   });
 
+  /// Pinned sessions head the first page, the latest pinned first; the rest page newest first.
   @override
   Future<ChatSessionPage> sessions({int? next}) => _answer('sessions', 'sessions ${next ?? 0}', () {
-    final ordered = [...sessionList]..sort((a, b) => b.time.compareTo(a.time));
+    final pinned = [...sessionList.where((session) => session.top)]..sort((a, b) => b.topTs.compareTo(a.topTs));
+    final ordered = [...sessionList.where((session) => !session.top)]..sort((a, b) => b.time.compareTo(a.time));
     final start = next == null ? 0 : ordered.indexWhere((session) => session.time.millisecondsSinceEpoch < next);
-    if (start < 0) return const ChatSessionPage(sessions: []);
+    if (start < 0) return ChatSessionPage(sessions: next == null ? pinned : const []);
     final end = (start + pageSize).clamp(0, ordered.length);
     final page = ordered.sublist(start, end);
     return ChatSessionPage(
-      sessions: page,
+      sessions: [if (next == null) ...pinned, ...page],
       next: end < ordered.length ? page.last.time.millisecondsSinceEpoch : null,
     );
   });
@@ -204,6 +212,25 @@ class FakeMessageApi implements MessageApi {
         counts = counts.copyWith(chat: (counts.chat - unread).clamp(0, counts.chat));
         sessionList[index] = sessionList[index].copyWith(unread: 0, ackSeqno: seqno);
       });
+
+  @override
+  Future<void> setTop(ChatSession session, {required bool on}) =>
+      _answer('setTop', 'setTop ${session.talkerId} $on', () {
+        tops.add((talkerId: session.talkerId, on: on));
+        final index = _sessionIndex(session);
+        if (index < 0) return;
+        sessionList[index] = sessionList[index].copyWith(topTs: on ? DateTime.now().microsecondsSinceEpoch : 0);
+      });
+
+  @override
+  Future<void> removeSession(ChatSession session) => _answer('removeSession', 'removeSession ${session.talkerId}', () {
+    removed.add(session.talkerId);
+    final index = _sessionIndex(session);
+    if (index >= 0) sessionList.removeAt(index);
+  });
+
+  int _sessionIndex(ChatSession session) =>
+      sessionList.indexWhere((each) => each.talkerId == session.talkerId && each.sessionType == session.sessionType);
 
   @override
   Future<ChatMessage> send(int talkerId, String text) => _answer('send', 'send $talkerId', () {

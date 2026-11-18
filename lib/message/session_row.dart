@@ -1,4 +1,5 @@
 import 'package:bili_core/api.dart';
+import 'package:flutter/semantics.dart';
 import 'package:flutter/widgets.dart';
 
 import '../comments/comment_badges.dart' show DecorImage;
@@ -35,9 +36,16 @@ Widget messageLine(String text, TextStyle style, {Key? key, TextAlign align = Te
 );
 
 /// A row of 消息's session list (196): the face (or a notice box's pink one) with its badge and red count, the name,
-/// the date and the last message.
+/// the date and the last message; a pinned one on grey (262).
 class SessionRow extends StatelessWidget {
-  const SessionRow({super.key, required this.session, required this.now, required this.onTap, this.counts = true});
+  const SessionRow({
+    super.key,
+    required this.session,
+    required this.now,
+    required this.onTap,
+    this.counts = true,
+    this.actions = const {},
+  });
 
   final ChatSession session;
 
@@ -47,6 +55,9 @@ class SessionRow extends StatelessWidget {
 
   /// 消息提醒 is on: the red count shows.
   final bool counts;
+
+  /// What its swipe offers (259), for VoiceOver.
+  final Map<CustomSemanticsAction, VoidCallback> actions;
 
   @override
   Widget build(BuildContext context) {
@@ -66,12 +77,14 @@ class SessionRow extends StatelessWidget {
       label: session.name,
       value: unread > 0 ? '${TabCount.label(unread)}条未读' : null,
       onTap: onTap,
+      customSemanticsActions: actions.isEmpty ? null : actions,
       excludeSemantics: true,
       child: PressHighlight(
         key: ValueKey('message-session-$id'),
         onTap: onTap,
-        child: SizedBox(
+        child: Container(
           height: MessageTabTheme.row,
+          color: session.top ? MessageTabTheme.pinnedFill : null,
           child: Stack(
             clipBehavior: Clip.none,
             children: [

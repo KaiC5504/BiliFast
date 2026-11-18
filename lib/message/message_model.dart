@@ -237,6 +237,7 @@ class MessageModel extends ChangeNotifier {
         _sessions.addAll(fresh);
         added = fresh.length;
       }
+      _sort();
       _next = page.next;
       // A page that adds no one ends the list, so nothing asks on and on.
       _hasMore = page.next != null && added > 0;
@@ -257,6 +258,65 @@ class MessageModel extends ChangeNotifier {
   int _indexOf(ChatSession session) => _sessions.indexWhere(
     (each) => each.talkerId == session.talkerId && each.sessionType == session.sessionType && each.box == session.box,
   );
+
+  /// Pinned sessions first, the latest pinned on top (262), then the rest newest first. Where get_sessions puts a
+  /// pinned one is unconfirmed, so the list doesn't count on it.
+  void _sort() {
+    final indexed = _sessions.indexed.toList()
+      ..sort((a, b) {
+        final (i, x) = a;
+        final (j, y) = b;
+        if (x.top != y.top) return x.top ? -1 : 1;
+        final order = x.top ? y.topTs.compareTo(x.topTs) : y.time.compareTo(x.time);
+        return order != 0 ? order : i.compareTo(j);
+      });
+    _sessions
+      ..clear()
+      ..addAll(indexed.map((entry) => entry.$2));
+  }
+
+  /// 置顶 ([on]) or 取消置顶 on [session]'s swipe (259): once Bilibili accepts it, the row goes to the top, or back
+  /// among the rest by its time. Throws when it is refused, the row left where it was.
+  Future<void> setTop(ChatSession session, {required bool on}) async {
+    if (_disposed || !_loggedIn) return;
+    final generation = _generation;
+    try {
+      await api.setTop(session, on: on);
+    } catch (error) {
+      _logger.warn(LogCategory.api, 'message top', {'on': on, 'result': searchLogReason(error)});
+      rethrow;
+    }
+    if (!_current(generation)) return;
+    _logger.info(LogCategory.api, 'message top', {'on': on, 'result': 'ok'});
+    final index = _indexOf(session);
+    if (index < 0) return;
+    _sessions[index] = _sessions[index].copyWith(topTs: on ? _now().microsecondsSinceEpoch : 0);
+    _sort();
+    _notify();
+  }
+
+  /// 删除 on [session]'s swipe (260): once Bilibili accepts it, the row leaves the list and its unread no longer
+  /// counts. Throws when it is refused, the row left as it was.
+  Future<void> removeSession(ChatSession session) async {
+    if (_disposed || !_loggedIn) return;
+    final generation = _generation;
+    try {
+      await api.removeSession(session);
+    } catch (error) {
+      _logger.warn(LogCategory.api, 'message remove', {'result': searchLogReason(error)});
+      rethrow;
+    }
+    if (!_current(generation)) return;
+    _logger.info(LogCategory.api, 'message remove', {'result': 'ok'});
+    final index = _indexOf(session);
+    if (index < 0) return;
+    final unread = _sessions.removeAt(index).unread;
+    if (unread > 0) {
+      _read(_unread.copyWith(chat: math.max(0, _unread.chat - unread)), const {_Count.chat}, listChanged: true);
+    } else {
+      _notify();
+    }
+  }
 
   /// [feed]'s list was opened: its count goes to 0 (回复与@ clears [NoticeFeed.reply] and [NoticeFeed.at]).
   void feedOpened(NoticeFeed feed) {

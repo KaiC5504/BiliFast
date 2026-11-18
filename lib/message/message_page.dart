@@ -3,6 +3,7 @@ import 'dart:math' as math;
 
 import 'package:bili_core/api.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/semantics.dart';
 import 'package:flutter/services.dart';
 
 import '../app/app_environment.dart';
@@ -17,10 +18,12 @@ import '../shared/release_refresh.dart';
 import '../shared/theme.dart';
 import '../shared/toast.dart';
 import '../skin/skin.dart';
+import 'feed/feed_page_state.dart' show FeedPageState;
 import 'message_model.dart';
 import 'message_routes.dart';
 import 'message_sheets.dart';
 import 'session_row.dart';
+import 'session_swipe.dart';
 
 /// The bottom bar's 消息 (196): the header with 一键已读 and ⋮, the three entries, and the session list.
 class MessagePage extends StatefulWidget {
@@ -68,6 +71,10 @@ class _MessagePageState extends State<MessagePage> with SkinRefreshRoom, Widgets
   DateTime? _loadedAt;
 
   final _scroll = ScrollController();
+
+  /// The chat row whose 置顶 and 删除 are out (259).
+  final _swipes = SessionSwipes();
+
   late final _paging = FollowPaging(
     canAsk: () {
       final model = _model!;
@@ -114,6 +121,7 @@ class _MessagePageState extends State<MessagePage> with SkinRefreshRoom, Widgets
       widget.reloads?.addListener(_reload);
     }
     if (widget.active && !oldWidget.active) _activateAfterBuild();
+    if (!widget.active) _swipes.closeAll();
   }
 
   /// The model tells its listeners as a refresh starts, which mustn't happen while the shell is building.
@@ -131,6 +139,7 @@ class _MessagePageState extends State<MessagePage> with SkinRefreshRoom, Widgets
       ..showRequests.removeListener(_showRequested);
     _paging.dispose();
     _scroll.dispose();
+    _swipes.dispose();
     super.dispose();
   }
 
@@ -233,6 +242,7 @@ class _MessagePageState extends State<MessagePage> with SkinRefreshRoom, Widgets
   /// With no session shown the list's own state stands for it.
   Future<void> _reload() async {
     if (_refreshing != null || _environment.account is! LoggedIn) return;
+    _swipes.closeAll();
     if (_model!.sessions.isEmpty) {
       unawaited(_refresh());
       return;
@@ -304,7 +314,82 @@ class _MessagePageState extends State<MessagePage> with SkinRefreshRoom, Widgets
 
   /// The pages clear their own counts as they open (a notification opens them too).
   void _openFeed(NoticeFeed feed) {
+    if (_swipes.takesTap()) return;
     unawaited(feed == NoticeFeed.like ? openLikes(context) : openReplies(context));
+  }
+
+  /// 置顶 or 取消置顶 (259): the row closes at once, and goes to the top or back in time order once Bilibili agrees.
+  Future<void> _setTop(ChatSession session) async {
+    _swipes.closeAll();
+    try {
+      await _model!.setTop(session, on: !session.top);
+    } on Exception catch (error) {
+      _actionFailed(error);
+    }
+  }
+
+  /// 删除 (259): the row stays open under 260's alert; 确认 takes it off the list once Bilibili agrees.
+  Future<void> _delete(ChatSession session) async {
+    final confirmed = await confirmDeleteChat(context);
+    if (!mounted) return;
+    if (!confirmed) {
+      _swipes.closeAll();
+      return;
+    }
+    try {
+      await _model!.removeSession(session);
+    } on Exception catch (error) {
+      _swipes.closeAll();
+      _actionFailed(error);
+    }
+  }
+
+  /// The model has logged it.
+  void _actionFailed(Exception error) {
+    if (!mounted) return;
+    if (error is BiliError && error.needsLogin) {
+      unawaited(_login());
+    } else {
+      showToast(context, FeedPageState.failureMessage(error));
+    }
+  }
+
+  static String _rowId(ChatSession session) => session.box?.name ?? '${session.sessionType}-${session.talkerId}';
+
+  /// Notice boxes don't swipe (KaiC: no screenshot of one swiped).
+  Widget _sessionRow(BuildContext context, ChatSession session, {required DateTime now, required bool counts}) {
+    final id = _rowId(session);
+    final name = session.box?.name ?? '${session.talkerId}';
+    final actions = session.box != null
+        ? const <SwipeAction>[]
+        : [
+            SwipeAction(
+              key: ValueKey('message-session-top-$name'),
+              label: session.top ? '取消置顶' : '置顶',
+              fill: MessageTabTheme.actionTopFill,
+              onTap: () => unawaited(_setTop(session)),
+            ),
+            SwipeAction(
+              key: ValueKey('message-session-delete-$name'),
+              label: '删除',
+              fill: MessageTabTheme.actionDeleteFill,
+              onTap: () => unawaited(_delete(session)),
+            ),
+          ];
+    return SessionSwipe(
+      key: ValueKey(id),
+      id: id,
+      swipes: _swipes,
+      actions: actions,
+      onTap: () => unawaited(openMessageChat(context, session)),
+      builder: (context, onTap) => SessionRow(
+        session: session,
+        now: now,
+        counts: counts,
+        onTap: onTap,
+        actions: {for (final action in actions) CustomSemanticsAction(label: action.label): action.onTap},
+      ),
+    );
   }
 
   @override
@@ -327,12 +412,18 @@ class _MessagePageState extends State<MessagePage> with SkinRefreshRoom, Widgets
       value: light ? SystemUiOverlayStyle.light : SystemUiOverlayStyle.dark,
       child: Material(
         color: MessageTabTheme.page,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            _Header(skin: head, onReadAll: () => unawaited(_readAll()), onMore: _more),
-            Expanded(child: _body(context)),
-          ],
+        child: Listener(
+          behavior: HitTestBehavior.translucent,
+          onPointerDown: (_) => _swipes.pointerDown(),
+          onPointerUp: (_) => _swipes.pointerUp(),
+          onPointerCancel: (_) => _swipes.pointerUp(),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              _Header(skin: head, onReadAll: () => unawaited(_readAll()), onMore: _more),
+              Expanded(child: _body(context)),
+            ],
+          ),
         ),
       ),
     );
@@ -381,84 +472,91 @@ class _MessagePageState extends State<MessagePage> with SkinRefreshRoom, Widgets
     final bottom = MediaQuery.paddingOf(context).bottom;
     return _paging.listen(
       _scroll,
-      CustomScrollView(
-        key: const ValueKey('message-list'),
-        controller: _scroll,
-        physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
-        slivers: [
-          ReleaseRefreshControl(
-            refreshTriggerPullDistance: refreshTrigger,
-            refreshIndicatorExtent: room,
-            builder: _reloadHeader ? null : loadingTvRefreshIndicator,
-            onRefresh: _reloadHeader ? null : _pull,
-          ),
-          SliverToBoxAdapter(
-            child: AnimatedContainer(
-              duration: _still
-                  ? Duration.zero
-                  : _reloadHeader
-                  ? MessageTabTheme.reloadHeader
-                  : MessageTabTheme.reloadCollapse,
-              curve: Curves.easeInOut,
-              height: _reloadHeader ? room : 0,
-              onEnd: () {
-                if (!_reloadHeader && mounted) setState(() => _reloadRoom = false);
-              },
-              child: _reloadRoom
-                  ? ClipRect(
-                      child: OverflowBox(
-                        key: const ValueKey('message-reload'),
-                        alignment: Alignment.bottomCenter,
-                        minHeight: room,
-                        maxHeight: room,
-                        child: Center(child: RefreshLoading(room: room)),
-                      ),
-                    )
-                  : null,
-            ),
-          ),
-          SliverToBoxAdapter(
-            child: _Entries(
-              replies: counts ? unread.reply + unread.at : 0,
-              likes: counts ? unread.like : 0,
-              onReplies: () => _openFeed(NoticeFeed.reply),
-              onLikes: () => _openFeed(NoticeFeed.like),
-              onFans: () => unawaited(openNewFans(context)),
-            ),
-          ),
-          if (sessions.isEmpty)
-            SliverFillRemaining(
-              hasScrollBody: false,
-              child: Padding(
-                padding: EdgeInsets.only(top: MessageTabTheme.stateTop, bottom: bottom),
-                child: Align(alignment: Alignment.topCenter, child: _state(model)),
-              ),
-            )
-          else ...[
-            SliverList.builder(
-              itemCount: sessions.length,
-              itemBuilder: (context, index) {
-                final session = sessions[index];
-                return SessionRow(
-                  session: session,
-                  now: now,
-                  counts: counts,
-                  onTap: () => unawaited(openMessageChat(context, session)),
-                );
-              },
+      NotificationListener<ScrollStartNotification>(
+        onNotification: (notification) {
+          if (notification.dragDetails != null) _swipes.closeAll();
+          return false;
+        },
+        child: CustomScrollView(
+          key: const ValueKey('message-list'),
+          controller: _scroll,
+          physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
+          slivers: [
+            ReleaseRefreshControl(
+              refreshTriggerPullDistance: refreshTrigger,
+              refreshIndicatorExtent: room,
+              builder: _reloadHeader ? null : loadingTvRefreshIndicator,
+              onRefresh: _reloadHeader ? null : _pull,
             ),
             SliverToBoxAdapter(
-              child: FollowFooter(
-                keyPrefix: 'message',
-                loading: model.hasMore && model.error == null,
-                error: model.error == null ? null : requestFailureMessage(model.error!),
-                isEnd: false,
-                onRetry: () => unawaited(model.nextPageFailed ? model.retryMore() : _pull(toast: false)),
+              child: AnimatedContainer(
+                duration: _still
+                    ? Duration.zero
+                    : _reloadHeader
+                    ? MessageTabTheme.reloadHeader
+                    : MessageTabTheme.reloadCollapse,
+                curve: Curves.easeInOut,
+                height: _reloadHeader ? room : 0,
+                onEnd: () {
+                  if (!_reloadHeader && mounted) setState(() => _reloadRoom = false);
+                },
+                child: _reloadRoom
+                    ? ClipRect(
+                        child: OverflowBox(
+                          key: const ValueKey('message-reload'),
+                          alignment: Alignment.bottomCenter,
+                          minHeight: room,
+                          maxHeight: room,
+                          child: Center(child: RefreshLoading(room: room)),
+                        ),
+                      )
+                    : null,
               ),
             ),
-            SliverToBoxAdapter(child: SizedBox(height: bottom)),
+            SliverToBoxAdapter(
+              child: _Entries(
+                replies: counts ? unread.reply + unread.at : 0,
+                likes: counts ? unread.like : 0,
+                onReplies: () => _openFeed(NoticeFeed.reply),
+                onLikes: () => _openFeed(NoticeFeed.like),
+                onFans: () {
+                  if (!_swipes.takesTap()) unawaited(openNewFans(context));
+                },
+              ),
+            ),
+            if (sessions.isEmpty)
+              SliverFillRemaining(
+                hasScrollBody: false,
+                child: Padding(
+                  padding: EdgeInsets.only(top: MessageTabTheme.stateTop, bottom: bottom),
+                  child: Align(alignment: Alignment.topCenter, child: _state(model)),
+                ),
+              )
+            else ...[
+              // Keyed, so a row's swipe stays with it when 置顶 moves it.
+              SliverList.builder(
+                itemCount: sessions.length,
+                findChildIndexCallback: (key) {
+                  final index = sessions.indexWhere((session) => ValueKey(_rowId(session)) == key);
+                  return index < 0 ? null : index;
+                },
+                itemBuilder: (context, index) => _sessionRow(context, sessions[index], now: now, counts: counts),
+              ),
+              SliverToBoxAdapter(
+                child: !model.hasMore && model.error == null
+                    ? const _ListEnd()
+                    : FollowFooter(
+                        keyPrefix: 'message',
+                        loading: model.hasMore && model.error == null,
+                        error: model.error == null ? null : requestFailureMessage(model.error!),
+                        isEnd: false,
+                        onRetry: () => unawaited(model.nextPageFailed ? model.retryMore() : _pull(toast: false)),
+                      ),
+              ),
+              SliverToBoxAdapter(child: SizedBox(height: bottom)),
+            ],
           ],
-        ],
+        ),
       ),
     );
   }
@@ -496,6 +594,31 @@ class _MessagePageState extends State<MessagePage> with SkinRefreshRoom, Widgets
       ],
     );
   }
+}
+
+/// 261: the list's end under its last row.
+class _ListEnd extends StatelessWidget {
+  const _ListEnd();
+
+  @override
+  Widget build(BuildContext context) => SizedBox(
+    key: const ValueKey('message-end'),
+    height: MessageTabTheme.endFoot,
+    child: Padding(
+      padding: const EdgeInsets.only(top: MessageTabTheme.endCentre - MessageTabTheme.endLine / 2),
+      child: Align(
+        alignment: Alignment.topCenter,
+        child: SizedBox(
+          height: MessageTabTheme.endLine,
+          child: messageLine(
+            '我可是有底线的_(:3ゝ∠)_',
+            messageStyle(MessageTabTheme.endText, MessageTabTheme.endInk, line: MessageTabTheme.endLine),
+            align: TextAlign.center,
+          ),
+        ),
+      ),
+    ),
+  );
 }
 
 /// 196's header: the 装扮's `head_bg` or white, 消息 on the row under the status bar, the broom and ⋮ at its right.

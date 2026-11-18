@@ -17,6 +17,8 @@ const _sessionsPath = '/session_svr/v1/session_svr/get_sessions';
 const _cardsPath = '/x/im/user_infos';
 const _messagesPath = '/svr_sync/v1/svr_sync/fetch_session_msgs';
 const _ackPath = '/session_svr/v1/session_svr/update_ack';
+const _topPath = '/session_svr/v1/session_svr/set_top';
+const _removePath = '/session_svr/v1/session_svr/remove_session';
 const _sendPath = '/web_im/v1/web_im/send_msg';
 const _systemPath = '/x/sys-msg/query_notify_list';
 const _cursorPath = '/x/sys-msg/update_cursor';
@@ -368,19 +370,57 @@ void main() {
       expect((person.talkerId, person.sessionType, person.name, person.face), (20000921, 1, '', ''));
       expect(person.lastText, '[自动回复] 谢谢关注 测试');
       expect((person.unread, person.ackSeqno, person.maxSeqno, person.top), (2, 100, 102, true));
+      expect(person.topTs, 1760000000000000);
       expect(person.time.microsecondsSinceEpoch, 1760000500000001);
       expect(person.box, isNull);
 
       expect((helper.name, helper.face), ('UP主小助手', 'https://message.biliimg.com/bfs/im/up.png'));
       expect(helper.box, NoticeBox.creator);
       expect(helper.lastText, '测试通知标题');
-      expect(helper.top, isFalse);
+      expect((helper.top, helper.topTs, service.top), (false, 0, false));
 
       expect((service.name, service.box, service.unread), ('服务通知', NoticeBox.service, 1));
       expect(picture.lastText, '[图片]');
       expect(withdrawn.lastText, '对方撤回了一条消息');
       expect((group.sessionType, group.name, group.face), (2, '测试应援团', 'https://i0.hdslb.com/bfs/face/g.jpg'));
       expect(group.lastText, '欢迎测试入群');
+    });
+
+    test('置顶 posts set_top on api.vc: op_type 0 pins, 1 unpins, the session and the csrf token twice', () async {
+      http.routes['POST $_topPath'] = (200, _ok);
+      await client.setChatTop(20000921, on: true);
+      await client.setChatTop(221082140, on: false, sessionType: 2);
+      final [pin, unpin] = http.requestsTo(_topPath);
+      expect((pin.method, pin.url.host, pin.url.query), ('POST', _vc, ''));
+      expect(form(pin), {
+        'talker_id': '20000921',
+        'session_type': '1',
+        'op_type': '0',
+        ..._web,
+        'csrf_token': 'MADE-UP-CSRF',
+        'csrf': 'MADE-UP-CSRF',
+      });
+      expect((form(unpin)['talker_id'], form(unpin)['session_type'], form(unpin)['op_type']), ('221082140', '2', '1'));
+    });
+
+    test('删除 posts remove_session on api.vc with the session; a refusal throws its code', () async {
+      http.routes['POST $_removePath'] = (200, _ok);
+      await client.removeChatSession(20000921);
+      final request = http.requestsTo(_removePath).single;
+      expect((request.method, request.url.host, request.url.query), ('POST', _vc, ''));
+      expect(form(request), {
+        'talker_id': '20000921',
+        'session_type': '1',
+        ..._web,
+        'csrf_token': 'MADE-UP-CSRF',
+        'csrf': 'MADE-UP-CSRF',
+      });
+
+      http.routes['POST $_removePath'] = (200, '{"code":-400,"msg":"请求错误","message":"请求错误","ttl":1}');
+      await expectLater(
+        client.removeChatSession(20000921),
+        throwsA(isA<BiliAPIError>().having((e) => e.code, 'code', -400)),
+      );
     });
 
     test('user cards name the bare sessions: 大会员 pink, the 大, verify and the frame', () async {
@@ -715,6 +755,8 @@ void main() {
         () => client.deleteNotice(NoticeFeed.reply, 1),
         () => client.setNoticeNotify(NoticeFeed.like, 1, on: false),
         () => client.ackChat(1, seqno: 1),
+        () => client.setChatTop(1, on: true),
+        () => client.removeChatSession(1),
         () => client.sendChatText(senderMid: 1, talkerId: 2, text: '测试'),
         () => client.ackSystemNotices(1),
         () => client.setChatPush(1, on: false),
@@ -746,6 +788,8 @@ void main() {
       const refused = BiliAPIError(code: GuardedTransport.readOnlyCode, message: 'PC 只读，未发送');
       await expectLater(api.ackChat(1, seqno: 2), throwsA(refused));
       await expectLater(api.ackSystemNotices(3), throwsA(refused));
+      await expectLater(api.setChatTop(1, on: true), throwsA(refused));
+      await expectLater(api.removeChatSession(1), throwsA(refused));
       await expectLater(api.sendChatText(senderMid: 1, talkerId: 2, text: '测试'), throwsA(refused));
       await expectLater(api.deleteNotice(NoticeFeed.like, 4), throwsA(refused));
       await expectLater(api.setNoticeSetting(NoticeSettingKind.likes, NoticeAudience.off), throwsA(refused));

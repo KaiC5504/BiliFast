@@ -11,8 +11,28 @@ import 'message_routes.dart';
 import 'session_row.dart' show messageStyle;
 
 /// 一键已读's alert (211): true once 清除 is pressed; 取消 or a tap on the dim gives false.
-Future<bool> confirmReadAll(BuildContext context) async =>
-    await Navigator.of(context).push(_AlertRoute(reduceMotion: MediaQuery.disableAnimationsOf(context))) ?? false;
+Future<bool> confirmReadAll(BuildContext context) =>
+    _confirm(context, const _AlertWords(key: 'message-read-all', title: '一键已读', message: '是否清除全部新消息提醒？', action: '清除'));
+
+/// 删除 on a chat's swipe (260), the same alert as 211's: true once 确认 is pressed.
+Future<bool> confirmDeleteChat(BuildContext context) => _confirm(
+  context,
+  const _AlertWords(key: 'message-delete', title: '删除聊天记录', message: '删除后所有聊天记录将被清空', action: '确认'),
+);
+
+Future<bool> _confirm(BuildContext context, _AlertWords words) async =>
+    await Navigator.of(context).push(_AlertRoute(words, reduceMotion: MediaQuery.disableAnimationsOf(context))) ??
+    false;
+
+/// An alert's words, and the key its box and buttons are found by.
+class _AlertWords {
+  const _AlertWords({required this.key, required this.title, required this.message, required this.action});
+
+  final String key;
+  final String title;
+  final String message;
+  final String action;
+}
 
 /// ⋮'s rows (212), top to bottom.
 enum MessageSheetChoice {
@@ -75,8 +95,9 @@ Future<void> showMessageMoreSheet(
 }
 
 class _AlertRoute extends PopupRoute<bool> {
-  _AlertRoute({required this.reduceMotion});
+  _AlertRoute(this.words, {required this.reduceMotion});
 
+  final _AlertWords words;
   final bool reduceMotion;
 
   @override
@@ -91,7 +112,7 @@ class _AlertRoute extends PopupRoute<bool> {
   @override
   Duration get transitionDuration => reduceMotion ? Duration.zero : MessageTabTheme.alertMotion;
 
-  /// Centred between the status bar and the home indicator, as 211's.
+  /// Centred between the status bar and the home indicator, as 211's and 260's.
   @override
   Widget buildPage(BuildContext context, Animation<double> animation, Animation<double> secondaryAnimation) => SafeArea(
     child: Center(
@@ -99,7 +120,8 @@ class _AlertRoute extends PopupRoute<bool> {
         opacity: animation,
         child: ScaleTransition(
           scale: Tween(begin: MessageTabTheme.alertStartScale, end: 1.0).animate(animation),
-          child: _ReadAllAlert(
+          child: _Alert(
+            words: words,
             onCancel: () => Navigator.of(context).pop(false),
             onConfirm: () => Navigator.of(context).pop(true),
           ),
@@ -109,9 +131,10 @@ class _AlertRoute extends PopupRoute<bool> {
   );
 }
 
-class _ReadAllAlert extends StatelessWidget {
-  const _ReadAllAlert({required this.onCancel, required this.onConfirm});
+class _Alert extends StatelessWidget {
+  const _Alert({required this.words, required this.onCancel, required this.onConfirm});
 
+  final _AlertWords words;
   final VoidCallback onCancel;
   final VoidCallback onConfirm;
 
@@ -127,7 +150,7 @@ class _ReadAllAlert extends StatelessWidget {
       ),
     );
     return Container(
-      key: const ValueKey('message-read-all'),
+      key: ValueKey(words.key),
       width: MessageTabTheme.alertWidth,
       clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
@@ -143,7 +166,7 @@ class _ReadAllAlert extends StatelessWidget {
             child: Stack(
               children: [
                 line(
-                  '一键已读',
+                  words.title,
                   messageStyle(
                     MessageTabTheme.alertTitleText,
                     MessageTabTheme.alertTitle,
@@ -154,7 +177,7 @@ class _ReadAllAlert extends StatelessWidget {
                   MessageTabTheme.alertTitleLine,
                 ),
                 line(
-                  '是否清除全部新消息提醒？',
+                  words.message,
                   messageStyle(
                     MessageTabTheme.alertMessageText,
                     MessageTabTheme.alertMessage,
@@ -177,6 +200,7 @@ class _ReadAllAlert extends StatelessWidget {
               children: [
                 Expanded(
                   child: _AlertButton(
+                    keyPrefix: words.key,
                     label: '取消',
                     colour: MessageTabTheme.alertCancel,
                     shift: -MessageTabTheme.alertSpread / 2,
@@ -185,7 +209,8 @@ class _ReadAllAlert extends StatelessWidget {
                 ),
                 Expanded(
                   child: _AlertButton(
-                    label: '清除',
+                    keyPrefix: words.key,
+                    label: words.action,
                     colour: MessageTabTheme.alertAction,
                     shift: MessageTabTheme.alertSpread / 2,
                     onTap: onConfirm,
@@ -201,8 +226,15 @@ class _ReadAllAlert extends StatelessWidget {
 }
 
 class _AlertButton extends StatefulWidget {
-  const _AlertButton({required this.label, required this.colour, required this.shift, required this.onTap});
+  const _AlertButton({
+    required this.keyPrefix,
+    required this.label,
+    required this.colour,
+    required this.shift,
+    required this.onTap,
+  });
 
+  final String keyPrefix;
   final String label;
   final Color colour;
 
@@ -228,7 +260,7 @@ class _AlertButtonState extends State<_AlertButton> {
     onTap: widget.onTap,
     excludeSemantics: true,
     child: GestureDetector(
-      key: ValueKey('message-read-all-${widget.label}'),
+      key: ValueKey('${widget.keyPrefix}-${widget.label}'),
       behavior: HitTestBehavior.opaque,
       onTap: widget.onTap,
       onTapDown: (_) => _press(true),
