@@ -3598,7 +3598,10 @@ abstract final class HomeTabBarTheme {
   /// takes the page's grey (110's grey starts at 142 pt). The field is filled white with no rim; the avatar, the
   /// field's ink and 推荐's place are 01's.
   static Color get headDivider => BiliColors.pageGrey;
-  static Color get headField => BiliColors.card;
+  /// Dressed, the field and its ink are the day's at night too, as the official app keeps them (KaiC).
+  static const headField = Color(0xFFFFFFFF);
+  static const headFieldInk = Color(0xFF61666D);
+  static const headFieldPressed = Color(0x14000000);
 
   /// The bar dressed by the 装扮 (109, 110), its labels where 01's are, in the skin's colours. On both shots every
   /// icon's ink is 41 pt tall (859-900 pt) and centred 19/3 pt under the bar's top, so its 60 × 45 box (fit centre,
@@ -6853,6 +6856,10 @@ abstract final class PadHomeTheme {
   static const fieldGlyph = 13.0;
   static const fieldGlyphLead = 16.5;
   static Color get fieldGlyphInk => tone(0xFF999999, 0xFF757A81);
+
+  /// The dressed field's ink, the day's at night too (see [HomeTabBarTheme.headField]).
+  static const headFieldInk = Color(0xFF9499A0);
+  static const headFieldGlyphInk = Color(0xFF999999);
   static const fieldTextStart = 35.5;
   static const fieldTextEnd = 17.0;
   static const fieldText = 13.0;

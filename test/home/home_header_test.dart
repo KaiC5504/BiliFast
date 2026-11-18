@@ -380,7 +380,7 @@ void main() {
     expect(tester.binding.transientCallbackCount, 0);
   });
 
-  testWidgets('dressed at night, the search field takes the dark card, as it does undressed', (tester) async {
+  testWidgets('dressed at night, the search field and its ink stay as by day, as the official app keeps them', (tester) async {
     await show(tester, phone: true, skin: _pictures.skin());
     BiliTheme.dark = true;
     redrawAll(tester.element(find.byType(MainShell)));
@@ -388,14 +388,15 @@ void main() {
     final shots = Platform.environment['BILIFAST_SHOTS'];
     if (shots != null) await saveShot(tester, find.byKey(_screen), '$shots/dressed-dark.png');
     final field = tester.widget<Container>(find.byKey(const ValueKey('home-search-field')));
-    expect((field.decoration! as ShapeDecoration).color, const Color(0xFF17181A));
+    expect((field.decoration! as ShapeDecoration).color, const Color(0xFFFFFFFF));
+    expect(tester.widget<Text>(find.byKey(const ValueKey('home-search-word'))).style?.color, const Color(0xFF61666D));
     final fills = tester
         .renderObjectList<RenderDecoratedBox>(
           find.descendant(of: find.byKey(const ValueKey('home-search-field')), matching: find.byType(DecoratedBox)),
         )
         .where((box) => box.position == DecorationPosition.background)
         .map((box) => (box.decoration as ShapeDecoration).color);
-    expect(fills.first, const Color(0xFF17181A));
+    expect(fills.first, const Color(0xFFFFFFFF));
   });
 
   testWidgets("a 装扮's header folds too: its pictures move up with it, cut at the screen's top, the magnifier in the "
