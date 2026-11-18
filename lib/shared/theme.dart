@@ -6009,15 +6009,15 @@ abstract final class DynamicCardTheme {
   /// a post or a repost, it fills the lone tall frame from its top (29: 240 wide from the gutter, 475:357.5).
   static const longPicture = 2.6;
 
-  /// 长图 on a long picture's bottom right (29): 12 pt white on half black, 4 in at the sides, as tall as its line,
-  /// corners of 2; 2 from the frame's right. Its bottom is under the bar on 29: 5.67 is where it sits if the frame is
-  /// the lone tall one.
+  /// 长图 on a long picture's bottom right (29): 12 pt white on half black, 18 tall and 4 in at the sides, corners of
+  /// 2; 2 from the frame's right. Its bottom is under the bar on 29: 5 is where it sits if the frame is the lone tall
+  /// one.
   static const longLabelText = 12.0;
-  static const longLabelHeight = 50 / 3;
+  static const longLabelHeight = 18.0;
   static const longLabelPadding = 4.0;
   static const longLabelRadius = 2.0;
   static const longLabelRight = 2.0;
-  static const longLabelBottom = 17 / 3;
+  static const longLabelBottom = 5.0;
   static const longLabelInk = Color(0xFFFFFFFF);
   static const longLabelFill = Color(0x80000000);
 
