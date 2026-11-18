@@ -114,7 +114,8 @@ class RemoteImage extends StatelessWidget {
   final bool fadeIn;
 
   /// Where the picture sits in its box. Off the centre (a long picture shown from its top) it is asked whole by the
-  /// box's width ([widthImageUrl]): the CDN's own crop keeps the centre. A [cover] or a [cdnSuffix] ignores it.
+  /// box's width ([widthImageUrl]), as the CDN's own crop keeps the centre, and only the part the box shows is kept
+  /// once decoded ([StoredNetworkImage.alignment]). A [cover] or a [cdnSuffix] ignores it.
   final Alignment alignment;
 
   /// Drawn over the picture once it is in, never over [placeholder] or [fallback]: a cover's shade.
@@ -182,7 +183,8 @@ class RemoteImage extends StatelessWidget {
     return ok;
   }
 
-  /// Keyed by the address and a cover's box, so a precache and its draw of one box share one download and one decode.
+  /// Keyed by the address and the box (a cover's, or an off-centre picture's), so a precache and its draw of one box
+  /// share one download and one decode.
   static StoredNetworkImage _provider(
     BuildContext context,
     String source,
@@ -217,14 +219,18 @@ class RemoteImage extends StatelessWidget {
       );
     }
     final width = _bucket(pixels.width);
+    final height = _bucket(pixels.height);
     if (alignment != Alignment.center) {
+      final whole = widthImageUrl(source, width: width);
+      final centre = sizedImageUrl(source, width: width, height: height);
       return StoredNetworkImage(
-        widthImageUrl(source, width: width),
+        whole,
         headers: BiliClient.mediaHeaders,
-        still: !animates(source),
+        box: Size(_exact(pixels.width).toDouble(), _exact(pixels.height).toDouble()),
+        alignment: alignment,
+        centreFallback: centre == whole ? null : centre,
       );
     }
-    final height = _bucket(pixels.height);
     return StoredNetworkImage(
       sizedImageUrl(source, width: width, height: height),
       headers: BiliClient.mediaHeaders,
@@ -282,7 +288,16 @@ class RemoteImage extends StatelessWidget {
 /// the size suffix, and a moving picture decodes a frame every few tens of ms for as long as it is on screen. A still
 /// one is cached under its own key, so it never shares an entry with the moving one.
 class StoredNetworkImage extends ImageProvider<NetworkImage> implements NetworkImage {
-  const StoredNetworkImage(this.url, {this.headers, this.still = true, this.box, this.preset, this.jpegFallback});
+  const StoredNetworkImage(
+    this.url, {
+    this.headers,
+    this.still = true,
+    this.box,
+    this.preset,
+    this.jpegFallback,
+    this.alignment,
+    this.centreFallback,
+  });
 
   @override
   final String url;
@@ -292,9 +307,19 @@ class StoredNetworkImage extends ImageProvider<NetworkImage> implements NetworkI
 
   final bool still;
 
-  /// A cover's box in device pixels. A larger answer (a preset, an address that can't take the suffix) is decoded only
-  /// as large as covering the box needs, so the box stays in the key. Always still.
+  /// The box in device pixels of a cover, or of a picture kept in part ([alignment]). A larger answer (a preset, an
+  /// address that can't take the suffix) is decoded only as large as covering the box needs, so the box stays in the
+  /// key. Always still.
   final Size? box;
+
+  /// With a [box]: only the part covering the box at this alignment is kept. A long picture asked whole by the box's
+  /// width ([widthImageUrl]) is decoded at its full height once, then let go, so the image cache holds a box-sized
+  /// frame rather than tens of MB.
+  final Alignment? alignment;
+
+  /// The CDN's centre crop at the box's size ([sizedImageUrl]), drawn when [url], asked whole, is refused or doesn't
+  /// decode: a WebP can't be taller than 16383 px, which a very long picture at the box's width would be.
+  final String? centreFallback;
 
   /// The preset a cover was asked by, which only names its downloads in `cover downloads`, so it is not in the key.
   final CoverPreset? preset;
@@ -332,6 +357,7 @@ class StoredNetworkImage extends ImageProvider<NetworkImage> implements NetworkI
       final codec = await decode(await ui.ImmutableBuffer.fromUint8List(await _bytes(url)));
       return still ? _FirstFrame(codec) : codec;
     }
+    if (alignment case final alignment?) return _part(box, alignment, decode);
     final jpeg = jpegFallback;
     if (jpeg == null) {
       return _covering(await _bytes(url, onDownloaded: _timed(url.endsWith('.webp') ? 'webp' : 'jpg')), box, decode);
@@ -367,6 +393,76 @@ class StoredNetworkImage extends ImageProvider<NetworkImage> implements NetworkI
       return null;
     }
     return decoded.codec;
+  }
+
+  /// Addresses asked whole that were refused or didn't decode in this run: their pictures go straight to the centre.
+  static final _wholeFailed = <String>{};
+
+  Future<ui.Codec> _part(Size box, Alignment alignment, ImageDecoderCallback decode) async {
+    final centre = centreFallback;
+    if (centre == null) return _shownPart(await _bytes(url), box, alignment, decode);
+    if (!_wholeFailed.contains(url)) {
+      try {
+        return await _shownPart(await _bytes(url), box, alignment, decode);
+      } catch (error) {
+        // A lost connection would lose the centre crop too.
+        if (error is TimeoutException || error is IOException) rethrow;
+        _wholeFailed.add(url);
+        RemoteImage._logFailure(url, error);
+        if (error is! NetworkImageLoadException) unawaited(ImageDiskCache.shared?.forget(url));
+      }
+    }
+    try {
+      return await _shownPart(await _bytes(centre), box, alignment, decode);
+    } catch (error) {
+      RemoteImage._logFailure(centre, error);
+      if (!_network(error)) unawaited(ImageDiskCache.shared?.forget(centre));
+      rethrow;
+    }
+  }
+
+  /// [bytes] decoded to cover [box], of which only the part the box shows at [alignment] is kept.
+  static Future<ui.Codec> _shownPart(
+    Uint8List bytes,
+    Size box,
+    Alignment alignment,
+    ImageDecoderCallback decode,
+  ) async {
+    final codec = await decode(
+      await ui.ImmutableBuffer.fromUint8List(bytes),
+      getTargetSize: (width, height) => covering(width, height, box),
+    );
+    final ui.Image whole;
+    try {
+      whole = (await codec.getNextFrame()).image;
+    } finally {
+      codec.dispose();
+    }
+    final part = shownPart(whole.width, whole.height, box, alignment);
+    if (part.width == whole.width && part.height == whole.height) return _Still(whole);
+    try {
+      final recorder = ui.PictureRecorder();
+      Canvas(recorder).drawImageRect(whole, part, Offset.zero & part.size, Paint());
+      final picture = recorder.endRecording();
+      try {
+        return _Still(await picture.toImage(part.width.toInt(), part.height.toInt()));
+      } finally {
+        picture.dispose();
+      }
+    } finally {
+      whole.dispose();
+    }
+  }
+
+  /// The part of a [width] × [height] picture that covering [box] at [alignment] shows, in whole pixels of the picture.
+  @visibleForTesting
+  static Rect shownPart(int width, int height, Size box, Alignment alignment) {
+    final scale = math.max(box.width / width, box.height / height);
+    final across = (box.width / scale).round().clamp(1, width);
+    final down = (box.height / scale).round().clamp(1, height);
+    final left = ((width - across) * (alignment.x + 1) / 2).round();
+    final top = ((height - down) * (alignment.y + 1) / 2).round();
+    return Rect.fromLTWH(left.toDouble(), top.toDouble(), across.toDouble(), down.toDouble());
   }
 
   /// A cover's network download, for `cover downloads` as [format].
@@ -415,10 +511,12 @@ class StoredNetworkImage extends ImageProvider<NetworkImage> implements NetworkI
       other.still == still &&
       other.box == box &&
       other.jpegFallback == jpegFallback &&
+      other.alignment == alignment &&
+      other.centreFallback == centreFallback &&
       mapEquals(other.headers, headers);
 
   @override
-  int get hashCode => Object.hash(StoredNetworkImage, url, still, box);
+  int get hashCode => Object.hash(StoredNetworkImage, url, still, box, alignment);
 
   /// Host and path only: a query can carry a signature.
   @override
@@ -447,6 +545,36 @@ final class _FirstFrame implements ui.Codec {
 
   @override
   void dispose() => _codec.dispose();
+}
+
+/// A frame already decoded, as a codec of one frame. Each ask hands out a clone: the stream asks again when its
+/// listeners left before the first frame came.
+final class _Still implements ui.Codec {
+  _Still(this._image);
+
+  final ui.Image _image;
+
+  @override
+  int get frameCount => 1;
+
+  @override
+  int get repetitionCount => 0;
+
+  @override
+  Future<ui.FrameInfo> getNextFrame() async => _StillFrame(_image.clone());
+
+  @override
+  void dispose() => _image.dispose();
+}
+
+final class _StillFrame implements ui.FrameInfo {
+  _StillFrame(this.image);
+
+  @override
+  final ui.Image image;
+
+  @override
+  Duration get duration => Duration.zero;
 }
 
 /// The picture at [image]'s address, faded in the first time. Once a frame of that address has shown, a reload of it
