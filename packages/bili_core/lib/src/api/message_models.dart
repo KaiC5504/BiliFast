@@ -249,7 +249,7 @@ final class ChatSession {
     this.unread = 0,
     this.ackSeqno = 0,
     this.maxSeqno = 0,
-    this.top = false,
+    this.topTs = 0,
     this.box,
     this.vipPink = false,
     this.bigVip = false,
@@ -274,8 +274,11 @@ final class ChatSession {
   final int ackSeqno;
   final int maxSeqno;
 
+  /// When it was 置顶 (`top_ts`, in microseconds), 0 for a session not pinned.
+  final int topTs;
+
   /// 置顶.
-  final bool top;
+  bool get top => topTs > 0;
 
   /// One of the official notice boxes, drawn with its pink icon (196's 服务通知, 社区中心); null for a person.
   final NoticeBox? box;
@@ -288,7 +291,7 @@ final class ChatSession {
   /// The face's frame (`pendant.image`), empty for none.
   final String pendant;
 
-  ChatSession copyWith({int? unread, int? ackSeqno, String? lastText, DateTime? time}) => ChatSession(
+  ChatSession copyWith({int? unread, int? ackSeqno, String? lastText, DateTime? time, int? topTs}) => ChatSession(
     talkerId: talkerId,
     sessionType: sessionType,
     name: name,
@@ -298,7 +301,7 @@ final class ChatSession {
     unread: unread ?? this.unread,
     ackSeqno: ackSeqno ?? this.ackSeqno,
     maxSeqno: maxSeqno,
-    top: top,
+    topTs: topTs ?? this.topTs,
     box: box,
     vipPink: vipPink,
     bigVip: bigVip,
@@ -685,7 +688,7 @@ ChatSession _session(Object? json) {
     unread: session.count('unread_count'),
     ackSeqno: _seqno(session.map['ack_seqno']) ?? 0,
     maxSeqno: _seqno(session.map['max_seqno']) ?? 0,
-    top: (_seqno(session.map['top_ts']) ?? 0) > 0,
+    topTs: _seqno(session.map['top_ts']) ?? 0,
     box: _box(account == null ? null : name, _id(session.map['system_msg_type']) ?? 0),
   );
 }

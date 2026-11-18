@@ -105,7 +105,7 @@ class _ChatPageState extends State<ChatPage> {
       unread: session.unread,
       ackSeqno: session.ackSeqno,
       maxSeqno: math.max(session.maxSeqno, seqno),
-      top: session.top,
+      topTs: session.topTs,
       box: session.box,
       vipPink: session.vipPink,
       bigVip: session.bigVip,

@@ -11,7 +11,7 @@ const _systemNoticePageSize = 20;
 final _chatDeviceIds = Expando<String>('chat dev_id');
 
 /// 消息's calls on the website's endpoints, with the web login's cookies: the red counts, the msgfeed lists, the
-/// 私信 sessions and messages, 系统通知, and 消息设置. Each is asked as message.bilibili.com asks it (2026-11),
+/// 私信 sessions (置顶 and 删除 too) and messages, 系统通知, and 消息设置. Each is asked as message.bilibili.com asks it (2026-11),
 /// unless its own doc says otherwise.
 extension BiliClientMessage on BiliClient {
   /// `/x/msgfeed/unread`.
@@ -201,6 +201,28 @@ extension BiliClientMessage on BiliClient {
       decode: (_) => null,
     );
   }
+
+  /// 置顶 on a session, or 取消置顶 (`session_svr/set_top`'s `op_type` 0 and 1).
+  Future<void> setChatTop(int talkerId, {required bool on, int sessionType = 1}) async => postVoid(
+    '/session_svr/v1/session_svr/set_top',
+    form: {
+      'talker_id': '$talkerId',
+      'session_type': '$sessionType',
+      'op_type': on ? '0' : '1',
+      ..._messageWeb,
+      'csrf_token': _messageCsrf(),
+    },
+    host: _messageVc,
+    referer: _messageReferer,
+  );
+
+  /// Takes a session off the list (`session_svr/remove_session`); its messages stay on Bilibili's side.
+  Future<void> removeChatSession(int talkerId, {int sessionType = 1}) async => postVoid(
+    '/session_svr/v1/session_svr/remove_session',
+    form: {'talker_id': '$talkerId', 'session_type': '$sessionType', ..._messageWeb, 'csrf_token': _messageCsrf()},
+    host: _messageVc,
+    referer: _messageReferer,
+  );
 
   /// 一键已读 (211). The official app clears everything with its gRPC `ClearUnread`; the website has no one call, so
   /// this does what its pages do when opened: acks every session on the first page that has unread messages up to

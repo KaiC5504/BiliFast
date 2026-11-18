@@ -8595,6 +8595,31 @@ abstract final class MessageTabTheme {
   static const sheetText = 18.0;
   static Color get sheetInk => BiliColors.text;
   static const sheetPressed = Color(0x0A000000);
+
+  /// A chat's swipe (259): the row slides 148 left over 置顶 on #BBBBC1 and 删除 on #FC2125, each 74 wide and the
+  /// row's whole height (over its hairline), the 16 pt white word centred. No dark reference: neither fill is in the
+  /// official palette, so both stay at night.
+  static const actionWidth = 74.0;
+  static const actionTopFill = Color(0xFFBBBBC1);
+  static const actionDeleteFill = Color(0xFFFC2125);
+  static const actionText = 16.0;
+  static const actionLine = 22.0;
+  static const actionInk = Color(0xFFFFFFFF);
+
+  /// Let go past half open, or flung faster than this (pt/s), the row opens; flung back, it closes.
+  static const swipeFling = 300.0;
+  static const swipeSettle = Duration(milliseconds: 250);
+
+  /// A pinned chat (262) on #F6F7F8 across the row; at night Ga0_s, the palette's value for the same grey on a card.
+  static Color get pinnedFill => tone(0xFFF6F7F8, 0xFF1E2022);
+
+  /// 261: past the last page, 我可是有底线的_(:3ゝ∠)_ in 12 pt #9499A0, centred, its ink 24.67 under the last row (the
+  /// line box a third of a point higher), in a 56 pt foot.
+  static const endText = 12.0;
+  static const endLine = 17.0;
+  static const endCentre = 73 / 3;
+  static const endFoot = 56.0;
+  static Color get endInk => BiliColors.secondaryText;
 }
 
 /// 回复与@, 收到喜欢 and 新增粉丝 (197-199, 213, 214). Filled by their builder.

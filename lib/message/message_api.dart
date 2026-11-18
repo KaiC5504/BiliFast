@@ -32,6 +32,12 @@ abstract interface class MessageApi {
   /// Marks [session] read up to [seqno] (系统通知's cursor for [NoticeBox.system]).
   Future<void> read(ChatSession session, {required int seqno});
 
+  /// 置顶 on a session's swipe (259), or 取消置顶.
+  Future<void> setTop(ChatSession session, {required bool on});
+
+  /// 删除 on a session's swipe (260): it leaves the list.
+  Future<void> removeSession(ChatSession session);
+
   /// Sends [text] to [talkerId]; the message as sent.
   Future<ChatMessage> send(int talkerId, String text);
 
@@ -119,6 +125,14 @@ class ClientMessageApi implements MessageApi {
   }
 
   @override
+  Future<void> setTop(ChatSession session, {required bool on}) =>
+      _client.setChatTop(session.talkerId, on: on, sessionType: session.sessionType);
+
+  @override
+  Future<void> removeSession(ChatSession session) =>
+      _client.removeChatSession(session.talkerId, sessionType: session.sessionType);
+
+  @override
   Future<ChatMessage> send(int talkerId, String text) =>
       _client.sendChatText(senderMid: mid(), talkerId: talkerId, text: text);
 
@@ -173,7 +187,7 @@ class ClientMessageApi implements MessageApi {
     unread: session.unread,
     ackSeqno: session.ackSeqno,
     maxSeqno: session.maxSeqno,
-    top: session.top,
+    topTs: session.topTs,
     box: session.box,
     vipPink: session.vipPink || card.vipPink,
     bigVip: session.bigVip || card.bigVip,
