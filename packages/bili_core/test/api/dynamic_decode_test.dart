@@ -464,4 +464,51 @@ void main() {
     expect(first.hasMore, isTrue);
     expect(decoded('bangumi', (json) => DynamicDecode.bangumi(json, page: 2, pageSize: 15)).hasMore, isFalse);
   });
+
+  group("@names keep the answer's own spacing", () {
+    Map<String, Object?> node(String type, String text, {String? orig, String? rid}) => {
+      'type': type,
+      'text': text,
+      'orig_text': orig ?? text,
+      'rid': ?rid,
+    };
+
+    List<Object> nodesOf(List<Map<String, Object?>> nodes) => shapes(
+      DynamicDecode.detail({
+        'item': {
+          'id_str': '1',
+          'type': 'DYNAMIC_TYPE_FORWARD',
+          'modules': {
+            'module_author': {'mid': 7, 'name': '作者'},
+            'module_dynamic': {
+              'desc': {'text': '', 'rich_text_nodes': nodes},
+            },
+          },
+        },
+      }),
+    );
+
+    test("a lottery's result runs them together, with no space anywhere (29)", () {
+      expect(
+        nodesOf([
+          node('RICH_TEXT_NODE_TYPE_TEXT', '恭喜'),
+          node('RICH_TEXT_NODE_TYPE_AT', '@甲', rid: '11'),
+          node('RICH_TEXT_NODE_TYPE_AT', '@乙', rid: '12'),
+          node('RICH_TEXT_NODE_TYPE_TEXT', '等2位同学中奖'),
+        ]),
+        [('text', '恭喜'), ('at', '@甲', 11), ('at', '@乙', 12), ('text', '等2位同学中奖')],
+      );
+    });
+
+    test("a typed one keeps the space the composer put after it, and text wins over orig_text", () {
+      expect(
+        nodesOf([
+          node('RICH_TEXT_NODE_TYPE_TEXT', '好看'),
+          node('RICH_TEXT_NODE_TYPE_AT', '@丙 ', orig: '@丙', rid: '13'),
+          node('RICH_TEXT_NODE_TYPE_TEXT', ' 再见 '),
+        ]),
+        [('text', '好看'), ('at', '@丙 ', 13), ('text', ' 再见 ')],
+      );
+    });
+  });
 }

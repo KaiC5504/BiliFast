@@ -14,7 +14,7 @@ import 'dynamic_open.dart';
 
 /// A post's text: topics and links blue, emotes inline, @names opening the space, a video link (▶) opening the video,
 /// badges (🎁 互动抽奖) toasting. Past [maxLines], or always when [folded], it ends in ... [moreLabel] (全文 / 展开),
-/// tapped to [onMore].
+/// tapped to [onMore]. An @name run into the words around it is set apart from them (29).
 class DynamicRichText extends StatefulWidget {
   const DynamicRichText({
     super.key,
@@ -24,6 +24,7 @@ class DynamicRichText extends StatefulWidget {
     this.folded = false,
     this.moreLabel = '全文',
     this.onMore,
+    this.wideTopicGaps = false,
   });
 
   final List<DynamicNode> nodes;
@@ -34,6 +35,9 @@ class DynamicRichText extends StatefulWidget {
   final bool folded;
   final String moreLabel;
   final VoidCallback? onMore;
+
+  /// The spaces beside topics [DynamicCardTheme.topicGap] wider, as a 图文 post's text on 关注 (135, 29).
+  final bool wideTopicGaps;
 
   /// What the text ends with when cut: three periods and a space before [moreLabel] (127, 128).
   static const ellipsis = '... ';
@@ -67,6 +71,7 @@ class _DynamicRichTextState extends State<DynamicRichText> {
     super.didUpdateWidget(oldWidget);
     if (!identical(oldWidget.nodes, widget.nodes) ||
         oldWidget.style.fontSize != widget.style.fontSize ||
+        oldWidget.wideTopicGaps != widget.wideTopicGaps ||
         (oldWidget.onMore == null) != (widget.onMore == null)) {
       _build();
     }
@@ -101,10 +106,18 @@ class _DynamicRichTextState extends State<DynamicRichText> {
     final linked = TextStyle(color: DynamicCardTheme.linkInk);
     final runs = <_Run>[];
     _large = false;
-    for (final node in widget.nodes) {
+    final nodes = widget.nodes;
+    // True right after the space put in after an @name: the next @name is still set apart from it.
+    var spaced = false;
+    for (var index = 0; index < nodes.length; index++) {
+      final node = nodes[index];
+      final afterSpaced = spaced;
+      spaced = false;
       switch (node) {
         case DynamicTextNode(:final text):
-          runs.add(_TextRun(text));
+          bool besideTopic(int at) =>
+              widget.wideTopicGaps && at >= 0 && at < nodes.length && nodes[at] is DynamicTopicNode;
+          _addText(runs, text, widenFirst: besideTopic(index - 1), widenLast: besideTopic(index + 1));
         case DynamicEmojiNode(:final text, :final url) when url.isEmpty:
           runs.add(_TextRun(text));
         case DynamicEmojiNode(:final text, :final url, :final large):
@@ -127,7 +140,12 @@ class _DynamicRichTextState extends State<DynamicRichText> {
           );
         case DynamicMentionNode(:final text, :final mid):
           final name = text.startsWith('@') ? text : '@$text';
+          if (afterSpaced || _endsInWord(runs)) _widenLast(runs, DynamicCardTheme.mentionLead);
           runs.add(_TextRun(name, linked, mid > 0 ? _tap(() => _openSpace(mid, name)) : null));
+          if (!_isSpace(name.codeUnitAt(name.length - 1)) && _wordNext(nodes, index)) {
+            runs.add(_TextRun(' '));
+            spaced = true;
+          }
         case DynamicTopicNode(:final text):
           runs.add(_TextRun(text, linked, _tap(_soon)));
         case DynamicLinkNode(:final text, :final url):
@@ -182,6 +200,53 @@ class _DynamicRichTextState extends State<DynamicRichText> {
   }
 
   void _soon() => showToast(context, notBuilt);
+
+  static final _word = RegExp(r'[\p{L}\p{N}]', unicode: true);
+
+  static bool _isWord(int rune) => _word.hasMatch(String.fromCharCode(rune));
+
+  static bool _isSpace(int unit) => unit == 0x20 || unit == 0x0A || unit == 0x3000 || unit == 0x09;
+
+  static bool _endsInWord(List<_Run> runs) => switch (runs.lastOrNull) {
+    _TextRun(:final text) when text.isNotEmpty => _isWord(text.runes.last),
+    _ => false,
+  };
+
+  /// Whether the node after [index] starts with a word (or is another @name), so an @name needs a space before it.
+  static bool _wordNext(List<DynamicNode> nodes, int index) {
+    if (index + 1 >= nodes.length) return false;
+    return switch (nodes[index + 1]) {
+      DynamicMentionNode() => true,
+      DynamicEmojiNode(:final url) when url.isNotEmpty => false,
+      DynamicVideoLinkNode() => false,
+      DynamicBadgeNode(:final kind) when kind == 'lottery' => false,
+      final next => next.text.isNotEmpty && _isWord(next.text.runes.first),
+    };
+  }
+
+  /// [text] as a run, its first or last space widened by [DynamicCardTheme.topicGap] when a topic is on that side.
+  static void _addText(List<_Run> runs, String text, {required bool widenFirst, required bool widenLast}) {
+    if (text.isEmpty) return;
+    final first = widenFirst && text.codeUnitAt(0) == 0x20;
+    final last = widenLast && text.codeUnitAt(text.length - 1) == 0x20 && !(first && text.length == 1);
+    final start = first ? 1 : 0;
+    final end = last ? text.length - 1 : text.length;
+    if (first) runs.add(_TextRun(' ', const TextStyle(letterSpacing: DynamicCardTheme.topicGap)));
+    if (start < end) runs.add(_TextRun(text.substring(start, end)));
+    if (last) runs.add(_TextRun(' ', const TextStyle(letterSpacing: DynamicCardTheme.topicGap)));
+  }
+
+  /// The last run's last character followed by [amount] more.
+  static void _widenLast(List<_Run> runs, double amount) {
+    final run = runs.removeLast() as _TextRun;
+    final text = run.text;
+    final cut = text.length - String.fromCharCode(text.runes.last).length;
+    if (cut > 0) runs.add(_TextRun(text.substring(0, cut), run.style, run.recognizer));
+    final style = run.style ?? const TextStyle();
+    runs.add(
+      _TextRun(text.substring(cut), style.copyWith(letterSpacing: (style.letterSpacing ?? 0) + amount), run.recognizer),
+    );
+  }
 
   void _openSpace(int mid, String name) {
     final bare = name.startsWith('@') ? name.substring(1) : name;
@@ -270,9 +335,7 @@ class _DynamicRichTextState extends State<DynamicRichText> {
     var at = units;
     while (at > 0) {
       final (run, offset) = _locate(at - 1);
-      if (run is! _TextRun) break;
-      final unit = run.text.codeUnitAt(offset);
-      if (unit != 0x20 && unit != 0x0A && unit != 0x3000 && unit != 0x09) break;
+      if (run is! _TextRun || !_isSpace(run.text.codeUnitAt(offset))) break;
       at -= 1;
     }
     return at;
