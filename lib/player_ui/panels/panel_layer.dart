@@ -37,7 +37,7 @@ final class PanelFrame {
     this.lead,
     this.trailing,
     this.top = 0,
-  }) : sheetColor = sheetColor ?? BiliColors.card;
+  }) : sheetColor = sheetColor ?? BiliColors.sheetFill;
 
   final double width;
   final double sheetHeight;

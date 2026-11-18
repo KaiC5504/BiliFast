@@ -303,7 +303,7 @@ class _Uploader extends StatelessWidget {
                       width: LandscapeActionTheme.pillWidth,
                       height: LandscapeActionTheme.pillHeight,
                       decoration: BoxDecoration(
-                        border: Border.all(color: BiliColors.pink, width: LandscapeActionTheme.pillBorder),
+                        border: Border.all(color: BiliColors.videoPink, width: LandscapeActionTheme.pillBorder),
                         borderRadius: BorderRadius.circular(LandscapeActionTheme.pillHeight / 2),
                       ),
                       padding: const EdgeInsets.only(left: LandscapeActionTheme.chargeShift),
@@ -317,7 +317,7 @@ class _Uploader extends StatelessWidget {
                           const SizedBox(width: LandscapeActionTheme.boltGap),
                           Text(
                             '充电',
-                            style: TextStyle(color: BiliColors.pink, fontSize: LandscapeActionTheme.pillText),
+                            style: TextStyle(color: BiliColors.videoPink, fontSize: LandscapeActionTheme.pillText),
                           ),
                         ],
                       ),
@@ -358,7 +358,7 @@ class _FollowPill extends StatelessWidget {
         width: LandscapeActionTheme.pillWidth,
         height: LandscapeActionTheme.pillHeight,
         decoration: BoxDecoration(
-          color: following ? LandscapeActionTheme.followedPill : BiliColors.pink,
+          color: following ? LandscapeActionTheme.followedPill : BiliColors.videoPink,
           borderRadius: BorderRadius.circular(LandscapeActionTheme.pillHeight / 2),
         ),
         child: AnimatedSwitcher(
@@ -406,7 +406,7 @@ class _BoltPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final points = [for (final (x, y) in _shape) Offset(x * size.width, y * size.height)];
-    canvas.drawPath(Path()..addPolygon(points, true), Paint()..color = BiliColors.pink);
+    canvas.drawPath(Path()..addPolygon(points, true), Paint()..color = BiliColors.videoPink);
   }
 
   @override

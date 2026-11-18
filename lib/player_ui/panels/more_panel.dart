@@ -120,7 +120,7 @@ class MorePanel extends StatefulWidget {
 }
 
 class _MorePanelState extends State<MorePanel> {
-  static TextStyle get _remainingStyle => TextStyle(fontSize: BiliMetrics.panelDetailText, color: BiliColors.pink);
+  static TextStyle get _remainingStyle => TextStyle(fontSize: BiliMetrics.panelDetailText, color: BiliColors.videoPink);
 
   var _page = _Page.root;
   var _customMinutes = 30;
@@ -353,7 +353,7 @@ class _MorePanelState extends State<MorePanel> {
             height: BiliMetrics.panelButtonHeight,
             alignment: Alignment.center,
             decoration: BoxDecoration(
-              color: BiliColors.pink,
+              color: BiliColors.videoPink,
               borderRadius: BorderRadius.circular(BiliMetrics.panelButtonHeight / 2),
             ),
             child: const Text('确定', style: TextStyle(color: BiliColors.onPink)),

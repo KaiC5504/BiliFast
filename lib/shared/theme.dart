@@ -24,9 +24,17 @@ abstract final class BiliColors {
   static Color get link => tone(0xFF00699D, 0xFF58B1D4);
   static Color get card => tone(0xFFFFFFFF, 0xFF17181A);
 
+  /// Alerts and the player's light sheets' cards (255, 258): white by day, the palette's Ga11 at night, a step above
+  /// [card].
+  static Color get dialog => tone(0xFFFFFFFF, 0xFF242628);
+
+  /// [pink] over the video: the player's controls and panels look the same in 深色模式.
+  static const videoPink = Color(0xFFFF6699);
+
   /// The feed's 推荐 reason and 竖屏 tag (01) are orange-red, not the pink accent.
-  static Color get reason => tone(0xFFFF6633, 0xFFFF6633); // night?
-  static Color get reasonTint => tone(0xFFFFF1ED, 0xFFFFF1ED); // night?
+  /// At night as 239's 1千点赞 and 竖屏 tags.
+  static Color get reason => tone(0xFFFF6633, 0xFFBF5330);
+  static Color get reasonTint => tone(0xFFFFF1ED, 0xFF3D2D29);
 
   /// Counts, durations and progress drawn over covers.
   static const onCover = Color(0xFFFFFFFF);
@@ -55,7 +63,10 @@ abstract final class BiliColors {
   static const panelKnob = Color(0xFFFFFFFF);
   static const panelPressed = Color(0x14FFFFFF);
 
-  /// The light 选集 sheet in portrait (19): its grabber, the cross in the grey close circle, and 内容到底啦.
+  /// The light 选集 sheet in portrait (19): its ground (Ga12's night, as 258's sheet), the grey close circle (Ga13_s),
+  /// its grabber, the cross in the circle, and 内容到底啦.
+  static Color get sheetFill => tone(0xFFFFFFFF, 0xFF202123);
+  static Color get sheetCloseFill => tone(0xFFF1F2F3, 0xFF2F3134);
   static Color get sheetGrabber => tone(0xFFC9CCD0, 0xFF46494D);
   static Color get sheetCloseGlyph => tone(0xFF61666D, 0xFFA2A7AE);
   static Color get sheetHint => tone(0xFFC9CCD0, 0xFF46494D);
@@ -132,14 +143,16 @@ abstract final class BiliColors {
   static const slower = Color(0xFFF2453D);
 
   /// The loading cards' sweep.
-  static Color get shimmerBase => tone(0xFFEDEEF0, 0xFFEDEEF0); // night?
-  static Color get shimmerHighlight => tone(0xFFF6F7F8, 0xFF101011);
+  /// At night a step above the 17181A card they sit on (Ga1_s), the sweep a step above that (Ga0_s).
+  static Color get shimmerBase => tone(0xFFEDEEF0, 0xFF232527);
+  static Color get shimmerHighlight => tone(0xFFF6F7F8, 0xFF2B2C2F);
 
-  /// The menus' frosted glass, and the highlight under a pressed row.
-  static const glassFill = Color(0xB8FFFFFF);
-  static const glassBorder = Color(0x99FFFFFF);
+  /// The menus' frosted glass, and the highlight under a pressed row. At night the glass is the dark alert's grey
+  /// (Ga11) letting as much through, under a faint light rim, and a pressed row lightens as much as it darkens by day.
+  static Color get glassFill => tone(0xB8FFFFFF, 0xB8242628);
+  static Color get glassBorder => tone(0x99FFFFFF, 0x1FFFFFFF);
   static const glassShadow = Color(0x26000000);
-  static const pressedFill = Color(0x14000000);
+  static Color get pressedFill => tone(0x14000000, 0x14FFFFFF);
 
   /// The 最近打开 tile runs from this down to [pink], one hue as Swift's `Theme.pink.gradient`.
   static Color get recentsTileTop => tone(0xFFFF8CB0, 0xFFA73E65);
@@ -1817,7 +1830,7 @@ abstract final class CommentRowTheme {
   static const metaText = 12.0;
   static Color get meta => tone(0xFFC9CCD0, 0xFF46494D);
   static Color get action => tone(0xFF61666D, 0xFFA2A7AE);
-  static Color get liked => BiliColors.pink;
+  static const liked = BiliColors.videoPink;
   static const replyGap = 8.0;
   static const replyTrailing = 10.0;
   static const likeTrailing = 73.0;
@@ -2831,17 +2844,18 @@ abstract final class DanmakuPanelTheme {
   static const secondary = BiliColors.panelSecondary;
   static const reset = Color(0xFFC9CCD0);
 
-  /// Portrait's light sheet (40, 41): the fill left of the thumb is half pink, the thumb and dots pink.
-  static const lightBackground = Color(0xFFF6F7F8);
-  static Color get lightCard => BiliColors.card;
-  static const lightSquare = Color(0xFFF6F7F8);
-  static const lightTrack = Color(0xFFE3E5E7);
-  static const lightFill = Color(0xFFFFB3CA);
-  static const lightHairline = Color(0xFFE3E5E7);
+  /// Portrait's light sheet (40, 41): the fill left of the thumb is half pink, the thumb and dots pink. At night as ⋮'s
+  /// sheet (258): Ga12 under Ga11 cards, the squares a step lighter (Ga12_s), the rest the palette's night values.
+  static Color get lightBackground => DownloadSheetTheme.sheet;
+  static Color get lightCard => DownloadSheetTheme.card;
+  static Color get lightSquare => tone(0xFFF6F7F8, 0xFF2B2C2F);
+  static Color get lightTrack => tone(0xFFE3E5E7, 0xFF2F3134);
+  static Color get lightFill => tone(0xFFFFB3CA, 0xFF76304B);
+  static Color get lightHairline => tone(0xFFE3E5E7, 0xFF2F3134);
   static Color get lightText => BiliColors.text;
   static Color get lightSecondary => BiliColors.secondaryText;
-  static const lightReset = Color(0xFF61666D);
-  static const lightSwitchOff = Color(0xFFE9E9EA);
+  static Color get lightReset => tone(0xFF61666D, 0xFFA2A7AE);
+  static Color get lightSwitchOff => tone(0xFFE9E9EA, 0xFF5F6065);
   static const lightKnobShadow = Color(0x29000000);
   static const lightKnobShadowBlur = 1.5;
   static const lightKnobShadowOffset = Offset(0, 0.5);
@@ -2869,7 +2883,7 @@ abstract final class BlockWordsTheme {
   static const rowHeight = 30.0;
   static const fieldLeft = 54.17;
   static const fieldFill = Color(0xFFFFFFFF);
-  static Color get fieldInk => BiliColors.text;
+  static const fieldInk = Color(0xFF18191C);
   static const fieldRadius = 3.5;
   static const fieldPadX = 10.0;
   static const fieldText = 12.0;
@@ -2922,8 +2936,9 @@ abstract final class BlockWordsTheme {
 /// The send bar and the style panel (22, 23, 36-39).
 abstract final class DanmakuSendTheme {
   /// Landscape's dark bar over its darker area (22, 23); portrait's white bar with a hairline over a grey panel (36-39).
-  static Color get darkBar => tone(0xFF242627, 0xFF242627); // night?
-  static Color get darkArea => tone(0xFF18191C, 0xFFE7E9EB);
+  /// Landscape's are over the video, so they stay in 深色模式.
+  static const darkBar = Color(0xFF242627);
+  static const darkArea = Color(0xFF18191C);
   static Color get lightBar => BiliColors.card;
   static Color get lightArea => BiliColors.pageGrey;
   static Color get hairline => tone(0xFFE3E5E7, 0xFF2F3134);
@@ -2931,12 +2946,12 @@ abstract final class DanmakuSendTheme {
 
   /// Landscape's pink is deeper than the light pages'; 竖屏's send arrow turns it too (37), while A and the options
   /// take the page pink there (38).
-  static Color get darkAccent => tone(0xFFED7098, 0xFFED7098); // night?
+  static const darkAccent = Color(0xFFED7098);
   static Color get lightAccent => BiliColors.pink;
   static Color get sendReady => darkAccent;
-  static Color get darkGlyph => tone(0xFFFFFFFF, 0xFF17181A);
+  static const darkGlyph = Color(0xFFFFFFFF);
   static Color get lightGlyph => tone(0xFF61666D, 0xFFA2A7AE);
-  static Color get hintDot => tone(0xFFD04B44, 0xFFD04B44); // night?
+  static const hintDot = Color(0xFFD04B44);
 
   /// 39's empty arrow is the dark glyph grey, 36's the placeholder grey.
   static Color get verticalSendIdle => tone(0xFFC9CCD0, 0xFF46494D);
@@ -2974,13 +2989,15 @@ abstract final class DanmakuSendTheme {
   /// The 30 pt pill: white in landscape, grey on the light bar, with a hairline in 竖屏. Text starts 8 pt in (12 in
   /// 竖屏) behind a 20 pt pink cursor.
   static const fieldHeight = 30.0;
-  static Color get darkField => tone(0xFFFFFFFF, 0xFF17181A);
+  static const darkField = Color(0xFFFFFFFF);
   static Color get lightField => BiliColors.pageGrey;
   static Color get fieldText => BiliColors.text;
+  static const darkFieldText = Color(0xFF18191C);
   static const fieldFont = 15.0;
   static const fieldPad = 8.0;
   static const verticalFieldPad = 12.0;
   static Color get placeholder => tone(0xFFC9CCD0, 0xFF46494D);
+  static const darkPlaceholder = Color(0xFFC9CCD0);
 
   /// 竖屏's placeholder is smaller and darker than the text it gives way to (36, 37).
   static Color get verticalPlaceholder => tone(0xFF9499A0, 0xFF757A81);
@@ -3012,7 +3029,7 @@ abstract final class DanmakuSendTheme {
   static const rowHeight = 54.0;
   static const labelWidth = 64.0;
   static const labelFont = 12.0;
-  static Color get darkSecondary => tone(0xFF9499A0, 0xFF757A81);
+  static const darkSecondary = Color(0xFF9499A0);
   static Color get lightSecondary => tone(0xFF9499A0, 0xFF757A81);
   static const option = 94.0;
   static const portraitOption = 121.0;
@@ -3044,7 +3061,7 @@ abstract final class DanmakuSendTheme {
   static const swatchFillInset = 2.2;
   static const swatchRingWidth = 1.4;
   static const lightSwatchRingWidth = 1.1;
-  static Color get darkSwatchRing => tone(0xFF46494C, 0xFF46494C); // night?
+  static const darkSwatchRing = Color(0xFF46494C);
   static Color get lightSwatchRing => tone(0xFFC9CCD0, 0xFF46494D);
 
   /// The dark picker shows the colours dimmed, in the same order as `DanmakuStyle.colors` (23 against 38).
@@ -3054,11 +3071,12 @@ abstract final class DanmakuSendTheme {
     Color(0xFF91BEC9), Color(0xFF8E7A43),
   ];
 
-  /// The 会员 chip: the gradient ring around a white middle, with its pink 会员 pill over the top right corner.
-  static Color get darkVipLeading => tone(0xFFD896D5, 0xFFD896D5); // night?
-  static Color get darkVipTrailing => tone(0xFF7AB2E6, 0xFF7AB2E6); // night?
-  static Color get lightVipLeading => tone(0xFFE492D9, 0xFFE492D9); // night?
-  static Color get lightVipTrailing => tone(0xFF71B2EA, 0xFF71B2EA); // night?
+  /// The 会员 chip: the gradient ring around a white middle, with its pink 会员 pill over the top right corner. The
+  /// middle is the white swatch's colour, so it and the ring stay as they are in 深色模式.
+  static const darkVipLeading = Color(0xFFD896D5);
+  static const darkVipTrailing = Color(0xFF7AB2E6);
+  static const lightVipLeading = Color(0xFFE492D9);
+  static const lightVipTrailing = Color(0xFF71B2EA);
   static const vipInsetX = 5.0;
   static const vipInsetY = 4.5;
   static const vipInnerRadius = 4.0;
@@ -3078,7 +3096,7 @@ abstract final class DanmakuSendTheme {
   static const tickRing = 1.0;
   static const tickOffset = 0.5;
   static const tickStroke = 1.1;
-  static Color get tickColour => tone(0xFFFFFFFF, 0xFF17181A);
+  static const tickColour = Color(0xFFFFFFFF);
 }
 
 /// 当前弹幕列表 (31, 32). Positions across the row count from the panel's content edge, [BiliMetrics.panelTrailing]
@@ -3103,7 +3121,7 @@ abstract final class DanmakuListTheme {
   /// 31's 👍 sits 2 px above the row's middle.
   static const thumbRise = 2 / 3;
   static const thumb = Color(0xFFFFFFFF);
-  static Color get liked => BiliColors.pink;
+  static const liked = BiliColors.videoPink;
 
   /// The count sits off the 👍's top right: its left 1.5 past the ink, its middle 9 above the row's.
   static const countText = 10.0;
@@ -3517,7 +3535,7 @@ abstract final class SettingsTheme {
   static const confirmButtonText = 16.0;
   static Color get confirmCancel => BiliColors.text;
   static Color get confirmAction => BiliColors.pink;
-  static const confirmPressed = BiliColors.pressedFill;
+  static Color get confirmPressed => BiliColors.pressedFill;
   static const confirmPressMotion = Duration(milliseconds: 120);
 
   /// It comes and goes as the other alerts do, settling from slightly large.
@@ -3601,10 +3619,20 @@ abstract final class HomeTabBarTheme {
 /// A 推荐 cover still loading (14): the official grey with its faint 小电视, centred on the cover. The asset is cut to
 /// its ink, 117 × 109 px at 3× (the clip's is 117 × 110 px of #CDCDCD); it is drawn white and tinted.
 abstract final class CoverPlaceholderTheme {
-  static Color get fill => tone(0xFFDEDFE1, 0xFFDEDFE1); // night?
-  static Color get ink => tone(0xFFCDCDCD, 0xFFCDCDCD); // night?
+  /// The APK's art has no night version; at night the palette's nearest greys, Ga2 and Ga3.
+  static Color get fill => tone(0xFFDEDFE1, 0xFF2F3134);
+  static Color get ink => tone(0xFFCDCDCD, 0xFF46494D);
   static const width = 117 / 3;
   static const height = 109 / 3;
+
+  /// The default face at night: each channel turned over so its light ground (E5E8EF) lands on [fill]'s night value
+  /// and its TV (B0B9C0) on [ink]'s.
+  static const nightFace = <double>[
+    -0.434, 0, 0, 0, 146.4, //
+    0, -0.511, 0, 0, 167.5, //
+    0, 0, -0.532, 0, 179.1, //
+    0, 0, 0, 1, 0,
+  ];
 }
 
 /// The bottom bar's glyphs (01, 02): their size, strokes and colours, and the + on its pink rounded square.
@@ -4042,7 +4070,7 @@ abstract final class LoadingTvTheme {
 
   /// 正在努力加载... under the TV on a page's first load (64, 67).
   static const stateText = 14.0;
-  static Color get stateInk => tone(0xFF86898B, 0xFF86898B); // night?
+  static Color get stateInk => tone(0xFF86898B, 0xFF757A81);
 
   /// From the TV's box to the text's line box.
   static const stateGap = 6.0;
@@ -7596,9 +7624,9 @@ abstract final class PadDanmakuTheme {
 /// 缓存's sheet (141-144, 153, 154) and the portrait ⋮ sheet it opens from (42, 43, differences/22).
 abstract final class DownloadSheetTheme {
   /// Both sheets are light grey with white cards; in 竖屏 they stand 573.67 pt tall (43), in the small player they run
-  /// from the player's bottom.
-  static Color get sheet => BiliColors.softGrey;
-  static Color get card => BiliColors.card;
+  /// from the player's bottom. At night the sheet is Ga12 and the cards and squares Ga11 (258).
+  static Color get sheet => tone(0xFFF6F7F8, 0xFF202123);
+  static Color get card => BiliColors.dialog;
   static const verticalHeight = 573.67 / 956;
   static const cardRadius = 8.0;
   static const cardInset = 16.0;
@@ -7636,8 +7664,8 @@ abstract final class DownloadSheetTheme {
   static const speedStart = 88.0;
   static const speedFade = 12.0;
 
-  /// The switch, off: a light grey track and a white knob with a faint shadow.
-  static Color get trackOff => tone(0xFFE6E6E8, 0xFFE6E6E8); // night?
+  /// The switch, off: a light grey track and a white knob with a faint shadow; 258's track at night.
+  static Color get trackOff => tone(0xFFE6E6E8, 0xFF5F6065);
   static const knobShadow = Color(0x29000000);
   static const knobShadowBlur = 2.0;
 
@@ -7678,7 +7706,8 @@ abstract final class DownloadSheetTheme {
   static const titleLine = 20.0;
   static const playingGap = 6.67;
   static Color get playing => BiliColors.pink;
-  static Color get playingBars => tone(0xFFFB7299, 0xFFFB7299); // night?
+  /// Bilibili's #FB7299, which the night pages keep (255's tick).
+  static const playingBars = Color(0xFFFB7299);
 
   /// A 合集's video (144, 154): the cover 134.67 × 76 with 12 round it, the title two 20 pt lines beside it.
   static const coverRowPad = 12.0;
@@ -7955,7 +7984,7 @@ abstract final class OfflineListTheme {
   static const confirmButtonSpread = 8.0;
   static Color get confirmCancel => BiliColors.text;
   static Color get confirmAction => BiliColors.pink;
-  static const confirmPressed = BiliColors.pressedFill;
+  static Color get confirmPressed => BiliColors.pressedFill;
   static const confirmMotion = Duration(milliseconds: 200);
 
   /// 同时缓存数量's sheet (147): #F6F7F8 with 12 corners over black at 0.32; a 30 × 3 #C9CCD0 handle 8 down; a white
@@ -8504,7 +8533,7 @@ abstract final class MessageTabTheme {
   static const alertSpread = 8.0;
   static Color get alertCancel => BiliColors.text;
   static Color get alertAction => BiliColors.pink;
-  static const alertPressed = BiliColors.pressedFill;
+  static Color get alertPressed => BiliColors.pressedFill;
   static const alertMotion = Duration(milliseconds: 200);
   static const alertStartScale = 1.1;
 

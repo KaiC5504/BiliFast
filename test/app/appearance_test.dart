@@ -63,15 +63,19 @@ void main() {
     expect(BiliTheme.dark, isTrue, reason: 'no longer following');
   });
 
-  testWidgets('turning it off keeps the mode on screen', (tester) async {
+  testWidgets('turning it off keeps the mode on screen, and its listeners still hear the switch', (tester) async {
     final model = AppearanceModel.memory(followSystem: true);
     addTearDown(model.dispose);
     addTearDown(tester.platformDispatcher.clearPlatformBrightnessTestValue);
     tester.platformDispatcher.platformBrightnessTestValue = Brightness.dark;
     model.attach();
     expect(BiliTheme.dark, isTrue);
+    var heard = 0;
+    model.addListener(() => heard++);
     await model.setFollowSystem(false);
     expect(BiliTheme.dark, isTrue);
+    expect(model.followSystem, isFalse);
+    expect(heard, 1);
   });
 
   testWidgets('a file that cannot be read is set aside and the defaults apply', (tester) async {

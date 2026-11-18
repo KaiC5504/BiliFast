@@ -35,7 +35,7 @@ class SpeedPanel extends StatelessWidget {
             fontSize: PadPanelTheme.speedText,
             color: selected ? PadPanelTheme.speedSelected : BiliColors.panelText,
           )
-        : TextStyle(color: selected ? BiliColors.pink : BiliColors.panelText);
+        : TextStyle(color: selected ? BiliColors.videoPink : BiliColors.panelText);
     return Semantics(
       button: true,
       selected: selected,

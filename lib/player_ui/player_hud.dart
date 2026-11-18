@@ -273,7 +273,7 @@ class _SeekPill extends StatelessWidget {
               maxLines: 1,
             ),
             const SizedBox(height: BiliMetrics.hudSeekGap),
-            _Bar(fraction: fraction, fill: BiliColors.pink),
+            _Bar(fraction: fraction, fill: BiliColors.videoPink),
           ],
         ),
       ),

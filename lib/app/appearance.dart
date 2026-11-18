@@ -78,7 +78,7 @@ class AppearanceModel extends ChangeNotifier with WidgetsBindingObserver {
       _attached = true;
       WidgetsBinding.instance.addObserver(this);
     }
-    _apply(force: true);
+    _apply();
   }
 
   /// 我的's ☾/☀: the other mode, which also stops following iOS (as the official app's switch does).
@@ -94,7 +94,8 @@ class AppearanceModel extends ChangeNotifier with WidgetsBindingObserver {
     if (value == _followSystem) return Future.value();
     if (!value) _dark = BiliTheme.dark;
     _followSystem = value;
-    _apply();
+    // The switch's own listeners hear it even when the mode stays.
+    if (!_apply()) notifyListeners();
     return _save();
   }
 
@@ -103,20 +104,19 @@ class AppearanceModel extends ChangeNotifier with WidgetsBindingObserver {
     if (_followSystem) _apply();
   }
 
-  void _apply({bool force = false}) {
+  /// Whether listeners were told of a change of mode.
+  bool _apply() {
     _native?.call(
       forced || !_followSystem
           ? (_wanted ? NativeInterfaceStyle.dark : NativeInterfaceStyle.light)
           : NativeInterfaceStyle.system,
     );
     final dark = _wanted;
-    if (dark == BiliTheme.dark && !force) return;
-    final changed = dark != BiliTheme.dark;
+    if (dark == BiliTheme.dark) return false;
     BiliTheme.dark = dark;
-    if (changed) {
-      _logger.info(LogCategory.ui, 'appearance', {'dark': dark, 'followSystem': _followSystem});
-      notifyListeners();
-    }
+    _logger.info(LogCategory.ui, 'appearance', {'dark': dark, 'followSystem': _followSystem});
+    notifyListeners();
+    return true;
   }
 
   Future<void> _save() {
@@ -173,6 +173,7 @@ class _AppearanceRedrawState extends State<AppearanceRedraw> {
   @override
   void initState() {
     super.initState();
+    _drawnDark = BiliTheme.dark;
     widget.model.addListener(_changed);
   }
 
@@ -191,8 +192,11 @@ class _AppearanceRedrawState extends State<AppearanceRedraw> {
     super.dispose();
   }
 
+  bool _drawnDark = false;
+
   void _changed() {
-    if (!mounted) return;
+    if (!mounted || _drawnDark == BiliTheme.dark) return;
+    _drawnDark = BiliTheme.dark;
     setState(() {});
     redrawAll(context);
   }

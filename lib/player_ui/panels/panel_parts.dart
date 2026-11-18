@@ -266,7 +266,7 @@ class PanelCardRow extends StatelessWidget {
                                 child: AnimatedDefaultTextStyle(
                                   duration: const Duration(milliseconds: 160),
                                   style: DefaultTextStyle.of(context).style.copyWith(
-                                    color: selected ? BiliColors.pink : BiliColors.panelText,
+                                    color: selected ? BiliColors.videoPink : BiliColors.panelText,
                                     fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
                                   ),
                                   child: Text(
@@ -327,7 +327,7 @@ class _Badge extends StatelessWidget {
     alignment: Alignment.center,
     padding: const EdgeInsets.symmetric(horizontal: BiliMetrics.panelBadgePad),
     decoration: BoxDecoration(
-      color: BiliColors.pink,
+      color: BiliColors.videoPink,
       borderRadius: BorderRadius.circular(BiliMetrics.panelBadgeHeight / 2),
     ),
     child: Text(text, style: _style, strutStyle: BiliFonts.strutOf(context, _style)),
@@ -475,7 +475,7 @@ class PanelSwitch extends StatelessWidget {
       height: BiliMetrics.panelSwitchHeight,
       padding: const EdgeInsets.all(inset),
       decoration: BoxDecoration(
-        color: on ? BiliColors.pink : BiliColors.panelTrackOff,
+        color: on ? BiliColors.videoPink : BiliColors.panelTrackOff,
         borderRadius: BorderRadius.circular(BiliMetrics.panelSwitchHeight / 2),
       ),
       child: AnimatedAlign(
@@ -512,7 +512,7 @@ class PanelSegments<T> extends StatelessWidget {
     final chosen = value == selected;
     final style = DefaultTextStyle.of(context).style.copyWith(
       fontSize: BiliMetrics.panelDetailText,
-      color: chosen ? BiliColors.pink : BiliColors.panelText,
+      color: chosen ? BiliColors.videoPink : BiliColors.panelText,
       fontWeight: chosen ? FontWeight.w600 : FontWeight.w400,
     );
     final label = AnimatedDefaultTextStyle(

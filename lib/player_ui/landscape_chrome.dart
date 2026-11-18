@@ -882,7 +882,7 @@ class _ActionPopState extends State<ActionPop> with SingleTickerProviderStateMix
       solid: widget.active,
       size: widget.size,
       stroke: widget.stroke,
-      color: widget.active ? BiliColors.pink : BiliColors.onVideo,
+      color: widget.active ? BiliColors.videoPink : BiliColors.onVideo,
     ),
   );
 }
@@ -1624,7 +1624,7 @@ class _TickPainter extends CustomPainter {
         ..moveToPoint(p(13.8, 16.4))
         ..lineToPoint(p(17.1, 18.6))
         ..lineToPoint(p(21.8, 14.5)),
-      _line(BiliColors.pink),
+      _line(BiliColors.videoPink),
     );
   }
 

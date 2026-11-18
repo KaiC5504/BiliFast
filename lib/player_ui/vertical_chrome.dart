@@ -944,7 +944,7 @@ class _UploaderRow extends StatelessWidget {
 
   static TextStyle _nameStyle(bool vip) => fullScreenText.merge(
     TextStyle(
-      color: vip ? BiliColors.pink : BiliColors.onVideo,
+      color: vip ? BiliColors.videoPink : BiliColors.onVideo,
       fontSize: BiliMetrics.verticalNameText,
       fontWeight: FontWeight.w500,
       height: 1,
@@ -1133,7 +1133,7 @@ class _FollowPill extends StatelessWidget {
           right: VerticalActionTheme.followTrailing,
         ),
         decoration: ShapeDecoration(
-          color: following ? VerticalActionTheme.followingFill : BiliColors.pink,
+          color: following ? VerticalActionTheme.followingFill : BiliColors.videoPink,
           shape: const StadiumBorder(),
         ),
         child: AnimatedSize(
@@ -1415,7 +1415,7 @@ class _ColumnItem extends StatelessWidget {
                 child: _Pop(
                   active: active,
                   child: TweenAnimationBuilder<Color?>(
-                    tween: ColorTween(end: active ? BiliColors.pink : VerticalActionTheme.icon),
+                    tween: ColorTween(end: active ? BiliColors.videoPink : VerticalActionTheme.icon),
                     duration: still ? Duration.zero : const Duration(milliseconds: 200),
                     builder: (context, color, _) =>
                         ActionIcon(glyph, solid: true, size: size, color: color ?? VerticalActionTheme.icon),
