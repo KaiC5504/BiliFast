@@ -58,6 +58,7 @@ class _NativePasteControlState extends State<_NativePasteControl> {
 
   void _created(int id) {
     if (!mounted) return;
+    _channel?.setMethodCallHandler(null);
     _channel = MethodChannel('${_NativePasteControl.viewType}/$id')..setMethodCallHandler(_handle);
   }
 
@@ -89,6 +90,8 @@ class _NativePasteControlState extends State<_NativePasteControl> {
       width: BiliMetrics.pasteControlWidth,
       height: BiliMetrics.pasteControlHeight,
       child: UiKitView(
+        // Its colours are set only when it's made, so a change of 深色模式 makes it again.
+        key: ValueKey(BiliTheme.dark),
         viewType: _NativePasteControl.viewType,
         creationParams: <String, Object?>{
           'fill': BiliColors.pink.toARGB32(),

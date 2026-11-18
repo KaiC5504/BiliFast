@@ -316,7 +316,7 @@ class _SeasonActions extends StatelessWidget {
             width: VerticalActionTheme.sheetShare,
             height: VerticalActionTheme.sheetShare,
             alignment: Alignment.center,
-            decoration: BoxDecoration(color: BiliColors.pageGrey, shape: BoxShape.circle),
+            decoration: BoxDecoration(color: BiliColors.sheetCloseFill, shape: BoxShape.circle),
             child: ActionIcon(
               ActionGlyph.share,
               solid: false,
@@ -654,7 +654,7 @@ class EpisodesSheetHeader extends StatelessWidget {
                   child: Container(
                     width: BiliMetrics.sheetClose,
                     height: BiliMetrics.sheetClose,
-                    decoration: BoxDecoration(color: BiliColors.pageGrey, shape: BoxShape.circle),
+                    decoration: BoxDecoration(color: BiliColors.sheetCloseFill, shape: BoxShape.circle),
                     child: Icon(
                       Icons.close,
                       size: BiliMetrics.sheetCloseGlyph,

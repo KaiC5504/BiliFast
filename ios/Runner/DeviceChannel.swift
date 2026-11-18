@@ -39,6 +39,25 @@ enum DeviceChannel {
 
   @MainActor private static var memoryWarnings: NSObjectProtocol?
 
+  /// 深色模式 for iOS's own sheets, alerts, pickers and keyboard. A window made later (a scene's, a text effects window)
+  /// takes it as it shows.
+  @MainActor static var interfaceStyle: UIUserInterfaceStyle = .unspecified {
+    didSet {
+      for case let scene as UIWindowScene in UIApplication.shared.connectedScenes {
+        for window in scene.windows { window.overrideUserInterfaceStyle = interfaceStyle }
+      }
+      guard windowsShowing == nil else { return }
+      windowsShowing = NotificationCenter.default.addObserver(
+        forName: UIWindow.didBecomeVisibleNotification, object: nil, queue: .main
+      ) { note in
+        guard let window = note.object as? UIWindow else { return }
+        MainActor.assumeIsolated { window.overrideUserInterfaceStyle = DeviceChannel.interfaceStyle }
+      }
+    }
+  }
+
+  @MainActor private static var windowsShowing: NSObjectProtocol?
+
   /// The process's phys_footprint (what iOS counts against its memory limit, decoder surfaces included), or -1.
   nonisolated static func footprintMB() -> Int64 {
     var info = task_vm_info_data_t()
@@ -236,9 +255,7 @@ final class DeviceHostApiImpl: DeviceHostApi {
     case .light: value = .light
     case .dark: value = .dark
     }
-    for case let scene as UIWindowScene in UIApplication.shared.connectedScenes {
-      for window in scene.windows { window.overrideUserInterfaceStyle = value }
-    }
+    MainActor.assumeIsolated { DeviceChannel.interfaceStyle = value }
   }
 
   @MainActor private static func setIcon(_ name: String?) async throws {

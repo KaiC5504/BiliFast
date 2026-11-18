@@ -343,14 +343,14 @@ class _Uploader extends StatelessWidget {
                         height: PadFullScreenTheme.endPillHeight,
                         alignment: Alignment.center,
                         decoration: BoxDecoration(
-                          border: Border.all(color: BiliColors.pink, width: LandscapeActionTheme.pillBorder),
+                          border: Border.all(color: BiliColors.videoPink, width: LandscapeActionTheme.pillBorder),
                           borderRadius: BorderRadius.circular(PadFullScreenTheme.endPillRadius),
                         ),
                         child: Text(
                           '为TA充电',
                           maxLines: 1,
                           softWrap: false,
-                          style: TextStyle(color: BiliColors.pink, fontSize: PadFullScreenTheme.endPillText),
+                          style: TextStyle(color: BiliColors.videoPink, fontSize: PadFullScreenTheme.endPillText),
                         ),
                       ),
                     ),
@@ -386,7 +386,7 @@ class _FollowPill extends StatelessWidget {
         width: PadFullScreenTheme.endFollowWidth,
         height: PadFullScreenTheme.endPillHeight,
         decoration: BoxDecoration(
-          color: following ? LandscapeActionTheme.followedPill : BiliColors.pink,
+          color: following ? LandscapeActionTheme.followedPill : BiliColors.videoPink,
           borderRadius: BorderRadius.circular(PadFullScreenTheme.endPillRadius),
         ),
         child: AnimatedSwitcher(

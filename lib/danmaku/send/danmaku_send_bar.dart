@@ -201,14 +201,14 @@ class _DanmakuSendBarState extends State<DanmakuSendBar> {
     final textStyle = TextStyle(
       fontFamily: BiliFonts.family,
       fontSize: DanmakuSendTheme.fieldFont,
-      color: DanmakuSendTheme.fieldText,
+      color: _dark ? DanmakuSendTheme.darkFieldText : DanmakuSendTheme.fieldText,
     );
     final hintStyle = _vertical
         ? textStyle.copyWith(
             fontSize: DanmakuSendTheme.verticalPlaceholderFont,
             color: DanmakuSendTheme.verticalPlaceholder,
           )
-        : textStyle.copyWith(color: DanmakuSendTheme.placeholder);
+        : textStyle.copyWith(color: _dark ? DanmakuSendTheme.darkPlaceholder : DanmakuSendTheme.placeholder);
     // What the field and its hint draw in (the theme's bodyLarge under ours); the hint is a Text so it takes a strut.
     final field = Theme.of(context).textTheme.bodyLarge!.merge(textStyle);
     final hint = field.merge(hintStyle);
@@ -234,7 +234,7 @@ class _DanmakuSendBarState extends State<DanmakuSendBar> {
                 readOnly: widget.closed,
                 maxLines: 1,
                 textInputAction: TextInputAction.send,
-                keyboardAppearance: _dark ? Brightness.dark : Brightness.light,
+                keyboardAppearance: _dark || BiliTheme.dark ? Brightness.dark : Brightness.light,
                 inputFormatters: [
                   LengthLimitingTextInputFormatter(
                     DanmakuSendModel.maxLength,

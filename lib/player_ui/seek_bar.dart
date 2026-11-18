@@ -555,7 +555,7 @@ class _SeekBarPainter extends CustomPainter {
       capsule(math.max(playedTo, 0)),
       Paint()
         ..color = switch (style) {
-          SeekBarStyle.tv => BiliColors.pink,
+          SeekBarStyle.tv => BiliColors.videoPink,
           SeekBarStyle.dot => Color.lerp(BiliColors.verticalPlayed, BiliColors.verticalPink, shown)!,
           SeekBarStyle.pausedDot => BiliColors.verticalPink,
         },
@@ -689,7 +689,7 @@ class _LinePainter extends CustomPainter {
     if (played <= 0) return;
     canvas.drawRRect(
       RRect.fromLTRBR(0, 0, played, size.height, Radius.circular(size.height / 2)),
-      Paint()..color = BiliColors.pink,
+      Paint()..color = BiliColors.videoPink,
     );
   }
 

@@ -521,12 +521,16 @@ class DefaultAvatar extends StatelessWidget {
   static const asset = 'assets/images/noface.jpeg';
 
   @override
-  Widget build(BuildContext context) => Image.asset(
-    asset,
-    key: const ValueKey('default-avatar'),
-    fit: BoxFit.cover,
-    width: double.infinity,
-    height: double.infinity,
-    excludeFromSemantics: true,
-  );
+  Widget build(BuildContext context) {
+    final face = Image.asset(
+      asset,
+      key: const ValueKey('default-avatar'),
+      fit: BoxFit.cover,
+      width: double.infinity,
+      height: double.infinity,
+      excludeFromSemantics: true,
+    );
+    if (!BiliTheme.dark) return face;
+    return ColorFiltered(colorFilter: const ColorFilter.matrix(CoverPlaceholderTheme.nightFace), child: face);
+  }
 }

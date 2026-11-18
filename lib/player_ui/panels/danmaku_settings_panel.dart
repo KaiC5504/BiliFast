@@ -49,11 +49,12 @@ class DanmakuSettingsPanel extends StatefulWidget {
 /// The colours of the dark strip or the light sheet.
 @immutable
 final class _Look {
-  _Look.dark()
+  const _Look.dark()
     : card = DanmakuPanelTheme.card,
       square = DanmakuPanelTheme.square,
       track = DanmakuPanelTheme.track,
-      fill = BiliColors.pink,
+      accent = BiliColors.videoPink,
+      fill = BiliColors.videoPink,
       thumb = DanmakuPanelTheme.text,
       dot = DanmakuPanelTheme.text,
       hairline = DanmakuPanelTheme.hairline,
@@ -68,6 +69,7 @@ final class _Look {
     : card = DanmakuPanelTheme.lightCard,
       square = DanmakuPanelTheme.lightSquare,
       track = DanmakuPanelTheme.lightTrack,
+      accent = BiliColors.pink,
       fill = DanmakuPanelTheme.lightFill,
       thumb = BiliColors.pink,
       dot = BiliColors.pink,
@@ -79,6 +81,7 @@ final class _Look {
       switchOff = DanmakuPanelTheme.lightSwitchOff,
       knobShadow = DanmakuPanelTheme.lightKnobShadow;
 
+  final Color accent;
   final Color card;
   final Color square;
   final Color track;
@@ -879,7 +882,7 @@ class _TypeButton extends StatelessWidget {
                 borderRadius: BorderRadius.circular(DanmakuPanelTheme.squareRadius),
               ),
               alignment: Alignment.center,
-              child: DanmakuPanelGlyph(type.glyph, color: blocked ? BiliColors.pink : look.text, blocked: blocked),
+              child: DanmakuPanelGlyph(type.glyph, color: blocked ? look.accent : look.text, blocked: blocked),
             ),
           ),
           SizedBox(
@@ -987,7 +990,7 @@ class _Switch extends StatelessWidget {
       height: BiliMetrics.panelSwitchHeight,
       padding: const EdgeInsets.all(inset),
       decoration: BoxDecoration(
-        color: on ? BiliColors.pink : look.switchOff,
+        color: on ? look.accent : look.switchOff,
         borderRadius: BorderRadius.circular(BiliMetrics.panelSwitchHeight / 2),
       ),
       child: AnimatedAlign(

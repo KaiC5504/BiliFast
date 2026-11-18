@@ -48,7 +48,7 @@ final class SheetRig {
 }
 
 /// Mounts the layer in [presentation] (the small player or 竖屏). [look] draws at 3× under the system font's
-/// stand-ins for a look-alike shot; otherwise at 1× with the phone's insets.
+/// stand-ins for a look-alike shot; otherwise at 1× with the phone's insets. [dark] draws 深色模式.
 Future<SheetRig> pumpSheetRig(
   WidgetTester tester, {
   Presentation presentation = Presentation.inline,
@@ -57,12 +57,13 @@ Future<SheetRig> pumpSheetRig(
   PageDetails? details,
   bool danmaku = true,
   bool look = false,
+  bool dark = false,
 }) async {
   final saved = BiliFonts.family;
   addTearDown(() => BiliFonts.family = saved);
   if (look) {
     await tester.runAsync(loadSystemFontStandIns);
-    showAsPhone(tester);
+    showAsPhone(tester, dark: dark);
   } else {
     const padding = PhoneFrame.portraitPadding;
     final fake = FakeViewPadding(top: padding.top, bottom: padding.bottom);
@@ -72,6 +73,7 @@ Future<SheetRig> pumpSheetRig(
       ..padding = fake
       ..viewPadding = fake;
     addTearDown(tester.view.reset);
+    BiliTheme.dark = dark;
   }
   final logger = Logger(session: 'test');
   final environment = await AppEnvironment.load(
