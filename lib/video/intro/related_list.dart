@@ -499,7 +499,7 @@ class _UpBadge extends StatelessWidget {
     height: metrics.iconHeight,
     alignment: Alignment.center,
     decoration: BoxDecoration(
-      border: Border.all(color: BiliColors.secondaryText, width: BiliMetrics.endUpBorder),
+      border: Border.all(color: IntroListTheme.iconInk, width: BiliMetrics.endUpBorder),
       borderRadius: BorderRadius.circular(metrics.upRadius),
     ),
     child: Text(
@@ -507,7 +507,7 @@ class _UpBadge extends StatelessWidget {
       textScaler: TextScaler.noScaling,
       style: TextStyle(
         fontFamily: BiliFonts.family,
-        color: BiliColors.secondaryText,
+        color: IntroListTheme.iconInk,
         fontSize: metrics.upFont,
         fontWeight: FontWeight.bold,
         height: 1,
@@ -525,7 +525,7 @@ class _CountIcon extends StatelessWidget {
   @override
   Widget build(BuildContext context) => CustomPaint(
     size: Size(metrics.iconWidth, metrics.iconHeight),
-    painter: CountPainter(glyph, color: BiliColors.secondaryText),
+    painter: CountPainter(glyph, color: IntroListTheme.iconInk),
   );
 }
 
@@ -578,7 +578,7 @@ class _DotsPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    final paint = Paint()..color = BiliColors.secondaryText;
+    final paint = Paint()..color = IntroListTheme.iconInk;
     final radius = dot / 2;
     for (var i = 0; i < 3; i++) {
       canvas.drawCircle(Offset(radius, radius + i * (dot + gap)), radius, paint);

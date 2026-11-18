@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -98,6 +99,81 @@ void main() {
     expect(File(path()).existsSync(), isFalse);
   });
 
+  testWidgets('深色跟随系统 is kept for the next launch and follows iOS from the first frame', (tester) async {
+    File(path()).writeAsStringSync(jsonEncode({'dark': false, 'followSystem': true}));
+    addTearDown(tester.platformDispatcher.clearPlatformBrightnessTestValue);
+    tester.platformDispatcher.platformBrightnessTestValue = Brightness.dark;
+    final styles = <NativeInterfaceStyle>[];
+    final model = (await tester.runAsync(() => AppearanceModel.load(path(), native: styles.add)))!;
+    addTearDown(model.dispose);
+    model.attach();
+    expect(model.followSystem, isTrue);
+    expect(BiliTheme.dark, isTrue);
+    expect(styles.last, NativeInterfaceStyle.system);
+  });
+
+  testWidgets("under the PC's --dark ☾/☀ still turns it, and nothing is saved", (tester) async {
+    final model = (await tester.runAsync(() => AppearanceModel.load(path())))!;
+    addTearDown(model.dispose);
+    model
+      ..forced = true
+      ..attach();
+    await tester.runAsync(model.toggle);
+    expect(BiliTheme.dark, isFalse);
+    await tester.runAsync(model.toggle);
+    expect(BiliTheme.dark, isTrue);
+    expect(File(path()).existsSync(), isFalse);
+  });
+
+  testWidgets("away from the screen iOS's trait flips are ignored, and the mode is settled on the way back", (
+    tester,
+  ) async {
+    final model = AppearanceModel.memory(followSystem: true);
+    addTearDown(model.dispose);
+    addTearDown(tester.platformDispatcher.clearPlatformBrightnessTestValue);
+    tester.platformDispatcher.platformBrightnessTestValue = Brightness.light;
+    model.attach();
+    var heard = 0;
+    model.addListener(() => heard++);
+
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.hidden);
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+    tester.platformDispatcher.platformBrightnessTestValue = Brightness.dark;
+    tester.platformDispatcher.platformBrightnessTestValue = Brightness.light;
+    tester.platformDispatcher.platformBrightnessTestValue = Brightness.dark;
+    expect(heard, 0, reason: 'no redraw while away');
+    expect(BiliTheme.dark, isFalse);
+
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.hidden);
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+    expect(BiliTheme.dark, isTrue, reason: 'iOS is dark now');
+    expect(heard, 1);
+  });
+
+  testWidgets('a page covered while the mode changes shows the new mode when uncovered, const widgets included', (
+    tester,
+  ) async {
+    final model = AppearanceModel.memory();
+    addTearDown(model.dispose);
+    model.attach();
+    final navigator = GlobalKey<NavigatorState>();
+    await tester.pumpWidget(
+      AppearanceRedraw(
+        model: model,
+        builder: (context) => MaterialApp(navigatorKey: navigator, home: const _Swatch()),
+      ),
+    );
+    unawaited(navigator.currentState!.push(MaterialPageRoute<void>(builder: (_) => const ColoredBox(color: Color(0xFF000000)))));
+    await tester.pumpAndSettle();
+    await model.toggle();
+    await tester.pump();
+    navigator.currentState!.pop();
+    await tester.pumpAndSettle();
+    expect(tester.widget<ColoredBox>(find.byKey(const ValueKey('swatch'))).color, const Color(0xFF17181A));
+  });
+
   testWidgets('a change draws every widget again, const ones and painters included, state kept', (tester) async {
     final model = AppearanceModel.memory();
     addTearDown(model.dispose);
@@ -155,4 +231,12 @@ class _Card extends CustomPainter {
 
   @override
   bool shouldRepaint(_Card oldDelegate) => false;
+}
+
+class _Swatch extends StatelessWidget {
+  const _Swatch();
+
+  @override
+  Widget build(BuildContext context) =>
+      ColoredBox(key: const ValueKey('swatch'), color: BiliColors.card, child: const SizedBox.expand());
 }

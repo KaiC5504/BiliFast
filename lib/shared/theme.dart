@@ -1056,6 +1056,9 @@ abstract final class IntroListTheme {
   static const sectionTop = 46 / 3;
   static const sectionBottom = 8 / 3;
 
+  /// 合集's bars and ›, and the related rows' small icons: the text's grey by day, 240 draws them a shade darker.
+  static Color get iconInk => tone(0xFF9499A0, 0xFF70747C);
+
   /// The action row ends this far below its count line, which puts the first section's top 45.17 under the icons'
   /// centre, as on 03 and font-check 02 (18 under 不喜欢's ink).
   static const actionsBottom = 0.5;
@@ -2156,8 +2159,8 @@ abstract final class SeekPreviewTheme {
 abstract final class ComposerTheme {
   static const gutter = BiliMetrics.gutter;
 
-  /// 14's page shows through at 80%: its white reads #CCCCCC. 257's dark page is dimmed further, 171819 to 0D0D0D.
-  static Color get dim => tone(0x33000000, 0x6F000000);
+  /// 14's page shows through at 80%: its white reads #CCCCCC; 257's dark page takes the same 20%.
+  static const dim = Color(0x33000000);
 
   /// Ga11 at night (242628 on 257), lighter than the page.
   static Color get sheet => tone(0xFFFFFFFF, 0xFF242628);
@@ -6198,7 +6201,7 @@ abstract final class DynamicFeedTheme {
 
   /// The pen without a 装扮; dark (243) draws it grey, not in the title's white.
   static Color get writeInk =>
-      BiliTheme.dark ? const Color(0xFFA2A7AE) : titleInk.withValues(alpha: writeOpacity);
+      BiliTheme.dark ? const Color(0xFF9A9EA5) : titleInk.withValues(alpha: writeOpacity);
 
   /// The white top under the header, 186 pt to the first grey band. 全部 / 视频: two #F6F7F8 halves 26 pt tall, 8 pt
   /// under the header, 12 pt in and 8 apart, 4 pt corners; the chosen one's word pink.
@@ -6622,7 +6625,7 @@ abstract final class FriendsTheme {
   static const unfollowGlyphWidth = 20.0;
   static const unfollowGlyphHeight = 19.0;
   static const actionGap = 8.0;
-  static Color get actionGapFill => tone(0xFFFAF8F6, 0xFF0A0B0C);
+  static Color get actionGapFill => tone(0xFFF8F8F8, 0xFF0A0B0C);
   static const cancelRow = 148 / 3;
   static const cancelRowText = 16.0;
   static const cancelRowLine = 22.0;
@@ -6697,10 +6700,11 @@ abstract final class FollowingListTheme {
   static const backDisc = 136 / 3;
   static const backCentreX = 42.0;
   static const backTarget = 52.0;
-  static const backLift = Color(0x4DFFFFFF);
+  /// At night the official glass back button (242, 249) reads #353638 on the dark bar, its light edge faint.
+  static Color get backLift => tone(0x4DFFFFFF, 0x21FFFFFF);
   static const backRim = Color(0x40000000);
   static const backRimWidth = 0.5;
-  static const backGloss = Color(0xCCFFFFFF);
+  static Color get backGloss => tone(0xCCFFFFFF, 0x33FFFFFF);
   static const backGlossWidth = 1.0;
   static const backShadow = Color(0x0D000000);
   static const backShadowBlur = 10.0;
@@ -8274,7 +8278,7 @@ abstract final class HotListTheme {
   static const coverWidth = 167.0;
   static const coverHeight = 94.0;
   static const coverRadius = 11 / 3;
-  static Color get coverPlaceholder => BiliColors.pageGrey;
+  static Color get coverPlaceholder => tone(0xFFF1F2F3, 0xFF1E2022);
   static const hairlineTop = 114.0;
   static const hairline = 0.5;
   static Color get hairlineInk => BiliColors.divider;
@@ -9078,7 +9082,7 @@ abstract final class LiveTabTheme {
   static Color get page => BiliColors.pageGrey;
   static Color get card => BiliColors.card;
   static const radius = 4.0;
-  static Color get coverPlaceholder => BiliColors.pageGrey;
+  static Color get coverPlaceholder => tone(0xFFF1F2F3, 0xFF1E2022);
   static Color get text => BiliColors.text;
   static Color get secondary => BiliColors.secondaryText;
   static const onCover = BiliColors.onCover;
@@ -9928,7 +9932,7 @@ abstract final class LiveSendTheme {
   static const pillGap = 4.0;
   static const pillLeft = 12.0;
   static const pillLeftLandscape = 44.0;
-  static const pillFill = Color(0xFF18191C);
+  static const pillFill = Color(0xFF17181E);
   static const pillLine = Color(0x33FFFFFF);
   static const pillLineWidth = 2 / 3;
   // Inside the line, which the decoration adds to the padding.
@@ -9944,7 +9948,7 @@ abstract final class LiveSendTheme {
   static const pillMarkInk = Color(0xFFFFFFFF);
   static const pillTextGap = 16 / 3;
   static const pillText = 12.0;
-  static const pillInk = Color(0xFFE3E5E7);
+  static const pillInk = Color(0xFFE5E5E5);
 
   /// 223: the same panel across the top of the keyboard, the field from 106 pt in to 6 before three glyph cells
   /// (centred 696.67, 732, 768), 6 more to 发送, which ends 106 from the right edge; the emotes from 74 in, fading 66

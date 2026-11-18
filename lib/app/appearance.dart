@@ -13,7 +13,7 @@ import '../shared/theme.dart';
 class AppearanceModel extends ChangeNotifier with WidgetsBindingObserver {
   AppearanceModel._(this._path, this._dark, this._followSystem, this._logger, this._native);
 
-  /// Kept in memory only, for tests, the PC and a store that can't be read.
+  /// Kept in memory only; for tests and AppScope's default.
   factory AppearanceModel.memory({
     bool dark = false,
     bool followSystem = false,
@@ -55,19 +55,25 @@ class AppearanceModel extends ChangeNotifier with WidgetsBindingObserver {
   bool _dark;
   bool _followSystem;
   bool _attached = false;
+  bool _resumed = true;
+  bool _saving = true;
   Future<void> _writing = Future.value();
 
-  /// The PC's `--dark`: dark for this run, nothing saved.
-  bool forced = false;
+  /// The PC's `--dark`: dark for this run, and nothing this run chooses is saved. ☾/☀ still turns it.
+  bool get forced => _forced;
+  bool _forced = false;
+  set forced(bool value) {
+    _forced = value;
+    if (value) _saving = false;
+  }
 
   /// 深色跟随系统: dark whenever iOS is.
   bool get followSystem => _followSystem;
 
-  /// Whether the app draws dark now.
   bool get dark => BiliTheme.dark;
 
   bool get _wanted {
-    if (forced) return true;
+    if (_forced) return true;
     if (!_followSystem) return _dark;
     return WidgetsBinding.instance.platformDispatcher.platformBrightness == Brightness.dark;
   }
@@ -84,6 +90,7 @@ class AppearanceModel extends ChangeNotifier with WidgetsBindingObserver {
   /// 我的's ☾/☀: the other mode, which also stops following iOS (as the official app's switch does).
   Future<void> toggle() {
     _dark = !BiliTheme.dark;
+    _forced = false;
     _followSystem = false;
     _apply();
     return _save();
@@ -93,21 +100,30 @@ class AppearanceModel extends ChangeNotifier with WidgetsBindingObserver {
   Future<void> setFollowSystem(bool value) {
     if (value == _followSystem) return Future.value();
     if (!value) _dark = BiliTheme.dark;
+    _forced = false;
     _followSystem = value;
     // The switch's own listeners hear it even when the mode stays.
     if (!_apply()) notifyListeners();
     return _save();
   }
 
+  // Away from the screen iOS flips the traits to snapshot the app in both modes for the switcher; following them
+  // would redraw everything twice per trip, so the mode is settled again on the way back.
   @override
   void didChangePlatformBrightness() {
-    if (_followSystem) _apply();
+    if (_followSystem && _resumed) _apply();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    _resumed = state == AppLifecycleState.resumed;
+    if (_resumed && _followSystem) _apply();
   }
 
   /// Whether listeners were told of a change of mode.
   bool _apply() {
     _native?.call(
-      forced || !_followSystem
+      _forced || !_followSystem
           ? (_wanted ? NativeInterfaceStyle.dark : NativeInterfaceStyle.light)
           : NativeInterfaceStyle.system,
     );
@@ -121,7 +137,7 @@ class AppearanceModel extends ChangeNotifier with WidgetsBindingObserver {
 
   Future<void> _save() {
     final path = _path;
-    if (path == null || forced) return Future.value();
+    if (path == null || !_saving) return Future.value();
     final text = jsonEncode({'dark': _dark, 'followSystem': _followSystem});
     // One write after another, so an older state never lands last; a failed one doesn't stop the next.
     final write = _writing.then((_) => _write(path, text));

@@ -395,7 +395,7 @@ void main() {
   );
 
   testWidgets(
-    'the composer at night (257): Ga11 sheet over a deeper dim, the dark keyboard, the faded 发布',
+    'the composer at night (257): Ga11 sheet over the same dim as by day, the dark keyboard, the faded 发布',
     (tester) async {
       await open(tester);
       await tester.tap(find.byKey(const ValueKey('tab-comments')));

@@ -4,7 +4,7 @@ import 'dart:io' show Directory, File, FileSystemEntity, Platform;
 import 'package:bili_core/devlog.dart';
 import 'package:flutter/cupertino.dart' show CupertinoThemeData;
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart' show SystemUiOverlayStyle;
+import 'package:flutter/services.dart' show PlatformException, SystemUiOverlayStyle;
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:path_provider/path_provider.dart';
 
@@ -114,7 +114,15 @@ Future<void> main(List<String> args) async {
     messagePrefs = await MessagePrefs.load(supportFilePath('message_prefs.json'));
     appearance = await AppearanceModel.load(
       supportFilePath('appearance.json'),
-      native: Platform.isIOS ? (style) => unawaited(DeviceHostApi().setInterfaceStyle(style)) : null,
+      native: Platform.isIOS
+          ? (style) => unawaited(
+              DeviceHostApi().setInterfaceStyle(style).catchError((Object error) {
+                Logger.shared.warn(LogCategory.app, 'interface style not set', {
+                  'error': error is PlatformException ? error.code : '${error.runtimeType}',
+                });
+              }),
+            )
+          : null,
     );
     followBaselines = await FollowBaselines.load(supportFilePath('follow_badge.json'));
     historyOutbox = await HistoryOutbox.load(supportFilePath('history_outbox.json'));
@@ -228,7 +236,6 @@ Future<void> main(List<String> args) async {
   unawaited(offline.start());
   unawaited(sideload.start());
   NotifyTaps(host: services.notify, navigator: services.navigator).start();
-  // PC checks: dark for this run, nothing saved.
   appearance
     ..forced = args.contains('--dark')
     ..attach();
