@@ -57,7 +57,7 @@ void main() {
     final pen = tester.widget<Image>(
       find.descendant(of: find.byKey(const ValueKey('follow-write')), matching: find.byType(Image)),
     );
-    expect(pen.color, const Color(0xFFA2A7AE));
+    expect(pen.color, const Color(0xFF9A9EA5));
     final region = tester.widget<AnnotatedRegion<SystemUiOverlayStyle>>(
       find.byType(AnnotatedRegion<SystemUiOverlayStyle>).last,
     );
