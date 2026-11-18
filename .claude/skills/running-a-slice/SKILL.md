@@ -135,10 +135,13 @@ Fix small findings directly.
 
 1. A dev build on KaiC's phone, when he's on the Mac's Wi-Fi: `python scripts/mac.py phone` (about 3 minutes,
    his login kept), then his numbered steps. If his phone can't be reached, stop and tell him.
-2. Update the layout section for any new folders. Remove the slice's worktrees and branches (step 6 below). Held (the
-   default): list the slice under CLAUDE.md's Next as on main, not released, push main, report and stop here.
-   The rest of this section runs only when KaiC says ship; the CLAUDE.md status entry is written then, covering every
-   held slice, as is `docs/release-notes.md`.
+2. Update the layout section for any new folders. Remove the slice's worktrees and branches (step 6 below). Add the
+   slice's user-facing line(s) to `docs/release-notes.md` (short native Chinese, what a user notices; nothing for a
+   change no user sees) in the same commit: the file always lists everything on main since the last shipped build,
+   so it builds up across held slices and is ready when KaiC says ship (2026-11-19). Writing it releases nothing.
+   Held (the default): list the slice under CLAUDE.md's Next as on main, not released, push main, report and stop
+   here. The rest of this section runs only when KaiC says ship; the CLAUDE.md status entry is written then, covering
+   every held slice, and `docs/release-notes.md` is only read over and trimmed.
 3. Run `python scripts/gate.py` on the committed tree.
 4. Push main, then `python scripts/testflight.py start`.
 5. Track the run in the background: one `gh run view <id> --json status` every 90 s until it completes, then
