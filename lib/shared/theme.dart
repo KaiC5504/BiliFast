@@ -5984,7 +5984,15 @@ abstract final class DynamicCardTheme {
   static const emote = 20.0;
   static const emoteLarge = 28.0;
 
-  /// The lottery's gift and a video link's ▶ circle, the icon font's, in the link blue (135, 131).
+  /// In 图文's text on 关注 a line holding an emote grows (243: 29 pt under the line before, where the lines are 26.78;
+  /// 136's plain pitch doesn't grow): the emote's whole height counts above the baseline, past PingFang's ascent, and
+  /// the pitch scales that line as it scales PingFang's own; the emote is drawn up from PingFang's descent (243).
+  static const pingFangAscent = 1.06;
+  static const pingFangDescent = 0.34;
+  static const pingFangLine = 1.4;
+
+  /// The lottery's gift and a video link's ▶ circle, the icon font's, in the link blue (135, 131). The gift's are at
+  /// [text]'s size and scale with the text it sits in (29: 14.67 × 15 in the 16 pt repost text).
   static const giftWidth = 47 / 3;
   static const giftHeight = 16.0;
   static const giftBefore = 3.0;
@@ -6009,6 +6017,11 @@ abstract final class DynamicCardTheme {
   static const followRepostBodyGap = 28 / 3;
   static const followRepostText = 16.0;
   static const followRepostTextLine = 76 / 3;
+
+  /// Its ... 全文 is drawn in Ga7's and Lb7's night values by day too (29); no dark reference shows it, and at night
+  /// those are the text's and the link's own.
+  static Color get followRepostEllipsisInk => tone(0xFFA2A7AE, 0xFFA2A7AE);
+  static Color get followRepostMoreInk => tone(0xFF58B1D4, 0xFF58B1D4);
 
   /// The pictures: corners of 4 pt; two to four two a row and more three a row, in 119.17 pt cells 1.67 apart (127),
   /// square, or about 3:4 (158.33 tall) for pictures taller than square; one alone at its shape across the width

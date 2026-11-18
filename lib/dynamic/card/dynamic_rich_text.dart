@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 import 'dart:ui' as ui;
 
 import 'package:bili_core/api.dart';
@@ -25,6 +26,9 @@ class DynamicRichText extends StatefulWidget {
     this.moreLabel = '全文',
     this.onMore,
     this.wideTopicGaps = false,
+    this.emoteLinesGrow = false,
+    this.ellipsisInk,
+    this.moreInk,
   });
 
   final List<DynamicNode> nodes;
@@ -39,6 +43,14 @@ class DynamicRichText extends StatefulWidget {
   /// The spaces beside topics [DynamicCardTheme.topicGap] wider, as a 图文 post's text on 关注 (135, 29).
   final bool wideTopicGaps;
 
+  /// A line holding an emote grows past the pitch, as 图文's text on 关注 does (243); see
+  /// [DynamicCardTheme.pingFangAscent].
+  final bool emoteLinesGrow;
+
+  /// The ... and [moreLabel] in these instead of the text's colour and the link blue (29's repost block).
+  final Color? ellipsisInk;
+  final Color? moreInk;
+
   /// What the text ends with when cut: three periods and a space before [moreLabel] (127, 128).
   static const ellipsis = '... ';
 
@@ -52,6 +64,7 @@ class _DynamicRichTextState extends State<DynamicRichText> {
   late List<_Run> _runs;
   late int _units;
   bool _large = false;
+  bool _grown = false;
 
   /// The runs carry the link colour of the mode they were made in.
   bool _builtDark = BiliTheme.dark;
@@ -71,7 +84,9 @@ class _DynamicRichTextState extends State<DynamicRichText> {
     super.didUpdateWidget(oldWidget);
     if (!identical(oldWidget.nodes, widget.nodes) ||
         oldWidget.style.fontSize != widget.style.fontSize ||
+        oldWidget.style.height != widget.style.height ||
         oldWidget.wideTopicGaps != widget.wideTopicGaps ||
+        oldWidget.emoteLinesGrow != widget.emoteLinesGrow ||
         (oldWidget.onMore == null) != (widget.onMore == null)) {
       _build();
     }
@@ -106,6 +121,9 @@ class _DynamicRichTextState extends State<DynamicRichText> {
     final linked = TextStyle(color: DynamicCardTheme.linkInk);
     final runs = <_Run>[];
     _large = false;
+    _grown = false;
+    final scale = (widget.style.fontSize ?? DynamicCardTheme.text) / DynamicCardTheme.text;
+    final growth = widget.emoteLinesGrow ? _EmoteGrowth.of(widget.style) : null;
     final nodes = widget.nodes;
     // True right after the space put in after an @name: the next @name is still set apart from it.
     var spaced = false;
@@ -123,24 +141,29 @@ class _DynamicRichTextState extends State<DynamicRichText> {
         case DynamicEmojiNode(:final text, :final url, :final large):
           if (large) _large = true;
           final side = large ? DynamicCardTheme.emoteLarge : DynamicCardTheme.emote;
-          runs.add(
-            _WidgetRun(
-              Size.square(side),
-              Semantics(
-                label: text,
-                image: true,
-                child: RemoteImage(
-                  url,
-                  size: Size.square(side),
-                  fit: BoxFit.contain,
-                  placeholder: const SizedBox.shrink(),
-                ),
-              ),
-            ),
+          final emote = Semantics(
+            label: text,
+            image: true,
+            child: RemoteImage(url, size: Size.square(side), fit: BoxFit.contain, placeholder: const SizedBox.shrink()),
           );
+          if (growth != null && !large) {
+            _grown = true;
+            runs.add(
+              _WidgetRun(
+                Size(side, growth.box),
+                Stack(
+                  clipBehavior: Clip.none,
+                  children: [Positioned(left: 0, top: growth.top, width: side, height: side, child: emote)],
+                ),
+                alignment: ui.PlaceholderAlignment.aboveBaseline,
+              ),
+            );
+          } else {
+            runs.add(_WidgetRun(Size.square(side), emote));
+          }
         case DynamicMentionNode(:final text, :final mid):
           final name = text.startsWith('@') ? text : '@$text';
-          if (afterSpaced || _endsInWord(runs)) _widenLast(runs, DynamicCardTheme.mentionLead);
+          if (afterSpaced || _endsInWord(runs)) _lead(runs);
           runs.add(_TextRun(name, linked, mid > 0 ? _tap(() => _openSpace(mid, name)) : null));
           if (!_isSpace(name.codeUnitAt(name.length - 1)) && _wordNext(nodes, index)) {
             runs.add(_TextRun(' '));
@@ -173,21 +196,16 @@ class _DynamicRichTextState extends State<DynamicRichText> {
             ..add(_TextRun(text, linked, _tap(open)));
         case DynamicBadgeNode(:final text, :final kind):
           if (kind == 'lottery') {
+            final before = DynamicCardTheme.giftBefore * scale;
+            final width = DynamicCardTheme.giftWidth * scale;
+            final height = DynamicCardTheme.giftHeight * scale;
             runs.add(
               _WidgetRun(
-                const Size(
-                  DynamicCardTheme.giftBefore + DynamicCardTheme.giftWidth + DynamicCardTheme.giftAfter,
-                  DynamicCardTheme.giftHeight,
-                ),
+                Size(before + width + DynamicCardTheme.giftAfter * scale, height),
                 _IconTap(
                   onTap: _soon,
-                  before: DynamicCardTheme.giftBefore,
-                  child: DynamicIcon(
-                    DynamicArt.gift,
-                    width: DynamicCardTheme.giftWidth,
-                    height: DynamicCardTheme.giftHeight,
-                    color: DynamicCardTheme.linkInk,
-                  ),
+                  before: before,
+                  child: DynamicIcon(DynamicArt.gift, width: width, height: height, color: DynamicCardTheme.linkInk),
                 ),
               ),
             );
@@ -205,7 +223,10 @@ class _DynamicRichTextState extends State<DynamicRichText> {
 
   static bool _isWord(int rune) => _word.hasMatch(String.fromCharCode(rune));
 
-  static bool _isSpace(int unit) => unit == 0x20 || unit == 0x0A || unit == 0x3000 || unit == 0x09;
+  static bool _isSpace(int unit) =>
+      unit == 0x20 || unit == 0x0A || unit == 0x3000 || unit == 0x09 || unit == _zeroWidthSpace;
+
+  static const _zeroWidthSpace = 0x200B;
 
   static bool _endsInWord(List<_Run> runs) => switch (runs.lastOrNull) {
     _TextRun(:final text) when text.isNotEmpty => _isWord(text.runes.last),
@@ -236,15 +257,26 @@ class _DynamicRichTextState extends State<DynamicRichText> {
     if (last) runs.add(_TextRun(' ', const TextStyle(letterSpacing: DynamicCardTheme.topicGap)));
   }
 
-  /// The last run's last character followed by [amount] more.
-  static void _widenLast(List<_Run> runs, double amount) {
-    final run = runs.removeLast() as _TextRun;
+  /// [DynamicCardTheme.mentionLead] after the last run, as letter spacing on its last character; after a link, badge or
+  /// title on a zero-width space of its own instead, since splitting a tappable run makes it two elements to VoiceOver.
+  static void _lead(List<_Run> runs) {
+    final run = runs.last as _TextRun;
+    if (run.recognizer != null) {
+      runs.add(
+        _TextRun(String.fromCharCode(_zeroWidthSpace), const TextStyle(letterSpacing: DynamicCardTheme.mentionLead)),
+      );
+      return;
+    }
+    runs.removeLast();
     final text = run.text;
     final cut = text.length - String.fromCharCode(text.runes.last).length;
-    if (cut > 0) runs.add(_TextRun(text.substring(0, cut), run.style, run.recognizer));
+    if (cut > 0) runs.add(_TextRun(text.substring(0, cut), run.style));
     final style = run.style ?? const TextStyle();
     runs.add(
-      _TextRun(text.substring(cut), style.copyWith(letterSpacing: (style.letterSpacing ?? 0) + amount), run.recognizer),
+      _TextRun(
+        text.substring(cut),
+        style.copyWith(letterSpacing: (style.letterSpacing ?? 0) + DynamicCardTheme.mentionLead),
+      ),
     );
   }
 
@@ -253,27 +285,33 @@ class _DynamicRichTextState extends State<DynamicRichText> {
     unawaited(DynamicOpen.space(context, UploaderRef(mid: mid, name: bare.isEmpty ? null : bare)));
   }
 
-  /// The runs' first [units] as spans, the placeholders' sizes in their order into [sizes].
-  List<InlineSpan> _spans(int units, List<Size> sizes) {
+  /// The runs' first [units] as spans, the placeholders' dimensions in their order into [placeholders].
+  List<InlineSpan> _spans(int units, List<PlaceholderDimensions> placeholders) {
     final spans = <InlineSpan>[];
     var left = units;
     for (final run in _runs) {
       if (left <= 0) break;
       final take = run.length < left ? run.length : left;
-      spans.add(run.span(take, sizes));
+      spans.add(run.span(take, placeholders));
       left -= take;
     }
     return spans;
   }
 
-  List<InlineSpan> _suffix() => [
-    const TextSpan(text: DynamicRichText.ellipsis),
-    TextSpan(
-      text: widget.moreLabel,
-      style: TextStyle(color: DynamicCardTheme.linkInk),
-      recognizer: _more,
-    ),
-  ];
+  List<InlineSpan> _suffix() {
+    final ellipsisInk = widget.ellipsisInk;
+    return [
+      TextSpan(
+        text: DynamicRichText.ellipsis,
+        style: ellipsisInk == null ? null : TextStyle(color: ellipsisInk),
+      ),
+      TextSpan(
+        text: widget.moreLabel,
+        style: TextStyle(color: widget.moreInk ?? DynamicCardTheme.linkInk),
+        recognizer: _more,
+      ),
+    ];
+  }
 
   /// How many units show before … [DynamicRichText.moreLabel], or null when the whole text shows as it is.
   int? _cutAt(BuildContext context, double width, TextStyle style, StrutStyle? strut) {
@@ -286,21 +324,18 @@ class _DynamicRichTextState extends State<DynamicRichText> {
     if (key == _cutFor) return _cut;
 
     bool fits(int units, {required bool withSuffix}) {
-      final sizes = <Size>[];
-      final spans = _spans(units, sizes);
-      final painter =
-          TextPainter(
-            text: TextSpan(style: style, children: [...spans, if (withSuffix) ..._suffix()]),
-            textDirection: TextDirection.ltr,
-            maxLines: maxLines,
-            strutStyle: strut,
-            textScaler: scaler,
-            locale: locale,
-            textHeightBehavior: defaults.textHeightBehavior,
-            textWidthBasis: defaults.textWidthBasis,
-          )..setPlaceholderDimensions([
-            for (final size in sizes) PlaceholderDimensions(size: size, alignment: ui.PlaceholderAlignment.middle),
-          ]);
+      final placeholders = <PlaceholderDimensions>[];
+      final spans = _spans(units, placeholders);
+      final painter = TextPainter(
+        text: TextSpan(style: style, children: [...spans, if (withSuffix) ..._suffix()]),
+        textDirection: TextDirection.ltr,
+        maxLines: maxLines,
+        strutStyle: strut,
+        textScaler: scaler,
+        locale: locale,
+        textHeightBehavior: defaults.textHeightBehavior,
+        textWidthBasis: defaults.textWidthBasis,
+      )..setPlaceholderDimensions(placeholders);
       painter.layout(maxWidth: width);
       final fit = !painter.didExceedMaxLines;
       painter.dispose();
@@ -354,7 +389,16 @@ class _DynamicRichTextState extends State<DynamicRichText> {
   Widget build(BuildContext context) {
     if (_builtDark != BiliTheme.dark) _build();
     final style = DefaultTextStyle.of(context).style.merge(widget.style);
-    final strut = _large ? null : BiliFonts.strut(style);
+    var strut = _large ? null : BiliFonts.strut(style);
+    // Forced, the strut holds every line to the pitch; an emote's line may only grow past a loose one.
+    if (_grown && strut != null) {
+      strut = StrutStyle(
+        fontFamily: strut.fontFamily,
+        fontSize: strut.fontSize,
+        height: strut.height,
+        leadingDistribution: strut.leadingDistribution,
+      );
+    }
     return LayoutBuilder(
       builder: (context, constraints) {
         final cut = _cutAt(context, constraints.maxWidth, style, strut);
@@ -374,7 +418,7 @@ class _DynamicRichTextState extends State<DynamicRichText> {
 sealed class _Run {
   int get length;
 
-  InlineSpan span(int units, List<Size> sizes);
+  InlineSpan span(int units, List<PlaceholderDimensions> placeholders);
 }
 
 final class _TextRun extends _Run {
@@ -388,7 +432,7 @@ final class _TextRun extends _Run {
   int get length => text.length;
 
   @override
-  InlineSpan span(int units, List<Size> sizes) {
+  InlineSpan span(int units, List<PlaceholderDimensions> placeholders) {
     var end = units;
     // Never between the halves of a surrogate pair.
     if (end < text.length && end > 0 && _isHighSurrogate(text.codeUnitAt(end - 1))) end -= 1;
@@ -399,21 +443,47 @@ final class _TextRun extends _Run {
 }
 
 final class _WidgetRun extends _Run {
-  _WidgetRun(this.size, this.child);
+  _WidgetRun(this.size, this.child, {this.alignment = ui.PlaceholderAlignment.middle});
 
   final Size size;
   final Widget child;
+  final ui.PlaceholderAlignment alignment;
 
   @override
   int get length => 1;
 
   @override
-  InlineSpan span(int units, List<Size> sizes) {
-    sizes.add(size);
+  InlineSpan span(int units, List<PlaceholderDimensions> placeholders) {
+    placeholders.add(PlaceholderDimensions(size: size, alignment: alignment, baseline: TextBaseline.alphabetic));
     return WidgetSpan(
-      alignment: ui.PlaceholderAlignment.middle,
+      alignment: alignment,
+      baseline: TextBaseline.alphabetic,
       child: SizedBox.fromSize(size: size, child: child),
     );
+  }
+}
+
+/// An emote in a line that grows for it ([DynamicCardTheme.pingFangAscent]): its placeholder [box] tall above the
+/// baseline, so the line ends the grown height under the line before, and the emote [top] down in it.
+final class _EmoteGrowth {
+  const _EmoteGrowth(this.box, this.top);
+
+  final double box;
+  final double top;
+
+  /// Null where the text isn't held to a pitch (no strut: not the system font, or no line height).
+  static _EmoteGrowth? of(TextStyle style) {
+    final size = style.fontSize;
+    final height = style.height;
+    if (size == null || height == null || BiliFonts.strut(style) == null) return null;
+    final line = size * height;
+    final natural = DynamicCardTheme.pingFangLine * size;
+    final descent = DynamicCardTheme.pingFangDescent * size;
+    const side = DynamicCardTheme.emote;
+    final grown = math.max(line, (side + descent) * line / natural);
+    // The strut's descent: PingFang's, with half the leading dynamicStyle spreads evenly.
+    final box = grown - (descent + (line - natural) / 2);
+    return _EmoteGrowth(box, box + descent - side);
   }
 }
 
