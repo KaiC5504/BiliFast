@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:math' as math;
 
 import 'package:bili_core/devlog.dart';
 import 'package:bilifast/account/keychain_store.dart';
@@ -18,6 +19,7 @@ import 'package:bilifast/search/search_glyphs.dart';
 import 'package:bilifast/search/search_page.dart';
 import 'package:bilifast/shared/theme.dart';
 import 'package:bilifast/skin/skin.dart';
+import 'package:flutter/gestures.dart' show kTouchSlop;
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -274,6 +276,65 @@ void main() {
     await pull.up();
     await settle(tester, 40);
     expect(header(tester), open);
+  });
+
+  testWidgets('down the list a finger dragging it down 20 pt opens it (250), held or not let go yet; scrolling back up '
+      'folds it again', (tester) async {
+    await show(tester);
+    final open = header(tester);
+    final far = math.min(1500.0, feedScroll(tester).maxScrollExtent - 50);
+    await scrollTo(tester, far);
+    expect(header(tester).bottom, open.bottom - _fold);
+
+    final drag = await tester.startGesture(tester.getCenter(find.byKey(const ValueKey('feed'))));
+    await drag.moveBy(const Offset(0, kTouchSlop + 1));
+    await tester.pump();
+    final start = feedScroll(tester).pixels;
+    while (start - feedScroll(tester).pixels < HomeHeaderTheme.reveal - 4) {
+      await drag.moveBy(const Offset(0, 2));
+      await tester.pump();
+    }
+    await settle(tester, 4);
+    expect(header(tester).bottom, open.bottom - _fold, reason: 'not far enough yet');
+    while (start - feedScroll(tester).pixels < HomeHeaderTheme.reveal) {
+      await drag.moveBy(const Offset(0, 2));
+      await tester.pump();
+    }
+    await settle(tester);
+    expect(header(tester), open, reason: 'opened with the finger still down');
+    expect(feedScroll(tester).pixels, greaterThan(far - 100));
+    expect(magnifier(), findsNothing);
+
+    await drag.moveBy(const Offset(0, -(HomeHeaderTheme.refold + 2)));
+    await tester.pump();
+    await settle(tester);
+    expect(header(tester).bottom, open.bottom - _fold, reason: 'folded by the scroll back up');
+    await drag.up();
+    await settle(tester, 60);
+  });
+
+  testWidgets("a flick down the list doesn't open it, however far its momentum carries the list", (tester) async {
+    await show(tester);
+    final open = header(tester);
+    final far = feedScroll(tester).maxScrollExtent;
+    await scrollTo(tester, far);
+    // A 15 pt flick, short of the reveal while held, then its momentum.
+    final flick = await tester.startGesture(tester.getCenter(find.byKey(const ValueKey('feed'))));
+    await flick.moveBy(const Offset(0, kTouchSlop + 1));
+    await tester.pump();
+    for (var i = 0; i < 5; i++) {
+      await flick.moveBy(const Offset(0, 3));
+      await tester.pump(const Duration(milliseconds: 4));
+    }
+    (feedScroll(tester) as ScrollPositionWithSingleContext).goBallistic(-3000);
+    await flick.cancel();
+    for (var i = 0; i < 20; i++) {
+      await tester.pump(const Duration(milliseconds: 16));
+    }
+    expect(feedScroll(tester).pixels, lessThan(far - 200), reason: 'the momentum carried it');
+    expect(feedScroll(tester).pixels, greaterThan(HomeHeaderTheme.trigger));
+    expect(header(tester).bottom, open.bottom - _fold);
+    await settle(tester, 120);
   });
 
   testWidgets("首页's tap opens it at once, alongside the scroll to the top, and refreshes", (tester) async {

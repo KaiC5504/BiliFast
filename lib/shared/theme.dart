@@ -5659,6 +5659,12 @@ abstract final class HomeHeaderTheme {
   /// fold starts in the first frame that scrolled, 6 pt down.
   static const trigger = BiliMetrics.feedSpacing;
 
+  /// Down the list, a finger dragging it down this far opens it (250: the opening starts 15-25 pt into each held
+  /// drag; a flick's momentum opens nothing), and this much scrolled back up folds it again (250: from the first
+  /// frame that moved, 9 pt).
+  static const reveal = 20.0;
+  static const refold = 4.0;
+
   /// 121's frames fit UIKit's ease-in-out over 0.3 s within 0.11 pt (rms over 20 frames).
   static const duration = Duration(milliseconds: 300);
   static const curve = Curves.easeInOut;

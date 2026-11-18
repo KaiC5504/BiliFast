@@ -88,6 +88,7 @@ class _HomePageState extends State<HomePage> {
 
   /// How far 推荐 is scrolled, which folds the header's top row away (121).
   final _feedOffset = ValueNotifier<double>(0);
+  final _headerReveal = HeaderReveal();
 
   /// 直播 (page 0), 推荐 (page 1) and 热门 (page 2); [_pagePosition] follows the slide, [_shownPage] is the one holding
   /// most of the screen, whose list folds the header and takes 首页's taps.
@@ -178,6 +179,7 @@ class _HomePageState extends State<HomePage> {
     _services.appAuth.removeListener(_authChanged);
     _feed?.dispose();
     _feedOffset.dispose();
+    _headerReveal.dispose();
     _pages.dispose();
     _pagePosition.dispose();
     _hotOffset.dispose();
@@ -465,12 +467,15 @@ class _HomePageState extends State<HomePage> {
                     onAvatar: _openAvatarPage,
                     onSearch: _openSearch,
                     onHistory: _openHistory,
+                    reveal: _headerReveal,
                   ),
                 ),
                 Expanded(
                   child: pad
                       ? feed
-                      : PageView(
+                      : NotificationListener<ScrollNotification>(
+                          onNotification: _headerReveal.onScroll,
+                          child: PageView(
                           key: const ValueKey('home-pages'),
                           controller: _pages,
                           // Nothing lies left of 直播 or right of 热门 to bounce into.
@@ -494,6 +499,7 @@ class _HomePageState extends State<HomePage> {
                               ),
                             ),
                           ],
+                          ),
                         ),
                 ),
               ],

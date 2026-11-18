@@ -37,11 +37,54 @@ enum HomeTopTab {
   };
 }
 
+/// The header opened again down the list (250): a finger holding a page and dragging it down
+/// [HomeHeaderTheme.reveal] opens it, however far down; a flick's momentum alone never does. Scrolling back up
+/// [HomeHeaderTheme.refold] folds it again. Fed every vertical scroll of 首页's pages.
+class HeaderReveal extends ValueNotifier<bool> {
+  HeaderReveal() : super(false);
+
+  double _down = 0;
+  double _up = 0;
+
+  bool onScroll(ScrollNotification notification) {
+    if (notification.metrics.axis != Axis.vertical) return false;
+    if (notification is ScrollStartNotification) _down = 0;
+    if (notification is! ScrollUpdateNotification) return false;
+    if (notification.metrics.pixels < HomeHeaderTheme.trigger) {
+      reset();
+      return false;
+    }
+    final delta = notification.scrollDelta ?? 0;
+    if (delta < 0) {
+      _up = 0;
+      if (notification.dragDetails == null) {
+        _down = 0;
+      } else {
+        _down -= delta;
+        if (_down >= HomeHeaderTheme.reveal) value = true;
+      }
+    } else if (delta > 0) {
+      _down = 0;
+      if (value) {
+        _up += delta;
+        if (_up >= HomeHeaderTheme.refold) value = false;
+      }
+    }
+    return false;
+  }
+
+  void reset() {
+    _down = 0;
+    _up = 0;
+    value = false;
+  }
+}
+
 /// 首页's top (01, 110, 204): the avatar and the search entry over the tab row, on white or the 装扮's pictures, and
 /// the hairline under it. Once [feedOffset], how far the page on screen is scrolled, passes
 /// [HomeHeaderTheme.trigger], it folds the top row away (121): everything moves up under the status bar, the top row
-/// fading out and a magnifier riding in at the tab row's end, which opens 搜索 in its place. Back under the trigger it
-/// opens again.
+/// fading out and a magnifier riding in at the tab row's end, which opens 搜索 in its place. Back under the trigger, or
+/// while [reveal] holds it open, it opens again.
 class HomeHeader extends StatefulWidget {
   const HomeHeader({
     super.key,
@@ -53,8 +96,11 @@ class HomeHeader extends StatefulWidget {
     required this.onPage,
     required this.onAvatar,
     required this.onSearch,
+    this.reveal,
     this.onHistory,
   });
+
+  final HeaderReveal? reveal;
 
   /// A skin with a `head_bg`, its pictures decoded, or null.
   final Skin? skin;
@@ -92,26 +138,35 @@ class _HomeHeaderState extends State<HomeHeader>
   late final Animation<double> _shown = ReverseAnimation(_fold);
   bool _still = false;
 
-  bool get _shouldFold => widget.feedOffset.value >= HomeHeaderTheme.trigger;
+  bool get _shouldFold =>
+      widget.feedOffset.value >= HomeHeaderTheme.trigger && !(widget.reveal?.value ?? false);
 
   @override
   void initState() {
     super.initState();
     widget.feedOffset.addListener(_offsetChanged);
+    widget.reveal?.addListener(_offsetChanged);
   }
 
   @override
   void didUpdateWidget(HomeHeader oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (!identical(oldWidget.reveal, widget.reveal)) {
+      oldWidget.reveal?.removeListener(_offsetChanged);
+      widget.reveal?.addListener(_offsetChanged);
+    }
     if (!identical(oldWidget.feedOffset, widget.feedOffset)) {
       oldWidget.feedOffset.removeListener(_offsetChanged);
       widget.feedOffset.addListener(_offsetChanged);
+      // Opened down one page, another page shows by its own scroll.
+      widget.reveal?.reset();
       _offsetChanged();
     }
   }
 
   @override
   void dispose() {
+    widget.reveal?.removeListener(_offsetChanged);
     widget.feedOffset.removeListener(_offsetChanged);
     _fold.dispose();
     _controller.dispose();
