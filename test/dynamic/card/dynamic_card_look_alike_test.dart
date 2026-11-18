@@ -10,9 +10,10 @@ import 'package:flutter_test/flutter_test.dart';
 import '../../support/look_alike.dart';
 import 'card_host.dart';
 
-/// The cards as KaiC's iPhone draws them (127, 128, 135, 136, 139, and 132's repost block on the post page), under the
-/// system font, 440 wide at 3×. With BILIFAST_SHOTS naming a folder outside the repo, each card's shot is saved there
-/// for tools/screen_diff.py. Names and words are made up, of the screenshots' lengths and scripts.
+/// The cards as KaiC's iPhone draws them (127, 128, 135, 136, 139, 29's long picture in a repost, and 132's repost
+/// block on the post page), under the system font, 440 wide at 3×. With BILIFAST_SHOTS naming a folder outside the
+/// repo, each card's shot is saved there for tools/screen_diff.py. Names and words are made up, of the screenshots'
+/// lengths and scripts.
 void main() {
   const author127 = DynamicAuthor(
     mid: 11,
@@ -29,6 +30,14 @@ void main() {
     face: '',
     pubTime: '4小时前',
     pubAction: '发布了动态视频',
+    vipPink: true,
+    verify: DynamicVerify.organisation,
+  );
+  const author29 = DynamicAuthor(
+    mid: 17,
+    name: '演示星河列车',
+    face: '',
+    pubTime: '50分钟前',
     vipPink: true,
     verify: DynamicVerify.organisation,
   );
@@ -152,6 +161,38 @@ void main() {
       ),
       stat: const DynamicStat(forward: 12, comment: 1370, like: 17000),
     ),
+    '29': post(
+      'a29',
+      kind: DynamicKind.forward,
+      author: author29,
+      nodes: const [
+        DynamicTextNode('恭喜'),
+        DynamicMentionNode('@演示名', mid: 18),
+        DynamicTextNode(' '),
+        DynamicMentionNode('@测试者', mid: 19),
+        DynamicTextNode(' '),
+        DynamicMentionNode('@WYZQMXYY', mid: 20),
+        DynamicTextNode(' 等10位同学中奖，已私信通知，详情请点击抽奖查看。'),
+      ],
+      original: post(
+        'o29',
+        kind: DynamicKind.draw,
+        author: author29,
+        nodes: const [
+          DynamicBadgeNode('互动抽奖', kind: 'lottery'),
+          DynamicTextNode(' '),
+          DynamicTopicNode('#演示星河列车#'),
+          DynamicTextNode(' '),
+          DynamicTopicNode('#测试话题写到第二个#'),
+          DynamicTextNode(' '),
+          DynamicTopicNode('#演示：星河列车创作者激励计划#'),
+          DynamicTextNode('\n\n亲爱的旅行者：\n演示活动的说明文字，还有好几行没有写完'),
+        ],
+        folded: true,
+        major: const DynamicPictures(pictures: [DynamicPicture(url: '', width: 1080, height: 7000)]),
+      ),
+      stat: const DynamicStat(forward: 10, comment: 97, like: 1430),
+    ),
   };
 
   testWidgets('the cards under the system font, 440 wide at 3×', (tester) async {
@@ -211,6 +252,7 @@ void main() {
     await tester.pump(const Duration(milliseconds: 300));
     expect(find.textContaining('... 全文', findRichText: true), findsWidgets);
     expect(find.textContaining('... 展开', findRichText: true), findsOneWidget);
+    expect(find.text('长图'), findsOneWidget);
     final shots = Platform.environment['BILIFAST_SHOTS'];
     if (shots == null) return;
     for (final key in [...cards.keys, '132-block']) {

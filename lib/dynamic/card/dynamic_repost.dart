@@ -16,8 +16,8 @@ import 'dynamic_rich_text.dart';
 import 'dynamic_video_box.dart';
 
 /// A repost's original in its grey block (132, 136): @name in blue with + 关注 when not followed, its text and body (a
-/// video's box, or its pictures in a row scrolling sideways). A tap opens the original. [detail] lays it out as the
-/// post page does (132).
+/// video's box, one picture in a post's lone frame (29), or more in a row scrolling sideways). A tap opens the
+/// original. [detail] lays it out as the post page does (132).
 class DynamicRepostBlock extends StatefulWidget {
   const DynamicRepostBlock({super.key, required this.original, this.inline, this.detail = false, this.onOpen});
 
@@ -118,6 +118,8 @@ class _DynamicRepostBlockState extends State<DynamicRepostBlock> {
         ? (detail ? DynamicCardTheme.repostDetailBodyGap : DynamicCardTheme.repostTextGap)
         : body is DynamicPictureStrip
         ? DynamicCardTheme.repostStripTop
+        : original.major is DynamicPictures
+        ? DynamicCardTheme.repostPictureTop - DynamicCardTheme.textLine / 2
         : DynamicCardTheme.bodyGap;
     return GestureDetector(
       key: const ValueKey('dynamic-repost-block'),
@@ -227,7 +229,8 @@ class _DynamicRepostBlockState extends State<DynamicRepostBlock> {
     );
   }
 
-  /// The video's box [inset] in (on the list 13 short of the right), or the pictures' row running off the right.
+  /// The video's box [inset] in (on the list 13 short of the right), a lone picture [inset] in, framed as the list's
+  /// lone picture on the post page too (no reference shows it there), or the pictures' row running off the right.
   Widget? _body(double inset) => switch (_original.major) {
     final DynamicVideo video => Padding(
       padding: EdgeInsets.only(left: inset, right: widget.detail ? inset : DynamicCardTheme.videoTrail),
@@ -237,6 +240,10 @@ class _DynamicRepostBlockState extends State<DynamicRepostBlock> {
         inline: widget.inline,
         titleTop: widget.detail ? DynamicCardTheme.repostDetailTitleTop : DynamicCardTheme.titleTop,
       ),
+    ),
+    DynamicPictures(:final pictures) when pictures.length == 1 => Padding(
+      padding: EdgeInsets.symmetric(horizontal: inset),
+      child: DynamicPictureGrid(pictures: pictures, onOpen: widget.onOpen),
     ),
     DynamicPictures(:final pictures) when pictures.isNotEmpty => DynamicPictureStrip(
       pictures: pictures,

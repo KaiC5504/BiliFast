@@ -24,7 +24,7 @@ class FakeDynamicApi implements DynamicApi {
   /// fetched. Its videos are the public one the other demos open, so an inline play never asks the guard for a made-up
   /// BV (whose 412 halts every call after it).
   factory FakeDynamicApi.demo() => FakeDynamicApi(
-    posts: demoPosts,
+    posts: [...demoLongPictures, ...demoPosts],
     upList: _demoUps,
     following: [
       for (final up in _demoUps) FollowingUser(mid: up.mid, name: up.name, face: '', vipPink: up.mid.isOdd),
@@ -188,6 +188,53 @@ class FakeDynamicApi implements DynamicApi {
     danmaku: '1233',
     badge: '动态视频',
   );
+
+  /// 29's long pictures, a repost of one and a post of one, ahead of [demoPosts] in the demo so a Windows check sees
+  /// them without scrolling.
+  static const demoLongPictures = <DynamicItem>[
+    DynamicItem(
+      id: '9007',
+      kind: DynamicKind.forward,
+      typeName: 'DYNAMIC_TYPE_FORWARD',
+      author: _upA,
+      nodes: [
+        DynamicTextNode('恭喜'),
+        DynamicMentionNode('@演示小雨', mid: 101),
+        DynamicTextNode(' '),
+        DynamicMentionNode('@演示阿木', mid: 102),
+        DynamicTextNode(' 等10位同学中奖，已私信通知，详情请点击抽奖查看。'),
+      ],
+      original: DynamicItem(
+        id: '9017',
+        kind: DynamicKind.draw,
+        typeName: 'DYNAMIC_TYPE_DRAW',
+        author: _upA,
+        nodes: [
+          DynamicBadgeNode('互动抽奖', kind: 'lottery'),
+          DynamicTextNode(' '),
+          DynamicTopicNode('#演示话题#'),
+          DynamicTextNode(' '),
+          DynamicTopicNode('#演示活动的第二个话题#'),
+          DynamicTextNode('\n\n亲爱的旅行者：\n这是一张很长的演示长图，往下还有很多内容。'),
+        ],
+        foldedLines: true,
+        major: DynamicPictures(pictures: [DynamicPicture(url: '', width: 1080, height: 7000)]),
+        comments: CommentArea(oid: 9017, type: 11),
+      ),
+      stat: DynamicStat(forward: 10, comment: 97, like: 1430),
+      comments: CommentArea(oid: 9007, type: 17),
+    ),
+    DynamicItem(
+      id: '9008',
+      kind: DynamicKind.draw,
+      typeName: 'DYNAMIC_TYPE_DRAW',
+      author: _upB,
+      nodes: [DynamicTextNode('一张长图，从顶上开始看')],
+      major: DynamicPictures(pictures: [DynamicPicture(url: '', width: 1080, height: 7000)]),
+      stat: DynamicStat(forward: 3, comment: 21, like: 256),
+      comments: CommentArea(oid: 9008, type: 11),
+    ),
+  ];
 
   /// One of each kind 127-140 show, in the feed's order.
   static final demoPosts = <DynamicItem>[

@@ -6021,6 +6021,9 @@ abstract final class DynamicCardTheme {
   static const longLabelInk = Color(0xFFFFFFFF);
   static const longLabelFill = Color(0x80000000);
 
+  /// A repost's lone picture (29): its top 22.67 under the middle of the original's last line, where 136's row is 34.
+  static const repostPictureTop = 68 / 3;
+
   /// The video box (128, 139): 16:9 from 12 to 13 short of the right (415 pt on the phone), corners of 4 pt. On its
   /// bottom left the duration in an 18 pt pill of half black 8 in and 6 up, then the plays and danmaku, 12 pt white
   /// centred on the pill; 动态视频 in a #FB7299 pill 8 from the top right; the APK's `ic_upper_tv_play` 42 pt wide,
