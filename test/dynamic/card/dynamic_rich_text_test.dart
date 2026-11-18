@@ -28,7 +28,8 @@ const _video = DynamicVideo(
 
 Finder get _paragraph => find.descendant(of: find.byType(DynamicRichText), matching: find.byType(RichText)).first;
 
-String _plain(WidgetTester tester) => tester.widget<RichText>(_paragraph).text.toPlainText();
+String _plain(WidgetTester tester) =>
+    tester.widget<RichText>(_paragraph).text.toPlainText(includeSemanticsLabels: false);
 
 /// Where the caret before the character at [offset] sits.
 Offset _caret(WidgetTester tester, int offset) =>
@@ -101,6 +102,52 @@ void main() {
       expect(_caret(tester, 5).dx - _caret(tester, 4).dx, closeTo(DynamicCardTheme.mentionLead, 0.01));
     });
 
+    testWidgets('VoiceOver reads the links and @names, with no empty element for a lead or added space between', (
+      tester,
+    ) async {
+      final semantics = tester.ensureSemantics();
+      await _pumpText(tester, const [
+        DynamicTextNode('看'),
+        DynamicLinkNode('网页链接', url: 'https://example.com/a'),
+        DynamicMentionNode('@甲', mid: 1),
+        DynamicMentionNode('@乙', mid: 2),
+        DynamicTextNode('好'),
+      ]);
+      final labels = <String>[];
+      void visit(SemanticsNode node) {
+        if (node.label.isNotEmpty) labels.add(node.label);
+        node.visitChildren((child) {
+          visit(child);
+          return true;
+        });
+      }
+
+      visit(tester.getSemantics(_paragraph));
+      // A label of only a space or the zero-width lead would be an element VoiceOver stops on and reads nothing.
+      expect(labels.where((label) => label.replaceAll('​', '').trim().isEmpty), isEmpty, reason: '$labels');
+      expect(labels, containsAll(['网页链接', '@甲', '@乙']));
+      semantics.dispose();
+    });
+
+    testWidgets('folded right after a word that leads an @name, ... follows at its plain width', (tester) async {
+      Future<void> pump(double width, List<DynamicNode> nodes) => pumpCardHost(
+        tester,
+        Align(
+          alignment: Alignment.topLeft,
+          child: SizedBox(
+            width: width,
+            child: DynamicRichText(nodes: nodes, style: _style, maxLines: 1, folded: true, onMore: () {}),
+          ),
+        ),
+      );
+      await pump(400, const [DynamicTextNode('恭喜')]);
+      final plainDots = _caret(tester, 2).dx;
+      final suffix = _caret(tester, 8).dx - plainDots;
+      await pump(plainDots + suffix + 1, const [DynamicTextNode('恭喜'), DynamicMentionNode('@甲乙丙丁戊', mid: 1)]);
+      expect(_plain(tester), '恭喜... 全文');
+      expect(_caret(tester, 2).dx, closeTo(plainDots, 0.01));
+    });
+
     testWidgets('a cut right after the lead drops it, so ... follows the link', (tester) async {
       Future<void> pump(double width) => pumpCardHost(
         tester,
@@ -148,7 +195,7 @@ void main() {
         return true;
       });
       expect(names, ['@甲']);
-      expect(rich.text.toPlainText(), '恭喜@甲 中奖');
+      expect(rich.text.toPlainText(includeSemanticsLabels: false), '恭喜@甲 中奖');
       rich.text.visitChildren((span) {
         if (span is TextSpan && span.text == '@甲') (span.recognizer! as TapGestureRecognizer).onTap!();
         return true;

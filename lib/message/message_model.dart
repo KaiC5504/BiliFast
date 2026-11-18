@@ -332,8 +332,9 @@ class MessageModel extends ChangeNotifier {
     final generation = _generation;
     final listedAt = _indexOf(session);
     final listed = listedAt < 0 ? session : _sessions[listedAt];
+    var acked = false;
     if (listed.unread > 0) {
-      await _ackBeforeRemoving(listed, generation);
+      acked = await _ackBeforeRemoving(listed, generation);
       if (!_current(generation)) return;
     }
     try {
@@ -348,7 +349,8 @@ class MessageModel extends ChangeNotifier {
     final index = _indexOf(session);
     if (index < 0) return;
     final unread = _sessions.removeAt(index).unread;
-    if (unread > 0) {
+    // An acked row's unread already left the count; a page answered since may have put it back on the row.
+    if (unread > 0 && !acked) {
       _read(_unread.copyWith(chat: math.max(0, _unread.chat - unread)), const {_Count.chat}, listChanged: true);
     } else {
       _notify();
@@ -356,20 +358,21 @@ class MessageModel extends ChangeNotifier {
   }
 
   /// 删除's ack: once Bilibili has it, the row shows no unread and its count leaves 私信's, so a refused 删除 after it
-  /// still shows what Bilibili holds.
-  Future<void> _ackBeforeRemoving(ChatSession listed, int generation) async {
+  /// still shows what Bilibili holds. True once Bilibili has it.
+  Future<bool> _ackBeforeRemoving(ChatSession listed, int generation) async {
     try {
       await api.read(listed, seqno: listed.maxSeqno);
     } catch (error) {
       if (_current(generation)) _logger.warn(LogCategory.api, 'message read failed', {'error': searchLogReason(error)});
-      return;
+      return false;
     }
-    if (!_current(generation)) return;
+    if (!_current(generation)) return true;
     final index = _indexOf(listed);
-    if (index < 0) return;
+    if (index < 0) return true;
     final row = _sessions[index];
     _sessions[index] = row.copyWith(unread: 0, ackSeqno: math.max(row.ackSeqno, listed.maxSeqno));
     _read(_unread.copyWith(chat: math.max(0, _unread.chat - row.unread)), const {_Count.chat}, listChanged: true);
+    return true;
   }
 
   /// [feed]'s list was opened: its count goes to 0 (回复与@ clears [NoticeFeed.reply] and [NoticeFeed.at]).

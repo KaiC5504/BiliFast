@@ -166,7 +166,7 @@ class _DynamicRichTextState extends State<DynamicRichText> {
           if (afterSpaced || _endsInWord(runs)) _lead(runs);
           runs.add(_TextRun(name, linked, mid > 0 ? _tap(() => _openSpace(mid, name)) : null));
           if (!_isSpace(name.codeUnitAt(name.length - 1)) && _wordNext(nodes, index)) {
-            runs.add(_TextRun(' '));
+            runs.add(_TextRun.quiet(' '));
             spaced = true;
           }
         case DynamicTopicNode(:final text):
@@ -263,7 +263,10 @@ class _DynamicRichTextState extends State<DynamicRichText> {
     final run = runs.last as _TextRun;
     if (run.recognizer != null) {
       runs.add(
-        _TextRun(String.fromCharCode(_zeroWidthSpace), const TextStyle(letterSpacing: DynamicCardTheme.mentionLead)),
+        _TextRun.quiet(
+          String.fromCharCode(_zeroWidthSpace),
+          const TextStyle(letterSpacing: DynamicCardTheme.mentionLead),
+        ),
       );
       return;
     }
@@ -273,9 +276,11 @@ class _DynamicRichTextState extends State<DynamicRichText> {
     if (cut > 0) runs.add(_TextRun(text.substring(0, cut), run.style));
     final style = run.style ?? const TextStyle();
     runs.add(
-      _TextRun(
+      _TextRun.lead(
         text.substring(cut),
         style.copyWith(letterSpacing: (style.letterSpacing ?? 0) + DynamicCardTheme.mentionLead),
+        unled: run.style,
+        semanticsLabel: run.semanticsLabel,
       ),
     );
   }
@@ -292,7 +297,7 @@ class _DynamicRichTextState extends State<DynamicRichText> {
     for (final run in _runs) {
       if (left <= 0) break;
       final take = run.length < left ? run.length : left;
-      spans.add(run.span(take, placeholders));
+      spans.add(run.span(take, placeholders, last: take == left));
       left -= take;
     }
     return spans;
@@ -418,25 +423,41 @@ class _DynamicRichTextState extends State<DynamicRichText> {
 sealed class _Run {
   int get length;
 
-  InlineSpan span(int units, List<PlaceholderDimensions> placeholders);
+  /// [last]: the shown text ends in this run.
+  InlineSpan span(int units, List<PlaceholderDimensions> placeholders, {bool last = false});
 }
 
 final class _TextRun extends _Run {
-  _TextRun(this.text, [this.style, this.recognizer]);
+  _TextRun(this.text, [this.style, this.recognizer]) : lead = false, unled = null, semanticsLabel = null;
+
+  /// A space or lead put between runs the answer ran together: VoiceOver reads nothing for it, where on its own
+  /// between two links it would be an empty element to stop on.
+  _TextRun.quiet(this.text, [this.style]) : recognizer = null, lead = false, unled = null, semanticsLabel = '';
+
+  /// A word's last character carrying the lead before an @name; drawn in [unled] when the text is cut after it.
+  _TextRun.lead(this.text, this.style, {required this.unled, this.semanticsLabel}) : recognizer = null, lead = true;
 
   final String text;
   final TextStyle? style;
   final GestureRecognizer? recognizer;
+  final bool lead;
+  final TextStyle? unled;
+  final String? semanticsLabel;
 
   @override
   int get length => text.length;
 
   @override
-  InlineSpan span(int units, List<PlaceholderDimensions> placeholders) {
+  InlineSpan span(int units, List<PlaceholderDimensions> placeholders, {bool last = false}) {
     var end = units;
     // Never between the halves of a surrogate pair.
     if (end < text.length && end > 0 && _isHighSurrogate(text.codeUnitAt(end - 1))) end -= 1;
-    return TextSpan(text: end >= text.length ? text : text.substring(0, end), style: style, recognizer: recognizer);
+    return TextSpan(
+      text: end >= text.length ? text : text.substring(0, end),
+      style: lead && last ? unled : style,
+      recognizer: recognizer,
+      semanticsLabel: semanticsLabel,
+    );
   }
 
   static bool _isHighSurrogate(int unit) => unit >= 0xD800 && unit <= 0xDBFF;
@@ -453,7 +474,7 @@ final class _WidgetRun extends _Run {
   int get length => 1;
 
   @override
-  InlineSpan span(int units, List<PlaceholderDimensions> placeholders) {
+  InlineSpan span(int units, List<PlaceholderDimensions> placeholders, {bool last = false}) {
     placeholders.add(PlaceholderDimensions(size: size, alignment: alignment, baseline: TextBaseline.alphabetic));
     return WidgetSpan(
       alignment: alignment,

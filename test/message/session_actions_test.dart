@@ -77,7 +77,7 @@ class _HeldNextApi extends FakeMessageApi {
 
 /// Answers the session list as it stood when asked, held until the [gate] set then completes.
 class _GatedListApi extends FakeMessageApi {
-  _GatedListApi({super.sessionList});
+  _GatedListApi({super.sessionList, super.counts});
 
   Completer<void>? gate;
 
@@ -221,6 +221,36 @@ void main() {
       await tester.runAsync(() => model.removeSession(model.sessions[2]));
       expect(api.removed, [1, 2]);
       expect(api.reads, hasLength(1));
+    });
+
+    testWidgets("a first page answered between 删除's ack and its answer doesn't take the row's unread off twice", (
+      tester,
+    ) async {
+      final sessions = [
+        for (final session in _sessions()) session.talkerId == 3 ? _person(3, DateTime(2026, 10, 8), unread: 3) : session,
+      ];
+      final api = _GatedListApi(sessionList: sessions, counts: const MessageUnread(chat: 5));
+      final model = (await tester.runAsync(() => loaded(api)))!;
+      expect(model.unread.chat, 5);
+      await tester.runAsync(() async {
+        // Made in the real zone: completed here, one made outside would wait for a pump.
+        final gate = api.gate = Completer<void>();
+        final remove = api.holds['removeSession'] = Completer<void>();
+        final refresh = model.refresh();
+        api.gate = null;
+        final removal = model.removeSession(model.sessions[2]);
+        for (var turns = 0; turns < 20 && !api.calls.contains('removeSession 1'); turns++) {
+          await Future<void>.value();
+        }
+        expect(api.calls, contains('removeSession 1'));
+        expect(model.unread.chat, 3, reason: 'the ack took its 2 off');
+        gate.complete();
+        await refresh;
+        remove.complete();
+        await removal;
+      });
+      expect(_order(model), [9000, 9001, 2, 3, 4]);
+      expect(model.unread.chat, 3);
     });
 
     testWidgets('a failed ack is logged and 删除 goes on; an ack through before a refused 删除 leaves the row read',
