@@ -491,8 +491,8 @@ class _BackButton extends StatelessWidget {
       child: Center(
         child: Transform.flip(
           flipX: true,
-          child: const Chevron(
-            size: Size(SettingsTheme.backGlyphWidth, SettingsTheme.backGlyphHeight),
+          child: Chevron(
+            size: const Size(SettingsTheme.backGlyphWidth, SettingsTheme.backGlyphHeight),
             stroke: SettingsTheme.backStroke,
             color: SettingsTheme.backGlyph,
           ),
@@ -644,9 +644,9 @@ class SettingsSection extends StatelessWidget {
                 ),
         ),
         if (look.topRule)
-          const ColoredBox(
+          ColoredBox(
             color: SettingsTheme.hairlineColor,
-            child: SizedBox(height: SettingsTheme.hairline),
+            child: const SizedBox(height: SettingsTheme.hairline),
           ),
         ColoredBox(
           color: SettingsTheme.row,
@@ -681,15 +681,15 @@ class SettingsSection extends StatelessWidget {
 /// A row: its title, the value in grey when there is one, and a › when it does something.
 /// A row that is not [enabled] greys its title and ignores taps.
 class SettingsRow extends StatelessWidget {
-  const SettingsRow({
+  SettingsRow({
     super.key,
     required this.title,
     this.value,
-    this.valueColor = SettingsTheme.value,
+    Color? valueColor,
     this.onTap,
     this.enabled = true,
     this.height = SettingsSection.rowHeight,
-  });
+  }) : valueColor = valueColor ?? SettingsTheme.value;
 
   final String title;
   final String? value;
@@ -701,10 +701,10 @@ class SettingsRow extends StatelessWidget {
   /// A row's title, set where 50's are.
   static Widget titleText(
     String title, {
-    Color color = SettingsTheme.rowTitle,
+    Color? color,
     double size = SettingsTheme.rowTitleText,
   }) {
-    final style = TextStyle(fontFamily: BiliFonts.family, fontSize: size, color: color);
+    final style = TextStyle(fontFamily: BiliFonts.family, fontSize: size, color: color ?? SettingsTheme.rowTitle);
     return Builder(
       builder: (context) => Text(
         title,
@@ -753,8 +753,8 @@ class SettingsRow extends StatelessWidget {
                     ),
                   if (onTap != null) ...[
                     if (value != null) const SizedBox(width: SettingsTheme.valueGap),
-                    const Chevron(
-                      size: Size(SettingsTheme.chevronWidth, SettingsTheme.chevronHeight),
+                    Chevron(
+                      size: const Size(SettingsTheme.chevronWidth, SettingsTheme.chevronHeight),
                       stroke: SettingsTheme.chevronStroke,
                       color: SettingsTheme.chevron,
                     ),

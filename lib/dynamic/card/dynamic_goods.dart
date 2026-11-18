@@ -30,7 +30,7 @@ class DynamicGoodsBlock extends StatelessWidget {
             child: Row(
               children: [
                 const SizedBox(width: DynamicCardTheme.goodsLockLead),
-                const DynamicIcon(
+                DynamicIcon(
                   DynamicArt.lock,
                   width: DynamicCardTheme.goodsLockWidth,
                   color: DynamicCardTheme.goodsHeadInk,

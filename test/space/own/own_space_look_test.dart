@@ -91,8 +91,8 @@ final class _Api implements SpaceApi {
 }
 
 /// 115's skin: the dark second-page bar with white text.
-final _skin = Skin(
-  equip: const SkinEquip(
+const _skin = Skin(
+  equip: SkinEquip(
     id: 1,
     name: '幸运塔罗星',
     ver: 1,

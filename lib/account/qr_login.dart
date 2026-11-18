@@ -315,8 +315,8 @@ class _QrLoginState extends State<QrLogin> {
           padding: const EdgeInsets.all(LoginTheme.qrQuietZone),
           backgroundColor: LoginTheme.qrBackground,
           errorCorrectionLevel: QrErrorCorrectLevel.M,
-          eyeStyle: const QrEyeStyle(eyeShape: QrEyeShape.square, color: LoginTheme.qrModule),
-          dataModuleStyle: const QrDataModuleStyle(
+          eyeStyle: QrEyeStyle(eyeShape: QrEyeShape.square, color: LoginTheme.qrModule),
+          dataModuleStyle: QrDataModuleStyle(
             dataModuleShape: QrDataModuleShape.square,
             color: LoginTheme.qrModule,
           ),
@@ -371,7 +371,7 @@ class _Button extends StatelessWidget {
         height: LoginTheme.retryHeight,
         padding: const EdgeInsets.symmetric(horizontal: LoginTheme.retryPadX),
         alignment: Alignment.center,
-        decoration: const ShapeDecoration(
+        decoration: ShapeDecoration(
           shape: StadiumBorder(side: BorderSide(color: LoginTheme.retry)),
         ),
         child: Text(label, style: LoginTheme.retryStyle),

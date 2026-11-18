@@ -222,7 +222,7 @@ class FavouriteVideoRow extends StatelessWidget {
             ),
           ),
           if (!last)
-            const Positioned(
+            Positioned(
               left: FavouritesTheme.gutter,
               right: 0,
               bottom: 0,
@@ -283,7 +283,7 @@ class _Cover extends StatelessWidget {
     child: Stack(
       fit: StackFit.expand,
       children: [
-        const ColoredBox(color: FavouritesTheme.coverEmpty),
+        ColoredBox(color: FavouritesTheme.coverEmpty),
         if (row.cover.isNotEmpty)
           RemoteImage(
             row.cover,
@@ -317,9 +317,9 @@ class _Cover extends StatelessWidget {
             width: math.min(row.progress, 1) * FavouritesTheme.coverWidth,
             child: DecoratedBox(
               key: ValueKey('$keyPrefix-progress-${row.aid}'),
-              decoration: const BoxDecoration(
+              decoration: BoxDecoration(
                 color: FavouritesTheme.progress,
-                borderRadius: BorderRadius.horizontal(right: Radius.circular(FavouritesTheme.progressRadius)),
+                borderRadius: const BorderRadius.horizontal(right: Radius.circular(FavouritesTheme.progressRadius)),
               ),
             ),
           ),
@@ -361,7 +361,7 @@ class _PinkButton extends StatelessWidget {
     child: Container(
       height: height,
       padding: EdgeInsets.symmetric(horizontal: padX),
-      decoration: const ShapeDecoration(color: BiliColors.pink, shape: StadiumBorder()),
+      decoration: ShapeDecoration(color: BiliColors.pink, shape: const StadiumBorder()),
       child: Center(
         widthFactor: 1,
         child: Text(label, style: favStyle(text, BiliColors.onPink, weight: FavouritesTheme.buttonWeight)),

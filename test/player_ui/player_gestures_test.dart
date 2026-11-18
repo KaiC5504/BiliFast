@@ -916,7 +916,7 @@ void main() {
       final gesture = await dragUp(tester, const Offset(200, 300));
       // 150 pt of the 450 pt box.
       expect(rig.device.sets.last, 'brightness ${0.5 + 150 / 450}');
-      expect(rig.chrome.hud.value, LevelHud(LevelKind.brightness, 0.5 + 150 / 450));
+      expect(rig.chrome.hud.value, const LevelHud(LevelKind.brightness, 0.5 + 150 / 450));
       expect(find.byKey(const ValueKey('hud-level-brightness')), findsOneWidget);
       expect(rig.device.sets.where((set) => set.startsWith('volume')), isEmpty);
       expect(rig.device.views, isEmpty, reason: 'brightness needs no volume view');
@@ -935,7 +935,7 @@ void main() {
       await rig.mountInline(tester);
       final gesture = await dragUp(tester, const Offset(600, 200), dy: 25);
       expect(rig.device.sets.last, 'volume ${0.5 - 150 / 450}');
-      expect(rig.chrome.hud.value, LevelHud(LevelKind.volume, 0.5 - 150 / 450));
+      expect(rig.chrome.hud.value, const LevelHud(LevelKind.volume, 0.5 - 150 / 450));
       expect(rig.device.views, ['enter']);
       await gesture.up();
       expect(rig.chrome.hud.value, isNull);

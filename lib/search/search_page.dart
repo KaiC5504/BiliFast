@@ -438,8 +438,8 @@ class _SearchBar extends StatelessWidget {
               child: Center(
                 child: Transform.flip(
                   flipX: true,
-                  child: const Chevron(
-                    size: Size(SearchTheme.backWidth, SearchTheme.backHeight),
+                  child: Chevron(
+                    size: const Size(SearchTheme.backWidth, SearchTheme.backHeight),
                     stroke: SearchTheme.backStroke,
                     color: SearchTheme.dim,
                   ),
@@ -455,7 +455,7 @@ class _SearchBar extends StatelessWidget {
                 child: Container(
                   height: SearchTheme.fieldHeight,
                   padding: const EdgeInsets.only(left: SearchTheme.magnifierInset),
-                  foregroundDecoration: const ShapeDecoration(
+                  foregroundDecoration: ShapeDecoration(
                     shape: StadiumBorder(
                       side: BorderSide(color: SearchTheme.fieldRimColor, width: SearchTheme.fieldRim),
                     ),
@@ -464,7 +464,7 @@ class _SearchBar extends StatelessWidget {
                     children: [
                       Transform.translate(
                         offset: const Offset(0, -SearchTheme.magnifierLift),
-                        child: const SearchGlyphIcon(
+                        child: SearchGlyphIcon(
                           SearchGlyph.magnifier,
                           size: SearchTheme.magnifier,
                           color: SearchTheme.dim,
@@ -511,7 +511,7 @@ class _SearchBar extends StatelessWidget {
                                   key: const ValueKey('search-clear'),
                                   label: '清空',
                                   onTap: onClear,
-                                  child: const Center(
+                                  child: Center(
                                     child: SearchGlyphIcon(
                                       SearchGlyph.clear,
                                       size: SearchTheme.clear,

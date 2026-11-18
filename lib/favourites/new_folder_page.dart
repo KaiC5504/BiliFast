@@ -424,7 +424,7 @@ class _NewFolderPageState extends State<NewFolderPage> {
                     height: FavouritesTheme.newThumbHeight,
                     child: _Thumbnail(key: const ValueKey('fav-new-cover-thumb'), bytes: bytes, busy: _uploading),
                   ),
-                const Positioned(
+                Positioned(
                   right: FavouritesTheme.chevronRight,
                   top: (FavouritesTheme.newCoverHeight - FavouritesTheme.chevronHeight) / 2,
                   child: FavGlyphIcon(
@@ -546,7 +546,7 @@ class _Thumbnail extends StatelessWidget {
             cacheWidth: pixels,
             gaplessPlayback: true,
             excludeFromSemantics: true,
-            errorBuilder: (context, error, stack) => const ColoredBox(color: FavouritesTheme.tileEmpty),
+            errorBuilder: (context, error, stack) => ColoredBox(color: FavouritesTheme.tileEmpty),
           ),
           if (busy)
             const ColoredBox(
@@ -665,7 +665,7 @@ class _CoverSheetState extends State<_CoverSheet> with SingleTickerProviderState
                       children: [
                         _group(FavouritesTheme.coverSheetFill, [
                           _button('fav-new-cover-album', '从相册选择', () => widget.onChoose(ImageSource.gallery)),
-                          const SizedBox(
+                          SizedBox(
                             height: FavouritesTheme.coverSheetHairline,
                             child: ColoredBox(color: FavouritesTheme.coverSheetHairlineInk),
                           ),

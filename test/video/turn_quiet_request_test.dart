@@ -90,7 +90,7 @@ void main() {
       await tester.pump();
       expect(lines('started').last.f['outcome'], const LogString('pending'));
       await expectOfficialTurn(tester, from: pi / 2);
-      expect(tester.getRect(TurnPage.area), Rect.fromLTWH(0, 62, 440, 440 / BiliMetrics.videoAspect));
+      expect(tester.getRect(TurnPage.area), const Rect.fromLTWH(0, 62, 440, 440 / BiliMetrics.videoAspect));
       expect(page.host.drawnTurns, [1, id]);
       await page.leave(tester);
     });

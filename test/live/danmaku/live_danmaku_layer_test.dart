@@ -133,12 +133,12 @@ void main() {
   testWidgets('the 弹幕设置 values apply: type switches, area, speed, size and opacity', (tester) async {
     harness = await liveHarness();
     harness.settings.update(
-      DanmakuSettings(
+      const DanmakuSettings(
         area: 0.25,
         opacity: 0.6,
         scale: 1.5,
         speed: 4,
-        filter: const DanmakuFilterOptions(blockScroll: true),
+        filter: DanmakuFilterOptions(blockScroll: true),
       ),
     );
     await pumpLayer(tester);

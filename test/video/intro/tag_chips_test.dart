@@ -101,7 +101,7 @@ void main() {
   testWidgets('three chips share the row, so three long ones would fill it (03)', (tester) async {
     await show(tester, const [longBgm, topic, long]);
 
-    final third = (row - IntroListTheme.chipGap * 2) / 3;
+    const third = (row - IntroListTheme.chipGap * 2) / 3;
     expect(pill(tester, 0).width, moreOrLessEquals(third));
     expect(pill(tester, 1).width, lessThan(third));
     expect(pill(tester, 2).width, moreOrLessEquals(third));
@@ -112,7 +112,7 @@ void main() {
     const fourth = VideoTag(id: 6, name: '第四个很长很长很长很长的话题', kind: VideoTagKind.topic);
     await show(tester, const [longBgm, long, long, fourth]);
 
-    final third = (row - IntroListTheme.chipGap * 2) / 3;
+    const third = (row - IntroListTheme.chipGap * 2) / 3;
     expect(pill(tester, 1).width, moreOrLessEquals(third));
     await tester.drag(find.byType(ListView), const Offset(-300, 0));
     await tester.pumpAndSettle();

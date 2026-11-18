@@ -70,7 +70,7 @@ void main() {
   testWidgets('a wide neighbour shows the corners; one followed has no pill; a 合集 one reads 合集 · 第N集', (
     tester,
   ) async {
-    final wide = StoryEntry(
+    const wide = StoryEntry(
       bvid: 'BV3',
       title: '标题',
       cover: '',

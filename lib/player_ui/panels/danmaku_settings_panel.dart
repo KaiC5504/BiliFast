@@ -49,7 +49,7 @@ class DanmakuSettingsPanel extends StatefulWidget {
 /// The colours of the dark strip or the light sheet.
 @immutable
 final class _Look {
-  const _Look.dark()
+  _Look.dark()
     : card = DanmakuPanelTheme.card,
       square = DanmakuPanelTheme.square,
       track = DanmakuPanelTheme.track,
@@ -64,7 +64,7 @@ final class _Look {
       switchOff = BiliColors.panelTrackOff,
       knobShadow = null;
 
-  const _Look.light()
+  _Look.light()
     : card = DanmakuPanelTheme.lightCard,
       square = DanmakuPanelTheme.lightSquare,
       track = DanmakuPanelTheme.lightTrack,
@@ -160,7 +160,7 @@ class _DanmakuSettingsPanelState extends State<DanmakuSettingsPanel> {
 
   bool get _light => widget.light;
 
-  _Look get _look => _light ? const _Look.light() : const _Look.dark();
+  _Look get _look => _light ? _Look.light() : _Look.dark();
 
   @override
   Widget build(BuildContext context) {

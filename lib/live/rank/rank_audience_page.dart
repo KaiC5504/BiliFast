@@ -117,7 +117,7 @@ class _InfoLine extends StatelessWidget {
                 children: [
                   Flexible(child: RankText('投喂、点赞、发弹幕均可获得贡献值', style)),
                   const SizedBox(width: LiveRankTheme.helpGap),
-                  const RankGlyph(RankArt.help, size: LiveRankTheme.helpSize, color: LiveRankTheme.audienceInfoInk),
+                  RankGlyph(RankArt.help, size: LiveRankTheme.helpSize, color: LiveRankTheme.audienceInfoInk),
                 ],
               ),
             ),
@@ -131,7 +131,7 @@ class _InfoLine extends StatelessWidget {
             children: [
               RankText('贡献值', style),
               const SizedBox(width: LiveRankTheme.exchangeGap),
-              const RankGlyph(RankArt.exchange, size: LiveRankTheme.exchangeSize, color: LiveRankTheme.audienceInfoInk),
+              RankGlyph(RankArt.exchange, size: LiveRankTheme.exchangeSize, color: LiveRankTheme.audienceInfoInk),
             ],
           ),
         ),
@@ -266,7 +266,7 @@ class OwnRow extends StatelessWidget {
     return Container(
       key: const ValueKey('rank-own'),
       padding: EdgeInsets.only(bottom: bottomInset),
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         color: LiveRankTheme.audiencePage,
         border: Border(
           top: BorderSide(color: LiveRankTheme.ownRuleInk, width: LiveRankTheme.ownRule),
@@ -326,7 +326,7 @@ class OwnRow extends StatelessWidget {
                   width: LiveRankTheme.feedWidth,
                   height: LiveRankTheme.feedHeight,
                   alignment: Alignment.center,
-                  decoration: const ShapeDecoration(color: LiveRankTheme.feedFill, shape: StadiumBorder()),
+                  decoration: ShapeDecoration(color: LiveRankTheme.feedFill, shape: const StadiumBorder()),
                   child: RankText('去投喂', rankStyle(LiveRankTheme.feedText, LiveRankTheme.feedInk)),
                 ),
               ),

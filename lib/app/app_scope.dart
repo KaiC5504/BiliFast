@@ -1,3 +1,4 @@
+import 'appearance.dart';
 import 'dart:async';
 
 import 'package:bili_core/devlog.dart';
@@ -214,6 +215,7 @@ class AppServices {
     this._messages,
     this._liveApi,
     MessagePrefs? messagePrefs,
+    AppearanceModel? appearance,
     FollowBaselines? followBaselines,
     MeProfileStore? meProfile,
     this._skinApi,
@@ -251,6 +253,7 @@ class AppServices {
        searchHistory = searchHistory ?? SearchHistoryStore.memory(),
        meProfile = meProfile ?? MeProfileStore.memory(),
        messagePrefs = messagePrefs ?? MessagePrefs.memory(),
+       appearance = appearance ?? AppearanceModel.memory(),
        followBaselines = followBaselines ?? FollowBaselines.memory(),
        danmakuSettings = danmakuSettings ?? DanmakuSettingsStore.memory() {
     this.blockRules =
@@ -372,6 +375,9 @@ class AppServices {
 
   /// 消息设置's 消息提醒, kept on the phone (`message_prefs.json`).
   final MessagePrefs messagePrefs;
+
+  /// 深色模式: light or dark, and whether it follows iOS.
+  final AppearanceModel appearance;
 
   FollowBadge? _madeFollowBadge;
 

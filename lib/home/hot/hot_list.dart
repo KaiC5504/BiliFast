@@ -304,7 +304,7 @@ class _HotListState extends State<HotList> with SkinRefreshRoom, AutomaticKeepAl
     if (model.error case final error? when !model.loadingFirst) {
       return _Failure(message: error, onRetry: () => unawaited(model.retry()));
     }
-    if (model.exhausted) return _Words(HotList.emptyMessage, key: const ValueKey('hot-empty'));
+    if (model.exhausted) return const _Words(HotList.emptyMessage, key: ValueKey('hot-empty'));
     return const LoadingTvState(key: ValueKey('hot-loading'));
   }
 
@@ -404,7 +404,7 @@ class _RetryPillState extends State<_RetryPill> {
           height: HotListTheme.retryHeight,
           padding: const EdgeInsets.symmetric(horizontal: HotListTheme.retryPadX),
           alignment: Alignment.center,
-          decoration: const ShapeDecoration(
+          decoration: ShapeDecoration(
             shape: StadiumBorder(
               side: BorderSide(color: BiliColors.pink, width: HotListTheme.retryRim),
             ),

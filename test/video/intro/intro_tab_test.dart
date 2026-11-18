@@ -219,7 +219,7 @@ void main() {
 
   testWidgets('a 合集: its row, named after the 合集, with the episodes; it opens 选集', (tester) async {
     details.actions = FakeVideoActions();
-    final season = UgcSeason(id: 1, title: 'MAD系列', intro: '', sections: const []);
+    const season = UgcSeason(id: 1, title: 'MAD系列', intro: '', sections: []);
     await host(
       tester,
       IntroContent(
@@ -241,7 +241,7 @@ void main() {
       tester,
     ) async {
       details.actions = FakeVideoActions();
-      final season = UgcSeason(id: 1, title: 'MAD系列', intro: '', sections: const []);
+      const season = UgcSeason(id: 1, title: 'MAD系列', intro: '', sections: []);
       await host(
         tester,
         IntroContent(

@@ -612,7 +612,7 @@ void main() {
       final harness = await openChat(tester, api, person());
       harness.pageApi.emotes = [
         ...harness.pageApi.emotes,
-        EmotePackage(
+        const EmotePackage(
           id: 2,
           name: '颜文字',
           icon: '',

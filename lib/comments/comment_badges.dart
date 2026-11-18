@@ -246,9 +246,9 @@ class VipMark extends StatelessWidget {
     width: CommentRowTheme.vipMark + CommentRowTheme.vipMarkRing * 2,
     height: CommentRowTheme.vipMark + CommentRowTheme.vipMarkRing * 2,
     padding: const EdgeInsets.all(CommentRowTheme.vipMarkRing),
-    decoration: const BoxDecoration(color: CommentRowTheme.vipMarkRim, shape: BoxShape.circle),
+    decoration: BoxDecoration(color: CommentRowTheme.vipMarkRim, shape: BoxShape.circle),
     child: DecoratedBox(
-      decoration: const BoxDecoration(color: CommentRowTheme.vipMarkFill, shape: BoxShape.circle),
+      decoration: BoxDecoration(color: CommentRowTheme.vipMarkFill, shape: BoxShape.circle),
       child: Center(
         child: Text(
           '大',

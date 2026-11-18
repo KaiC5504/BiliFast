@@ -139,7 +139,7 @@ void main() {
       tester,
     ) async {
       final session = singleVideo();
-      final request = OfflineRequest(
+      const request = OfflineRequest(
         bvid: 'BV1single',
         aid: 11,
         cid: 501,
@@ -172,7 +172,7 @@ void main() {
     });
 
     testWidgets('a paused part resumes on a tap', (tester) async {
-      final request = OfflineRequest(
+      const request = OfflineRequest(
         bvid: 'BV1single',
         aid: 11,
         cid: 501,

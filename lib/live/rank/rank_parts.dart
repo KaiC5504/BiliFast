@@ -286,7 +286,7 @@ class RankFailure extends StatelessWidget {
           height: LiveRankTheme.retryHeight,
           padding: const EdgeInsets.symmetric(horizontal: LiveRankTheme.retryPadX),
           alignment: Alignment.center,
-          decoration: const ShapeDecoration(
+          decoration: ShapeDecoration(
             shape: StadiumBorder(
               side: BorderSide(color: LiveRankTheme.retryInk, width: LiveRankTheme.retryRim),
             ),

@@ -135,8 +135,8 @@ class _DanmakuSendBarState extends State<DanmakuSendBar> {
     }
     final sheet = Stack(
       children: [
-        const Positioned.fill(child: ColoredBox(color: DanmakuSendTheme.lightBar)),
-        const Positioned(
+        Positioned.fill(child: ColoredBox(color: DanmakuSendTheme.lightBar)),
+        Positioned(
           left: 0,
           right: 0,
           top: 0,
@@ -183,7 +183,7 @@ class _DanmakuSendBarState extends State<DanmakuSendBar> {
                     top: (DanmakuSendTheme.aHeight - DanmakuSendTheme.hintDotSize) / 2 - DanmakuSendTheme.hintDotOffset,
                     width: DanmakuSendTheme.hintDotSize,
                     height: DanmakuSendTheme.hintDotSize,
-                    child: const DecoratedBox(
+                    child: DecoratedBox(
                       decoration: BoxDecoration(color: DanmakuSendTheme.hintDot, shape: BoxShape.circle),
                     ),
                   ),
@@ -219,7 +219,7 @@ class _DanmakuSendBarState extends State<DanmakuSendBar> {
         color: _dark ? DanmakuSendTheme.darkField : DanmakuSendTheme.lightField,
         shape: StadiumBorder(
           side: _vertical
-              ? const BorderSide(color: DanmakuSendTheme.hairline, width: DanmakuSendTheme.hairlineWidth)
+              ? BorderSide(color: DanmakuSendTheme.hairline, width: DanmakuSendTheme.hairlineWidth)
               : BorderSide.none,
         ),
       ),

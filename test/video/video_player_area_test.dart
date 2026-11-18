@@ -455,8 +455,8 @@ void main() {
 
     // 竖屏 sets a landscape video in its band above the middle; the TV keeps to the video.
     await show(tester, Presentation.vertical, loading: true);
-    final band = 956 * BiliMetrics.verticalVideoCentre * 2;
-    expect(tester.getRect(find.byType(PlayerLoading)), const Offset(0, 0) & Size(440, band));
+    const band = 956 * BiliMetrics.verticalVideoCentre * 2;
+    expect(tester.getRect(find.byType(PlayerLoading)), const Offset(0, 0) & const Size(440, band));
     session
       ..isVertical = true
       ..changed();
@@ -475,7 +475,7 @@ void main() {
       ..heldVertical = null
       ..changed();
     await tester.pump();
-    expect(tester.getRect(find.byType(PlayerLoading)), const Offset(0, 0) & Size(440, band));
+    expect(tester.getRect(find.byType(PlayerLoading)), const Offset(0, 0) & const Size(440, band));
 
     await show(tester, Presentation.inline, loading: true, failure: '播放失败');
     expect(find.byType(PlayerLoading), findsNothing, reason: 'the failure takes its place');

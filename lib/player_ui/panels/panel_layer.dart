@@ -24,20 +24,20 @@ import 'speed_panel.dart';
 /// swaps the content without sliding again.
 @immutable
 final class PanelFrame {
-  const PanelFrame({
+  PanelFrame({
     required this.width,
     required this.sheetHeight,
     this.column = false,
     this.light = false,
     this.full = false,
     this.solid = false,
-    this.sheetColor = BiliColors.card,
+    Color? sheetColor,
     this.points,
     this.shade,
     this.lead,
     this.trailing,
     this.top = 0,
-  });
+  }) : sheetColor = sheetColor ?? BiliColors.card;
 
   final double width;
   final double sheetHeight;
@@ -69,37 +69,37 @@ final class PanelFrame {
   static PanelFrame of(PlayerPanel panel, {bool pad = false}) => pad ? _pad(panel) : _phone(panel);
 
   static PanelFrame _phone(PlayerPanel panel) => switch (panel) {
-    PlayerPanel.quality || PlayerPanel.codec => const PanelFrame(
+    PlayerPanel.quality || PlayerPanel.codec => PanelFrame(
       width: BiliMetrics.panelQualityWidth,
       sheetHeight: BiliMetrics.panelSheetHeight,
     ),
-    PlayerPanel.speed => const PanelFrame(
+    PlayerPanel.speed => PanelFrame(
       width: BiliMetrics.panelSpeedWidth,
       sheetHeight: BiliMetrics.panelSpeedSheetHeight,
       column: true,
     ),
     // Portrait's ⋮ is the light sheet of 42 and 43, and 缓存 takes its place in the same frame.
-    PlayerPanel.more || PlayerPanel.download => const PanelFrame(
+    PlayerPanel.more || PlayerPanel.download => PanelFrame(
       width: BiliMetrics.panelMoreWidth,
       sheetHeight: DownloadSheetTheme.verticalHeight,
       light: true,
       sheetColor: DownloadSheetTheme.sheet,
     ),
-    PlayerPanel.episodes => const PanelFrame(
+    PlayerPanel.episodes => PanelFrame(
       width: BiliMetrics.panelWidth,
       sheetHeight: BiliMetrics.panelSheetHeight,
       light: true,
     ),
     // Portrait's 弹幕设置 is the light sheet of 40.
-    PlayerPanel.danmakuSettings => const PanelFrame(
+    PlayerPanel.danmakuSettings => PanelFrame(
       width: DanmakuPanelTheme.width,
       sheetHeight: DanmakuPanelTheme.sheetHeight,
       light: true,
       solid: true,
       sheetColor: DanmakuPanelTheme.lightBackground,
     ),
-    PlayerPanel.blockWords => const PanelFrame(width: 1, sheetHeight: 1, full: true),
-    PlayerPanel.danmakuList => const PanelFrame(width: BiliMetrics.panelWidth, sheetHeight: BiliMetrics.panelSheetHeight),
+    PlayerPanel.blockWords => PanelFrame(width: 1, sheetHeight: 1, full: true),
+    PlayerPanel.danmakuList => PanelFrame(width: BiliMetrics.panelWidth, sheetHeight: BiliMetrics.panelSheetHeight),
   };
 
   /// Full screen on the iPad (ipad/10-13): every strip hard-edged and as wide in points sideways as upright. 选集 and

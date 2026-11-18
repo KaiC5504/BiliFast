@@ -36,7 +36,7 @@ void main() {
           backgroundColor: HotListTheme.page,
           body: Column(
             children: [
-              const SizedBox(
+              SizedBox(
                 height: 142,
                 width: double.infinity,
                 child: ColoredBox(color: BiliColors.pageGrey),

@@ -151,7 +151,7 @@ class HotRow extends StatelessWidget {
               ),
             ),
           ),
-          const Positioned(
+          Positioned(
             left: 0,
             right: 0,
             top: HotListTheme.hairlineTop,
@@ -253,7 +253,7 @@ class _Cover extends StatelessWidget {
         fit: StackFit.expand,
         children: [
           if (card.cover.isEmpty)
-            const ColoredBox(key: ValueKey('hot-cover-placeholder'), color: HotListTheme.coverPlaceholder)
+            ColoredBox(key: const ValueKey('hot-cover-placeholder'), color: HotListTheme.coverPlaceholder)
           else
             RemoteImage(card.cover, size: const Size(HotListTheme.coverWidth, HotListTheme.coverHeight), cover: true),
           if (card.duration > 0)

@@ -149,7 +149,7 @@ class _MoreSheetRoute extends PopupRoute<_MoreChoice> {
                     hairline: index < rows.length - 1,
                     onTap: () => pick(row.choice),
                   ),
-                const SizedBox(
+                SizedBox(
                   height: DynamicCardTheme.sheetGap,
                   child: ColoredBox(color: DynamicCardTheme.sheetGapFill),
                 ),
@@ -257,7 +257,7 @@ class _Row extends StatelessWidget {
               ),
             ),
             if (hairline)
-              const Positioned(
+              Positioned(
                 left: DynamicCardTheme.sheetHairlineLeft,
                 right: 0,
                 bottom: 0,

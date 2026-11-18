@@ -53,26 +53,26 @@ class ConcurrencySheet extends StatelessWidget {
       ),
       child: Container(
         key: const ValueKey('offline-concurrency-sheet'),
-        decoration: const BoxDecoration(
+        decoration: BoxDecoration(
           color: _T.sheet,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(_T.sheetRadius)),
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(_T.sheetRadius)),
         ),
         padding: EdgeInsets.only(bottom: bottom + _T.cardBottom),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            const SizedBox(
+            SizedBox(
               height: _T.cardTop,
               child: Align(
                 alignment: Alignment.topCenter,
                 child: Padding(
-                  padding: EdgeInsets.only(top: _T.handleTop),
+                  padding: const EdgeInsets.only(top: _T.handleTop),
                   child: SizedBox(
                     width: _T.handleWidth,
                     height: _T.handleHeight,
                     child: DecoratedBox(
-                      decoration: ShapeDecoration(color: _T.handle, shape: StadiumBorder()),
+                      decoration: ShapeDecoration(color: _T.handle, shape: const StadiumBorder()),
                     ),
                   ),
                 ),
@@ -89,8 +89,8 @@ class ConcurrencySheet extends StatelessWidget {
                   children: [
                     for (final count in counts) ...[
                       if (count != counts.first)
-                        const Padding(
-                          padding: EdgeInsets.only(left: _T.optionInset),
+                        Padding(
+                          padding: const EdgeInsets.only(left: _T.optionInset),
                           child: SizedBox(
                             height: _T.optionRule,
                             child: ColoredBox(color: _T.optionRuleInk),
@@ -142,7 +142,7 @@ class _Option extends StatelessWidget {
                 Container(
                   height: _T.badgeHeight,
                   padding: const EdgeInsets.symmetric(horizontal: _T.badgePadX),
-                  decoration: const ShapeDecoration(color: _T.badgeFill, shape: StadiumBorder()),
+                  decoration: ShapeDecoration(color: _T.badgeFill, shape: const StadiumBorder()),
                   child: Center(widthFactor: 1, child: offlineLine('(大会员专享)', badge)),
                 ),
               ],

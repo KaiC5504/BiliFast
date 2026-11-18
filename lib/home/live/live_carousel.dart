@@ -436,7 +436,7 @@ class _Anchor extends StatelessWidget {
           width: LiveTabTheme.face,
           height: LiveTabTheme.face,
           padding: const EdgeInsets.all(LiveTabTheme.faceRing),
-          decoration: const BoxDecoration(color: LiveTabTheme.faceRingInk, shape: BoxShape.circle),
+          decoration: BoxDecoration(color: LiveTabTheme.faceRingInk, shape: BoxShape.circle),
           child: ClipOval(child: RemoteImage.avatar(card.face.isEmpty ? null : card.face)),
         ),
         const SizedBox(width: LiveTabTheme.nameGap),
@@ -491,7 +491,7 @@ class _BandButton extends StatelessWidget {
         width: LiveTabTheme.bandButtonWidth,
         height: LiveTabTheme.bandButtonHeight,
         alignment: Alignment.center,
-        decoration: const ShapeDecoration(
+        decoration: ShapeDecoration(
           shape: StadiumBorder(
             side: BorderSide(color: LiveTabTheme.bandButtonInk, width: LiveTabTheme.bandButtonRim),
           ),

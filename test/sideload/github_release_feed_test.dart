@@ -75,7 +75,7 @@ void main() {
   });
 
   test("a failed connection is nothing, logged by its type and never its text, which carries the address", () async {
-    final release = await feed((request) => throw SocketException('failed', osError: const OSError('refused')))
+    final release = await feed((request) => throw const SocketException('failed', osError: OSError('refused')))
         .latest();
     expect(release, isNull);
     expect(reasons(), ['SocketException']);

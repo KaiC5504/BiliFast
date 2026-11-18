@@ -100,7 +100,7 @@ class SearchUserRow extends StatelessWidget {
               onTap: onFollow,
             ),
           ),
-          const Positioned(
+          Positioned(
             left: SearchResultTheme.gutter,
             right: SearchResultTheme.gutter,
             bottom: 0,
@@ -164,7 +164,7 @@ class _Avatar extends StatelessWidget {
               width: SearchResultTheme.badge + SearchResultTheme.badgeRing * 2,
               height: SearchResultTheme.badge + SearchResultTheme.badgeRing * 2,
               padding: const EdgeInsets.all(SearchResultTheme.badgeRing),
-              decoration: const BoxDecoration(color: BiliColors.card, shape: BoxShape.circle),
+              decoration: BoxDecoration(color: BiliColors.card, shape: BoxShape.circle),
               child: CustomPaint(painter: VerifiedBoltPainter(badge)),
             ),
           ),

@@ -257,7 +257,7 @@ class PageTabRow extends StatelessWidget {
     return SizedBox(
       height: PageTheme.tabRowHeight,
       child: DecoratedBox(
-        decoration: const BoxDecoration(
+        decoration: BoxDecoration(
           color: BiliColors.card,
           border: Border(
             bottom: BorderSide(color: BiliColors.divider, width: PageTheme.hairline),
@@ -389,10 +389,10 @@ class PageTabRow extends StatelessWidget {
       width: math.max(0, right - left),
       bottom: 0,
       height: PageTheme.underlineHeight,
-      child: const DecoratedBox(
+      child: DecoratedBox(
         decoration: BoxDecoration(
           color: BiliColors.pink,
-          borderRadius: BorderRadius.all(Radius.circular(PageTheme.underlineRadius)),
+          borderRadius: const BorderRadius.all(Radius.circular(PageTheme.underlineRadius)),
         ),
       ),
     );
@@ -442,7 +442,7 @@ class DanmakuCapsule extends StatelessWidget {
       width: on ? PageTheme.danmakuFieldWidth + PageTheme.danmakuToggleOn : PageTheme.danmakuToggleOff,
       height: height,
       clipBehavior: Clip.antiAlias,
-      decoration: const ShapeDecoration(color: BiliColors.softGrey, shape: StadiumBorder()),
+      decoration: ShapeDecoration(color: BiliColors.softGrey, shape: const StadiumBorder()),
       foregroundDecoration: ShapeDecoration(
         shape: StadiumBorder(
           side: BorderSide(color: BiliColors.divider, width: border),
@@ -536,18 +536,18 @@ class DanmakuMark extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (!on) {
-      return const Icon(CustomIcons.danmakuOff, size: PageTheme.danmakuMark, color: PageTheme.tabText);
+      return Icon(CustomIcons.danmakuOff, size: PageTheme.danmakuMark, color: PageTheme.tabText);
     }
-    return const SizedBox.square(
+    return SizedBox.square(
       dimension: PageTheme.danmakuMark,
       child: Stack(
         children: [
           ClipPath(
-            clipper: _TickClip(tick: false),
+            clipper: const _TickClip(tick: false),
             child: Icon(CustomIcons.danmakuOn, size: PageTheme.danmakuMark, color: PageTheme.tabText),
           ),
           ClipPath(
-            clipper: _TickClip(tick: true),
+            clipper: const _TickClip(tick: true),
             child: Icon(CustomIcons.danmakuOn, size: PageTheme.danmakuMark, color: BiliColors.pink),
           ),
         ],

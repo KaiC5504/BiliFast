@@ -120,7 +120,7 @@ class MorePanel extends StatefulWidget {
 }
 
 class _MorePanelState extends State<MorePanel> {
-  static const _remainingStyle = TextStyle(fontSize: BiliMetrics.panelDetailText, color: BiliColors.pink);
+  static TextStyle get _remainingStyle => TextStyle(fontSize: BiliMetrics.panelDetailText, color: BiliColors.pink);
 
   var _page = _Page.root;
   var _customMinutes = 30;

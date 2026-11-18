@@ -152,7 +152,7 @@ abstract final class _Capitals {
     const w = OwnSpaceTheme.labelNumberWeight;
     final half = box.height / 2;
     final mid = box.top + half;
-    final across = w * _slant;
+    const across = w * _slant;
     final stem = box.center.dx - w / 2;
     void bar(Rect rect) => canvas.drawRect(rect, ink);
     void band(Offset from, Offset to) =>

@@ -371,7 +371,7 @@ void main() {
       await rig.mountAsPhone(tester);
 
       final fullScreen = rectOf(tester, find.byKey(const ValueKey('portrait-fullscreen')));
-      expect(fullScreen, Rect.fromLTRB(395, 265.5, 439, 309.5));
+      expect(fullScreen, const Rect.fromLTRB(395, 265.5, 439, 309.5));
       expect(corners(tester).center, within(distance: 0.01, from: const Offset(371, 287.5)));
       expect(pill(tester).center.dx, closeTo(383, 0.01));
       expect(rectOf(tester, find.byKey(const ValueKey('portrait-time'))).right, 339);

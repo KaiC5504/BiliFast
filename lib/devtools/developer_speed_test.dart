@@ -133,9 +133,9 @@ class DeveloperSpeedTest extends StatelessWidget {
     ].join(' · ');
   }
 
-  static Widget _note(String text, {Key? key, Color color = DevToolsTheme.note}) => Builder(
+  static Widget _note(String text, {Key? key, Color? color}) => Builder(
     builder: (context) {
-      final style = TextStyle(fontFamily: BiliFonts.family, fontSize: DevToolsTheme.noteText, color: color);
+      final style = TextStyle(fontFamily: BiliFonts.family, fontSize: DevToolsTheme.noteText, color: color ?? DevToolsTheme.note);
       return Text(text, key: key, style: style, strutStyle: BiliFonts.strutOf(context, style));
     },
   );

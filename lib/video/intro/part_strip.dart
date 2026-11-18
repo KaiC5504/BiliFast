@@ -106,8 +106,8 @@ class _PartStripState extends State<PartStrip> {
                           ),
                         ),
                         const SizedBox(width: IntroListTheme.collectionChevronGap),
-                        const Chevron(
-                          size: Size(IntroListTheme.collectionChevronWidth, IntroListTheme.collectionChevronHeight),
+                        Chevron(
+                          size: const Size(IntroListTheme.collectionChevronWidth, IntroListTheme.collectionChevronHeight),
                           stroke: IntroListTheme.chevronStroke,
                           color: BiliColors.secondaryText,
                         ),
@@ -213,10 +213,10 @@ class _PartChipState extends State<_PartChip> {
               TextSpan(
                 children: [
                   if (playing)
-                    const WidgetSpan(
+                    WidgetSpan(
                       alignment: PlaceholderAlignment.middle,
                       child: Padding(
-                        padding: EdgeInsets.only(right: IntroListTheme.partPlayingGap),
+                        padding: const EdgeInsets.only(right: IntroListTheme.partPlayingGap),
                         child: PlayingBars(color: BiliColors.pink, height: IntroListTheme.partChipText * 0.85),
                       ),
                     ),

@@ -618,7 +618,7 @@ class _SearchFieldState extends State<_SearchField> {
 
   @override
   Widget build(BuildContext context) {
-    const word = TextStyle(
+    final word = TextStyle(
       fontSize: HomeTabBarTheme.fieldText,
       color: HomeTabBarTheme.fieldInk,
     );
@@ -643,16 +643,16 @@ class _SearchFieldState extends State<_SearchField> {
             width: HomeTabBarTheme.fieldWidth,
             height: BiliMetrics.linkFieldHeight,
             decoration: widget.filled
-                ? const ShapeDecoration(
+                ? ShapeDecoration(
                     color: HomeTabBarTheme.headField,
-                    shape: StadiumBorder(),
+                    shape: const StadiumBorder(),
                   )
                 : null,
             foregroundDecoration: ShapeDecoration(
               color: _pressed ? BiliColors.pressedFill : null,
               shape: widget.filled
                   ? const StadiumBorder()
-                  : const StadiumBorder(
+                  : StadiumBorder(
                       side: BorderSide(
                         color: HomeTabBarTheme.fieldOutline,
                         width: HomeTabBarTheme.fieldOutlineWidth,
@@ -664,7 +664,7 @@ class _SearchFieldState extends State<_SearchField> {
                 const SizedBox(width: glyphLead),
                 Transform.translate(
                   offset: const Offset(0, -HomeTabBarTheme.fieldGlyphRise),
-                  child: const SearchGlyphIcon(
+                  child: SearchGlyphIcon(
                     SearchGlyph.magnifier,
                     size: HomeTabBarTheme.fieldGlyph,
                     color: HomeTabBarTheme.fieldInk,
@@ -1003,7 +1003,7 @@ class _PadSearchFieldState extends State<_PadSearchField> {
 
   @override
   Widget build(BuildContext context) {
-    const word = TextStyle(fontSize: PadHomeTheme.fieldText, color: PadHomeTheme.fieldInk);
+    final word = TextStyle(fontSize: PadHomeTheme.fieldText, color: PadHomeTheme.fieldInk);
     return Semantics(
       button: true,
       label: '搜索',
@@ -1031,7 +1031,7 @@ class _PadSearchFieldState extends State<_PadSearchField> {
               mainAxisSize: MainAxisSize.min,
               children: [
                 const SizedBox(width: PadHomeTheme.fieldGlyphLead),
-                const SearchGlyphIcon(
+                SearchGlyphIcon(
                   SearchGlyph.magnifier,
                   size: PadHomeTheme.fieldGlyph,
                   color: PadHomeTheme.fieldGlyphInk,
@@ -1119,7 +1119,7 @@ class _PadGlyphPainter extends CustomPainter {
       );
     }
     canvas.drawRect(
-      Rect.fromLTRB(1.085, 10 - PadHomeTheme.iconLine / 2, 18.915, 10 + PadHomeTheme.iconLine / 2),
+      const Rect.fromLTRB(1.085, 10 - PadHomeTheme.iconLine / 2, 18.915, 10 + PadHomeTheme.iconLine / 2),
       Paint()..color = color,
     );
   }

@@ -55,7 +55,7 @@ class StateWithButton extends StatelessWidget {
             child: Container(
               height: WatchLaterTheme.buttonHeight,
               padding: const EdgeInsets.symmetric(horizontal: WatchLaterTheme.buttonPadX),
-              decoration: const ShapeDecoration(color: BiliColors.pink, shape: StadiumBorder()),
+              decoration: ShapeDecoration(color: BiliColors.pink, shape: const StadiumBorder()),
               child: Center(
                 widthFactor: 1,
                 child: Text(

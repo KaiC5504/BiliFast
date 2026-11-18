@@ -13,5 +13,7 @@ Future<void> testExecutable(FutureOr<void> Function() testMain) async {
   TestWidgetsFlutterBinding.ensureInitialized();
   await loadSystemFontStandIns();
   BiliFonts.systemFallback = systemFallback;
+  // 深色模式 is a global: a test that turns it on never leaks it into the next.
+  setUp(() => BiliTheme.dark = false);
   await testMain();
 }

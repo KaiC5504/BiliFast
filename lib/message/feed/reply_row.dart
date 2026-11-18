@@ -245,9 +245,9 @@ class _UpTag extends StatelessWidget {
     width: MessageFeedTheme.upWidth,
     height: MessageFeedTheme.upHeight,
     alignment: Alignment.center,
-    decoration: const BoxDecoration(
+    decoration: BoxDecoration(
       color: MessageFeedTheme.upFill,
-      borderRadius: BorderRadius.all(Radius.circular(MessageFeedTheme.upRadius)),
+      borderRadius: const BorderRadius.all(Radius.circular(MessageFeedTheme.upRadius)),
     ),
     child: Text('UP', style: feedStyle(MessageFeedTheme.upText, MessageFeedTheme.upInk).copyWith(height: 1)),
   );

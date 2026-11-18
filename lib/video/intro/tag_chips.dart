@@ -121,8 +121,8 @@ class _Chip extends StatelessWidget {
           const SizedBox(width: IntroListTheme.chipIconGap),
           ChipName(tag.name, room: room, scrolls: scrolls),
           const SizedBox(width: IntroListTheme.chipChevronGap),
-          const Chevron(
-            size: Size(IntroListTheme.chipChevronWidth, IntroListTheme.chipChevronHeight),
+          Chevron(
+            size: const Size(IntroListTheme.chipChevronWidth, IntroListTheme.chipChevronHeight),
             stroke: IntroListTheme.chipChevronStroke,
             color: IntroListTheme.chipGlyphColor,
           ),

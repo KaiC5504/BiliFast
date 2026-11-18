@@ -110,7 +110,7 @@ class _Bar extends StatelessWidget {
               key: const ValueKey('avatar-back'),
               label: '返回',
               onTap: () => Navigator.of(context).maybePop(),
-              child: const BackGlyph(color: AvatarPageTheme.barIcon, shadow: false),
+              child: BackGlyph(color: AvatarPageTheme.barIcon, shadow: false),
             ),
           ),
           Positioned(
@@ -139,8 +139,8 @@ class _Bar extends StatelessWidget {
             top: AvatarPageTheme.tabUnderlineTop,
             width: AvatarPageTheme.tabUnderlineWidth,
             height: AvatarPageTheme.tabUnderlineHeight,
-            child: const DecoratedBox(
-              decoration: ShapeDecoration(color: BiliColors.pink, shape: StadiumBorder()),
+            child: DecoratedBox(
+              decoration: ShapeDecoration(color: BiliColors.pink, shape: const StadiumBorder()),
             ),
           ),
           Positioned(
@@ -571,7 +571,7 @@ class _LoginButton extends StatelessWidget {
       child: Container(
         height: HistoryTheme.loginHeight,
         padding: const EdgeInsets.symmetric(horizontal: HistoryTheme.loginPadX),
-        decoration: const ShapeDecoration(color: BiliColors.pink, shape: StadiumBorder()),
+        decoration: ShapeDecoration(color: BiliColors.pink, shape: const StadiumBorder()),
         child: Center(
           widthFactor: 1,
           child: Text(
@@ -667,7 +667,7 @@ class _VideoRow extends StatelessWidget {
                         cover: true,
                       )
                     else
-                      const ColoredBox(color: BiliColors.pageGrey),
+                      ColoredBox(color: BiliColors.pageGrey),
                     if (duration > 0)
                       Positioned(
                         right: AvatarPageTheme.durationInset,
@@ -698,7 +698,7 @@ class _VideoRow extends StatelessWidget {
                         bottom: 0,
                         height: AvatarPageTheme.progressHeight,
                         width: AvatarPageTheme.coverWidth * progress,
-                        child: const ColoredBox(key: ValueKey('avatar-recent-progress'), color: BiliColors.pink),
+                        child: ColoredBox(key: const ValueKey('avatar-recent-progress'), color: BiliColors.pink),
                       ),
                   ],
                 ),

@@ -129,7 +129,7 @@ void main() {
 
     await mount(tester, landscape: false);
     expect(tester.takeException(), isNull);
-    final width = (834 - 44 - 12.5 * 3) / 4;
+    const width = (834 - 44 - 12.5 * 3) / 4;
     expect(tester.getSize(find.bySemanticsLabel('推荐 0')).width, closeTo(width, 0.5));
   });
 }

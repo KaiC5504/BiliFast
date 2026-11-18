@@ -280,7 +280,7 @@ class PadPinnedStrip extends StatelessWidget {
   final VoidCallback? onFace;
 
   /// The iPhone's cells at the strip's own pitch, with the iPad page's counts (05).
-  static const _stripActions = ActionRowMetrics(
+  static ActionRowMetrics get _stripActions => ActionRowMetrics(
     gutter: 0,
     topGap: ActionTheme.topGap,
     icon: ActionTheme.iconSize,
@@ -296,7 +296,7 @@ class PadPinnedStrip extends StatelessWidget {
   @override
   Widget build(BuildContext context) => DecoratedBox(
     key: const ValueKey('pad-pinned-strip'),
-    decoration: const BoxDecoration(
+    decoration: BoxDecoration(
       color: BiliColors.card,
       border: Border(
         bottom: BorderSide(color: PadPageTheme.ruleColour, width: PadPageTheme.rule),

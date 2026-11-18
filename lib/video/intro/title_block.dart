@@ -275,14 +275,14 @@ class _MetaLine extends StatelessWidget {
         child: Row(
           children: [
             const SizedBox(width: IntroTheme.metaLead),
-            const CustomPaint(
+            CustomPaint(
               size: icon,
               painter: CountPainter(CountGlyph.views, color: BiliColors.secondaryText),
             ),
             const SizedBox(width: IntroTheme.metaIconGap),
             Text(CountFormat.short(detail.stat.view), style: text, strutStyle: strut),
             const SizedBox(width: IntroTheme.metaGroupGap),
-            const CustomPaint(
+            CustomPaint(
               size: icon,
               painter: CountPainter(CountGlyph.danmaku, color: BiliColors.secondaryText),
             ),

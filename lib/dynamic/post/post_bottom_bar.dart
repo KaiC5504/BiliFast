@@ -83,11 +83,11 @@ class PostBottomBar extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          const SizedBox(
+          SizedBox(
             height: DynamicPostTheme.bottomRuleEach,
             child: ColoredBox(color: DynamicPostTheme.bottomRule),
           ),
-          const SizedBox(
+          SizedBox(
             height: DynamicPostTheme.bottomRuleEach,
             child: ColoredBox(color: DynamicPostTheme.bottomRuleSoft),
           ),
@@ -110,7 +110,7 @@ class PostBottomBar extends StatelessWidget {
                       behavior: HitTestBehavior.opaque,
                       onTap: onWrite,
                       child: DecoratedBox(
-                        decoration: const ShapeDecoration(color: DynamicPostTheme.pillFill, shape: StadiumBorder()),
+                        decoration: ShapeDecoration(color: DynamicPostTheme.pillFill, shape: const StadiumBorder()),
                         child: Padding(
                           padding: const EdgeInsets.symmetric(horizontal: DynamicPostTheme.pillPadding),
                           child: Align(alignment: Alignment.centerLeft, child: postLine(context, prompt, promptStyle)),

@@ -114,7 +114,7 @@ class _LinkRow extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            const SizedBox(
+            SizedBox(
               height: MessageChatTheme.cardRule,
               child: ColoredBox(color: MessageChatTheme.hairline),
             ),

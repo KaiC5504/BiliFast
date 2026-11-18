@@ -462,7 +462,7 @@ void main() {
       await settle(tester, 40);
       expect(http.asked, [1, 1]);
       expect(tester.widget<SkinLoadingView>(view).playing, isTrue);
-      final room = SkinLoadingTheme.size;
+      const room = SkinLoadingTheme.size;
       expect(tester.getTopLeft(card('BV1c0')).dy, moreOrLessEquals(cardTop + room), reason: "the picture's 60 pt open");
       expect(tester.getRect(view).bottom, moreOrLessEquals(cardTop + room - BiliMetrics.feedSpacing));
 

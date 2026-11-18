@@ -68,7 +68,7 @@ Future<FeedReason?> showFeedReasonsSheet(BuildContext context, FeedDislike disli
                 FeedSheetRow(
                   key: const ValueKey('feed-reason-repeated'),
                   label: repeated.name,
-                  icon: const FeedDislikeGlyphIcon(
+                  icon: FeedDislikeGlyphIcon(
                     FeedDislikeGlyph.repeatedOff,
                     size: FeedDislikeTheme.rowIconBox,
                     color: FeedDislikeTheme.ink,
@@ -269,7 +269,7 @@ class FeedDislikedCard extends StatelessWidget {
                                   children: [
                                     Text('选择不感兴趣原因', style: reasons),
                                     const SizedBox(width: FeedDislikeTheme.chevronGap),
-                                    const SizedBox(
+                                    SizedBox(
                                       width: FeedDislikeTheme.chevronWidth,
                                       height: FeedDislikeTheme.chevronHeight,
                                       child: FeedDislikeGlyphIcon(

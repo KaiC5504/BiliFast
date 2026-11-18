@@ -229,6 +229,18 @@ final class DeviceHostApiImpl: DeviceHostApi {
     _ = await PHPhotoLibrary.requestAuthorization(for: .readWrite)
   }
 
+  func setInterfaceStyle(style: NativeInterfaceStyle) throws {
+    let value: UIUserInterfaceStyle
+    switch style {
+    case .system: value = .unspecified
+    case .light: value = .light
+    case .dark: value = .dark
+    }
+    for case let scene as UIWindowScene in UIApplication.shared.connectedScenes {
+      for window in scene.windows { window.overrideUserInterfaceStyle = value }
+    }
+  }
+
   @MainActor private static func setIcon(_ name: String?) async throws {
     let application = UIApplication.shared
     guard application.supportsAlternateIcons else {

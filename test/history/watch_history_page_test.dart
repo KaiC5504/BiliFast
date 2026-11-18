@@ -273,7 +273,7 @@ void main() {
     expect(tester.widget(state), isA<LoadingTvState>());
     expect(find.text(LoadingTvState.message), findsOneWidget);
     expect(find.byType(CupertinoActivityIndicator), findsNothing);
-    final barBottom = 62 + HistoryTheme.barHeight + HistoryTheme.barHairline;
+    const barBottom = 62 + HistoryTheme.barHeight + HistoryTheme.barHairline;
     final tv = find.byType(LoadingTv);
     expect(tester.getTopLeft(tv).dy - barBottom, closeTo(892 / 3, 0.01));
     expect(tester.getCenter(tv).dx, closeTo(220, 0.01));

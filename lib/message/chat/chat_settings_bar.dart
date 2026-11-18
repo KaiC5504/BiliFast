@@ -40,7 +40,7 @@ class ChatSettingsBar extends StatelessWidget {
         children: [
           if (showPush) ...[
             Expanded(child: _push()),
-            const SizedBox(
+            SizedBox(
               width: MessageChatTheme.settingsRule,
               height: MessageChatTheme.settingsRuleHeight,
               child: ColoredBox(color: MessageChatTheme.hairline),

@@ -168,7 +168,7 @@ class SpaceVideoRow extends StatelessWidget {
               },
             ),
           ),
-          const Positioned(
+          Positioned(
             left: SpaceVideosTheme.gutter,
             right: 0,
             top: _coverTop + SpaceVideosTheme.coverHeight + SpaceVideosTheme.rowPadBottom,
@@ -221,7 +221,7 @@ class _Cover extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final picture = video.cover.isEmpty
-        ? const ColoredBox(key: ValueKey('space-cover-placeholder'), color: SpaceVideosTheme.coverPlaceholder)
+        ? ColoredBox(key: const ValueKey('space-cover-placeholder'), color: SpaceVideosTheme.coverPlaceholder)
         : RemoteImage(
             video.cover,
             size: const Size(SpaceVideosTheme.coverWidth, SpaceVideosTheme.coverHeight),

@@ -18,7 +18,7 @@ class DownloadMark extends StatelessWidget {
   Widget build(BuildContext context) {
     final item = this.item;
     if (item != null && item.isDone) {
-      return const SizedBox.square(
+      return SizedBox.square(
         dimension: DownloadSheetTheme.mark,
         child: SheetIcon(SheetArt.done, width: DownloadSheetTheme.mark, color: DownloadSheetTheme.markDone),
       );

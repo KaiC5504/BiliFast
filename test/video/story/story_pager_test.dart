@@ -348,7 +348,7 @@ void main() {
       pager.feed = wide;
       await show(tester);
       expect(pager.extent, screen);
-      expect(tester.getRect(stillOf('BV2')), Rect.fromLTWH(0, screen + 956 * 0.415 - 440 * 9 / 16 / 2, 440, 247.5));
+      expect(tester.getRect(stillOf('BV2')), const Rect.fromLTWH(0, screen + 956 * 0.415 - 440 * 9 / 16 / 2, 440, 247.5));
       final image = tester.widget<RemoteImage>(stillOf('BV2'));
       expect((image.cover, image.preset, image.size), (true, CoverPreset.player, const Size(440, 247.5)));
 
@@ -373,9 +373,9 @@ void main() {
       addTearDown(upright.dispose);
       pager.feed = upright;
       await show(tester);
-      final band = 956 * BiliMetrics.verticalUprightCentre * 2;
+      const band = 956 * BiliMetrics.verticalUprightCentre * 2;
       const height = 440 * 16 / 9;
-      expect(tester.getRect(stillOf('BV2')), Rect.fromLTWH(0, screen + band / 2 - height / 2, 440, height));
+      expect(tester.getRect(stillOf('BV2')), const Rect.fromLTWH(0, screen + band / 2 - height / 2, 440, height));
       expect(tester.widget<RemoteImage>(stillOf('BV2')).preset, CoverPreset.exact);
     });
 

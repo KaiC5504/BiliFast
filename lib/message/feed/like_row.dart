@@ -196,7 +196,7 @@ class _Pair extends StatelessWidget {
             height: face + ring * 2,
             child: Container(
               padding: const EdgeInsets.all(ring),
-              decoration: const BoxDecoration(color: MessageFeedTheme.page, shape: BoxShape.circle),
+              decoration: BoxDecoration(color: MessageFeedTheme.page, shape: BoxShape.circle),
               child: FeedFace(users[0].face),
             ),
           ),

@@ -180,7 +180,7 @@ class FriendsRow extends StatelessWidget {
                     child: friendsLine(person.sign, sign, key: ValueKey('friends-sign-${user.mid}')),
                   ),
                 ),
-              const Positioned(
+              Positioned(
                 left: FriendsTheme.textLeft,
                 right: 0,
                 bottom: FriendsTheme.rowRule,
@@ -252,7 +252,7 @@ class RelationPill extends StatelessWidget {
                       top: (FriendsTheme.pillHeight - FriendsTheme.pillGlyphHeight) / 2 + 1,
                       width: FriendsTheme.pillGlyphWidth,
                       height: FriendsTheme.pillGlyphHeight,
-                      child: const CustomPaint(painter: PillMenuPainter(color: FriendsTheme.pillInk)),
+                      child: CustomPaint(painter: PillMenuPainter(color: FriendsTheme.pillInk)),
                     ),
                     Positioned(
                       left: FriendsTheme.pillTextLeft,
@@ -298,7 +298,7 @@ class _Face extends StatelessWidget {
               width: FriendsTheme.badge + FriendsTheme.badgeRing * 2,
               height: FriendsTheme.badge + FriendsTheme.badgeRing * 2,
               padding: const EdgeInsets.all(FriendsTheme.badgeRing),
-              decoration: const BoxDecoration(color: FriendsTheme.page, shape: BoxShape.circle),
+              decoration: BoxDecoration(color: FriendsTheme.page, shape: BoxShape.circle),
               child: Image.asset('assets/images/friends/face_collectible.png'),
             ),
           ),
@@ -311,7 +311,7 @@ class _Face extends StatelessWidget {
               width: FriendsTheme.badge + FriendsTheme.badgeRing * 2,
               height: FriendsTheme.badge + FriendsTheme.badgeRing * 2,
               padding: const EdgeInsets.all(FriendsTheme.badgeRing),
-              decoration: const BoxDecoration(color: FriendsTheme.page, shape: BoxShape.circle),
+              decoration: BoxDecoration(color: FriendsTheme.page, shape: BoxShape.circle),
               child: CustomPaint(painter: VerifiedBoltPainter(badge)),
             ),
           ),
@@ -388,7 +388,7 @@ class FriendsMessage extends StatelessWidget {
               height: FollowingListTheme.retryHeight,
               padding: const EdgeInsets.symmetric(horizontal: FollowingListTheme.retryPadX),
               alignment: Alignment.center,
-              decoration: const ShapeDecoration(
+              decoration: ShapeDecoration(
                 shape: StadiumBorder(
                   side: BorderSide(color: BiliColors.pink, width: FollowingListTheme.retryRim),
                 ),

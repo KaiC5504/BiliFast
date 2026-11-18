@@ -140,7 +140,7 @@ class VerifiedBadge extends StatelessWidget {
     width: IntroTheme.badge + IntroTheme.badgeRing * 2,
     height: IntroTheme.badge + IntroTheme.badgeRing * 2,
     padding: const EdgeInsets.all(IntroTheme.badgeRing),
-    decoration: const BoxDecoration(color: BiliColors.card, shape: BoxShape.circle),
+    decoration: BoxDecoration(color: BiliColors.card, shape: BoxShape.circle),
     child: CustomPaint(painter: _BoltPainter(color)),
   );
 }

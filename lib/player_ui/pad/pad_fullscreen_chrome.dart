@@ -168,7 +168,7 @@ class PadFullScreenChrome extends StatelessWidget {
   };
 
   Widget _topRow(EdgeInsets insets) {
-    final titleStyle = TextStyle(
+    const titleStyle = TextStyle(
       color: BiliColors.onVideo,
       fontSize: PadFullScreenTheme.titleText,
       fontWeight: FontWeight.w500,

@@ -104,12 +104,12 @@ class _FeedCardViewState extends State<FeedCardView> {
   /// shrinks the card nor opens the video.
   bool _onUploader = false;
 
-  static const _title = TextStyle(
+  static TextStyle get _title => TextStyle(
     fontSize: BiliMetrics.cardTitleText,
     color: BiliColors.text,
     height: FeedCardSize._lineHeight,
   );
-  static const _owner = TextStyle(fontSize: BiliMetrics.cardFooterText, color: BiliColors.secondaryText, height: 1);
+  static TextStyle get _owner => TextStyle(fontSize: BiliMetrics.cardFooterText, color: BiliColors.secondaryText, height: 1);
 
   void _press(bool pressed) {
     if (pressed && _onUploader) return;
@@ -297,7 +297,7 @@ class _FeedCardViewState extends State<FeedCardView> {
                                 dimension: BiliMetrics.cardMoreTarget,
                                 child: Transform.translate(
                                   offset: const Offset(0, BiliMetrics.cardMoreDrop),
-                                  child: const Icon(
+                                  child: Icon(
                                     Icons.more_vert,
                                     size: BiliMetrics.cardFooterText + 4,
                                     color: BiliColors.secondaryText,
@@ -375,12 +375,12 @@ class _FeedCardViewState extends State<FeedCardView> {
   /// the title after its reason tag, the uploader and date, and ⋮.
   Widget _padCard(BuildContext context, ZoomSource source) {
     final card = widget.card;
-    const title = TextStyle(
+    final title = TextStyle(
       fontSize: PadHomeTheme.titleText,
       color: BiliColors.text,
       height: PadHomeTheme.titleLine / PadHomeTheme.titleText,
     );
-    const byline = TextStyle(fontSize: PadHomeTheme.subText, color: PadHomeTheme.subInk, height: 1.2);
+    final byline = TextStyle(fontSize: PadHomeTheme.subText, color: PadHomeTheme.subInk, height: 1.2);
     final reason = card.reason;
     final openUploader = _uploaderTap(card, pad: true);
     return LayoutBuilder(
@@ -581,7 +581,7 @@ class _PadTag extends StatelessWidget {
 
   final String text;
 
-  static const _style = TextStyle(fontSize: PadHomeTheme.tagText, color: BiliColors.reason, height: 1);
+  static TextStyle get _style => TextStyle(fontSize: PadHomeTheme.tagText, color: BiliColors.reason, height: 1);
 
   @override
   Widget build(BuildContext context) => Container(
@@ -829,7 +829,7 @@ class _Tag extends StatelessWidget {
   final String text;
   final double pad;
 
-  static const _style = TextStyle(fontSize: BiliMetrics.cardTagText, color: BiliColors.reason, height: 1);
+  static TextStyle get _style => TextStyle(fontSize: BiliMetrics.cardTagText, color: BiliColors.reason, height: 1);
 
   @override
   Widget build(BuildContext context) => Container(
@@ -858,7 +858,7 @@ class FeedCardSkeleton extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              const AspectRatio(
+              AspectRatio(
                 aspectRatio: BiliMetrics.coverAspect,
                 child: ColoredBox(color: BiliColors.shimmerBase),
               ),
@@ -914,7 +914,7 @@ class FeedCardSkeleton extends StatelessWidget {
             height: PadHomeTheme.footer,
             child: Stack(
               children: [
-                const Positioned(
+                Positioned(
                   left: 0,
                   top: PadHomeTheme.faceTop,
                   child: SizedBox.square(
@@ -924,11 +924,11 @@ class FeedCardSkeleton extends StatelessWidget {
                     ),
                   ),
                 ),
-                Positioned(
+                const Positioned(
                   left: PadHomeTheme.titleLeft,
                   right: PadHomeTheme.titleRight,
                   top: PadHomeTheme.faceTop + PadHomeTheme.skeletonTitleDrop,
-                  child: const Column(
+                  child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
                       _Bar(),
@@ -1001,7 +1001,7 @@ class _ShimmerState extends State<Shimmer> with SingleTickerProviderStateMixin {
           return LinearGradient(
             begin: Alignment(at - 1, -0.3),
             end: Alignment(at + 1, 0.3),
-            colors: const [BiliColors.shimmerBase, BiliColors.shimmerHighlight, BiliColors.shimmerBase],
+            colors: [BiliColors.shimmerBase, BiliColors.shimmerHighlight, BiliColors.shimmerBase],
             stops: const [0.35, 0.5, 0.65],
           ).createShader(bounds);
         },

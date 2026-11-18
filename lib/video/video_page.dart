@@ -2225,7 +2225,7 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
       bottom: PadCommentWriteBar.height,
     );
     final related = DecoratedBox(
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         color: BiliColors.card,
         border: Border(
           left: BorderSide(color: PadPageTheme.ruleColour, width: PadPageTheme.rule),

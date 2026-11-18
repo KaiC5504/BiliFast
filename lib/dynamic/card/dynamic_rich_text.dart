@@ -94,7 +94,7 @@ class _DynamicRichTextState extends State<DynamicRichText> {
     _disposeRecognizers();
     _cutFor = null;
     _more = widget.onMore == null ? null : (TapGestureRecognizer()..onTap = () => widget.onMore?.call());
-    const linked = TextStyle(color: DynamicCardTheme.linkInk);
+    final linked = TextStyle(color: DynamicCardTheme.linkInk);
     final runs = <_Run>[];
     _large = false;
     for (final node in widget.nodes) {
@@ -140,7 +140,7 @@ class _DynamicRichTextState extends State<DynamicRichText> {
                 _IconTap(
                   onTap: open,
                   before: DynamicCardTheme.videoLinkBefore,
-                  child: const DynamicIcon(
+                  child: DynamicIcon(
                     DynamicArt.videoLink,
                     width: DynamicCardTheme.videoLinkSide,
                     color: DynamicCardTheme.linkInk,
@@ -160,7 +160,7 @@ class _DynamicRichTextState extends State<DynamicRichText> {
                 _IconTap(
                   onTap: _soon,
                   before: DynamicCardTheme.giftBefore,
-                  child: const DynamicIcon(
+                  child: DynamicIcon(
                     DynamicArt.gift,
                     width: DynamicCardTheme.giftWidth,
                     height: DynamicCardTheme.giftHeight,
@@ -201,7 +201,7 @@ class _DynamicRichTextState extends State<DynamicRichText> {
     const TextSpan(text: DynamicRichText.ellipsis),
     TextSpan(
       text: widget.moreLabel,
-      style: const TextStyle(color: DynamicCardTheme.linkInk),
+      style: TextStyle(color: DynamicCardTheme.linkInk),
       recognizer: _more,
     ),
   ];

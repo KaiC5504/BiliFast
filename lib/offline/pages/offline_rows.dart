@@ -118,7 +118,7 @@ class _DoneMarks extends StatelessWidget {
                 FractionallySizedBox(
                   alignment: Alignment.centerLeft,
                   widthFactor: watched,
-                  child: const ColoredBox(color: _T.watched),
+                  child: ColoredBox(color: _T.watched),
                 ),
               ],
             ),
@@ -182,7 +182,7 @@ class OfflineProgress extends StatelessWidget {
     child: Stack(
       fit: StackFit.expand,
       children: [
-        const ColoredBox(color: _T.progressTrack),
+        ColoredBox(color: _T.progressTrack),
         FractionallySizedBox(
           alignment: Alignment.centerLeft,
           widthFactor: item.progress,
@@ -277,11 +277,11 @@ class OfflineRowFrame extends StatelessWidget {
                 top: _T.coverTop - _T.stackCardRise,
                 width: _T.coverWidth - _T.stackCardInset * 2,
                 height: _T.stackCardRise + _T.coverRadius,
-                child: const IgnorePointer(
+                child: IgnorePointer(
                   child: DecoratedBox(
                     decoration: BoxDecoration(
                       color: _T.stackCard,
-                      borderRadius: BorderRadius.vertical(top: Radius.circular(_T.coverRadius)),
+                      borderRadius: const BorderRadius.vertical(top: Radius.circular(_T.coverRadius)),
                     ),
                   ),
                 ),
@@ -308,7 +308,7 @@ class OfflineRowFrame extends StatelessWidget {
                 right: 0,
                 top: _T.row - _T.dividerHeight / 2,
                 height: _T.dividerHeight,
-                child: const ColoredBox(color: _T.divider),
+                child: ColoredBox(color: _T.divider),
               ),
           ],
         );

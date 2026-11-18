@@ -152,12 +152,12 @@ class _Top extends StatelessWidget {
           height: SpaceTheme.bannerHeight + stretch,
           child: ExcludeSemantics(
             child: banner == null || banner.isEmpty
-                ? const ColoredBox(key: ValueKey('space-banner-default'), color: SpaceTheme.bannerDefault)
+                ? ColoredBox(key: const ValueKey('space-banner-default'), color: SpaceTheme.bannerDefault)
                 : RemoteImage(
                     banner,
                     // A pull stretches the box every frame; the download keeps the resting size.
                     size: Size(MediaQuery.sizeOf(context).width, SpaceTheme.bannerHeight),
-                    placeholder: const ColoredBox(color: SpaceTheme.bannerDefault),
+                    placeholder: ColoredBox(color: SpaceTheme.bannerDefault),
                   ),
           ),
         ),
@@ -200,8 +200,8 @@ class _Face extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final Widget? badge = switch (profile.official) {
-      SpaceOfficial.person => const VerifiedBadge(color: IntroTheme.badgePerson),
-      SpaceOfficial.organisation => const VerifiedBadge(color: IntroTheme.badgeOrganisation),
+      SpaceOfficial.person => VerifiedBadge(color: IntroTheme.badgePerson),
+      SpaceOfficial.organisation => VerifiedBadge(color: IntroTheme.badgeOrganisation),
       SpaceOfficial.none => profile.vip ? const VipMark() : null,
     };
     return ExcludeSemantics(
@@ -211,7 +211,7 @@ class _Face extends StatelessWidget {
           Positioned.fill(
             child: Container(
               padding: const EdgeInsets.all(SpaceTheme.faceRing),
-              decoration: const BoxDecoration(color: SpaceTheme.faceRingInk, shape: BoxShape.circle),
+              decoration: BoxDecoration(color: SpaceTheme.faceRingInk, shape: BoxShape.circle),
               child: ClipOval(child: RemoteImage.avatar(profile.face)),
             ),
           ),
@@ -238,8 +238,8 @@ class _Stats extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     const ruleTop = SpaceTheme.statsRuleTop - (SpaceTheme.countCentre - SpaceTheme.countLine / 2);
-    const rule = Padding(
-      padding: EdgeInsets.only(top: ruleTop),
+    final rule = Padding(
+      padding: const EdgeInsets.only(top: ruleTop),
       child: SizedBox(
         width: SpaceTheme.statsRuleWidth,
         height: SpaceTheme.statsRule,
@@ -334,7 +334,7 @@ class SpaceFollowRow extends StatelessWidget {
               border: Border.all(color: SpaceTheme.chargeInk, width: SpaceTheme.chargeBorder),
               borderRadius: BorderRadius.circular(SpaceTheme.followRadius),
             ),
-            glyph: const SpaceGlyphIcon(
+            glyph: SpaceGlyphIcon(
               SpaceGlyph.bolt,
               width: SpaceTheme.chargeBoltWidth,
               height: SpaceTheme.chargeBoltHeight,
@@ -358,7 +358,7 @@ class SpaceFollowRow extends StatelessWidget {
               color: SpaceTheme.followedFill,
               borderRadius: BorderRadius.circular(SpaceTheme.followRadius),
             ),
-            glyph: const SpaceGlyphIcon(
+            glyph: SpaceGlyphIcon(
               SpaceGlyph.list,
               width: SpaceTheme.followedListWidth,
               height: SpaceTheme.followedListHeight,
@@ -388,7 +388,7 @@ class SpaceFollowRow extends StatelessWidget {
                 child: Center(
                   child: Transform.translate(
                     offset: const Offset(0, SpaceTheme.moreChevronDrop),
-                    child: const SpaceGlyphIcon(
+                    child: SpaceGlyphIcon(
                       SpaceGlyph.chevronDown,
                       width: SpaceTheme.moreChevronWidth,
                       height: SpaceTheme.moreChevronHeight,
@@ -410,7 +410,7 @@ class SpaceFollowRow extends StatelessWidget {
               color: SpaceTheme.followFill,
               borderRadius: BorderRadius.circular(SpaceTheme.followRadius),
             ),
-            glyph: const SpaceGlyphIcon(
+            glyph: SpaceGlyphIcon(
               SpaceGlyph.plus,
               width: SpaceTheme.followPlus,
               height: SpaceTheme.followPlus,
@@ -572,7 +572,7 @@ class _OfficialLine extends StatelessWidget {
                     height: SpaceTheme.officialDisc,
                     decoration: BoxDecoration(color: disc, shape: BoxShape.circle),
                     alignment: Alignment.center,
-                    child: const SpaceGlyphIcon(
+                    child: SpaceGlyphIcon(
                       SpaceGlyph.bolt,
                       width: SpaceTheme.officialBoltWidth,
                       height: SpaceTheme.officialBoltHeight,
@@ -672,7 +672,7 @@ class _Tag extends StatelessWidget {
   Widget build(BuildContext context) {
     final icon = tag.icon;
     final Widget? glyph = tag.text.startsWith('IP属地')
-        ? const SpaceGlyphIcon(
+        ? SpaceGlyphIcon(
             SpaceGlyph.ip,
             width: SpaceTheme.tagIconWidth,
             height: SpaceTheme.tagIconHeight,
@@ -696,7 +696,7 @@ class _Tag extends StatelessWidget {
         Flexible(child: spaceLine(tag.text, style)),
         if (tag.link) ...[
           const SizedBox(width: SpaceTheme.tagChevronGap),
-          const SpaceGlyphIcon(
+          SpaceGlyphIcon(
             SpaceGlyph.chevron,
             width: SpaceTheme.tagChevronWidth,
             height: SpaceTheme.tagChevronHeight,
@@ -746,13 +746,13 @@ class _Entry extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final icon = switch (entry.kind) {
-      SpaceEntryKind.shop => const SpaceGlyphIcon(
+      SpaceEntryKind.shop => SpaceGlyphIcon(
         SpaceGlyph.shop,
         width: SpaceTheme.entryIcon,
         height: SpaceTheme.entryShopHeight,
         color: SpaceTheme.entryIconInk,
       ),
-      SpaceEntryKind.charge => const SizedBox(
+      SpaceEntryKind.charge => SizedBox(
         width: SpaceTheme.entryIcon,
         child: Center(
           child: SpaceGlyphIcon(

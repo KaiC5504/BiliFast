@@ -30,7 +30,7 @@ class PasteButton extends StatelessWidget {
       onPressed: enabled ? _read : null,
       tooltip: '粘贴',
       visualDensity: VisualDensity.compact,
-      icon: const Icon(Icons.content_paste_rounded, size: BiliMetrics.iconSize, color: BiliColors.pink),
+      icon: Icon(Icons.content_paste_rounded, size: BiliMetrics.iconSize, color: BiliColors.pink),
     );
   }
 }
@@ -51,7 +51,7 @@ class _NativePasteControl extends StatefulWidget {
 class _NativePasteControlState extends State<_NativePasteControl> {
   /// The control must get the touch itself: the system pastes only on a real tap on it.
   static final _gestures = <Factory<OneSequenceGestureRecognizer>>{
-    Factory<OneSequenceGestureRecognizer>(EagerGestureRecognizer.new),
+    const Factory<OneSequenceGestureRecognizer>(EagerGestureRecognizer.new),
   };
 
   MethodChannel? _channel;

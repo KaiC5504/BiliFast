@@ -57,7 +57,7 @@ class SpaceBar extends StatelessWidget {
                   key: const ValueKey('space-bar'),
                   behavior: HitTestBehavior.opaque,
                   onTap: () {},
-                  child: const ColoredBox(color: SpaceTheme.bar),
+                  child: ColoredBox(color: SpaceTheme.bar),
                 ),
               ),
             ),

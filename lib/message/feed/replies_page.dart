@@ -336,9 +336,9 @@ class _RepliesPageState extends State<RepliesPage> with SkinRefreshRoom, FeedPag
     refreshRoom: refreshRoom,
     refreshTrigger: refreshTrigger,
     onRefreshFailed: toast,
-    empty: const ColoredBox(
+    empty: ColoredBox(
       color: MessageFeedTheme.emptyFill,
-      child: FeedEmpty(top: MessageFeedTheme.emptyTop, textCentre: MessageFeedTheme.emptyTextCentre),
+      child: const FeedEmpty(top: MessageFeedTheme.emptyTop, textCentre: MessageFeedTheme.emptyTextCentre),
     ),
     row: (context, notice, last) => ReplyRow(
       key: ValueKey('feed-row-${notice.id}'),
@@ -390,7 +390,7 @@ class _Chips extends StatelessWidget {
             ],
           ),
         ),
-        const Positioned(
+        Positioned(
           left: 0,
           right: 0,
           bottom: 0,
@@ -420,9 +420,9 @@ class _Chip extends StatelessWidget {
       height: MessageFeedTheme.chipHeight,
       alignment: Alignment.center,
       decoration: chosen
-          ? const BoxDecoration(
+          ? BoxDecoration(
               color: MessageFeedTheme.chipChosenFill,
-              borderRadius: BorderRadius.all(Radius.circular(MessageFeedTheme.chipRadius)),
+              borderRadius: const BorderRadius.all(Radius.circular(MessageFeedTheme.chipRadius)),
             )
           : null,
       child: feedLine(

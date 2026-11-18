@@ -15,7 +15,7 @@ class StatsOverlay extends StatelessWidget {
     fontSize: BiliMetrics.statsFont,
     fontFamily: 'Menlo',
     fontFamilyFallback: ['Consolas', 'Courier New', ?BiliFonts.family, ...?BiliFonts.fallback],
-    fontFeatures: [FontFeature.tabularFigures()],
+    fontFeatures: const [FontFeature.tabularFigures()],
   );
 
   @override

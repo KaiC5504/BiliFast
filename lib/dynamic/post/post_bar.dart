@@ -137,7 +137,7 @@ class PostBarRule extends StatelessWidget {
       key: const ValueKey('post-bar-rule'),
       opacity: shown ? 1 : 0,
       duration: MediaQuery.disableAnimationsOf(context) ? Duration.zero : DynamicPostTheme.barFade,
-      child: const ColoredBox(color: DynamicPostTheme.barRule),
+      child: ColoredBox(color: DynamicPostTheme.barRule),
     ),
   );
 }

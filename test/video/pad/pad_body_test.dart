@@ -388,7 +388,7 @@ void main() {
     });
 
     test("the iPhone's action metrics are the theme's", () {
-      const phone = ActionRowMetrics.phone;
+      final phone = ActionRowMetrics.phone;
       expect(phone.cell, isNull);
       expect(phone.icon, ActionTheme.iconSize);
       expect(phone.coinDrop, IntroTheme.actionCoinDrop);

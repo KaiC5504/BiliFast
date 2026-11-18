@@ -158,8 +158,8 @@ class OfflinePageList extends StatelessWidget {
               mainAxisSize: MainAxisSize.min,
               children: [
                 if (index > 0)
-                  const Padding(
-                    padding: EdgeInsets.only(left: OfflinePageTheme.gutter),
+                  Padding(
+                    padding: const EdgeInsets.only(left: OfflinePageTheme.gutter),
                     child: SizedBox(
                       height: OfflinePageTheme.hairline,
                       width: double.infinity,

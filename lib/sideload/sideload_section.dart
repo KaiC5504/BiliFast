@@ -324,7 +324,7 @@ class _SourceChoice extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const rule = SizedBox(
+    final rule = SizedBox(
       height: SettingsTheme.confirmRule,
       child: ColoredBox(color: SettingsTheme.confirmRuleColor),
     );

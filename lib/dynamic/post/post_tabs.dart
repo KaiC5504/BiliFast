@@ -28,7 +28,7 @@ class PostTabs extends StatelessWidget {
         height: DynamicPostTheme.tabsHeight,
         child: Stack(
           children: [
-            const Positioned(
+            Positioned(
               left: 0,
               right: 0,
               bottom: 0,
@@ -54,12 +54,12 @@ class PostTabs extends StatelessWidget {
                         alignment: Alignment.center,
                         children: [
                           Text(commentsLabel, maxLines: 1, softWrap: false, style: chosen),
-                          const Positioned(
+                          Positioned(
                             left: 0,
                             right: 0,
                             bottom: DynamicPostTheme.tabHairline,
                             height: DynamicPostTheme.tabUnderline,
-                            child: ColoredBox(key: ValueKey('post-tab-underline'), color: DynamicPostTheme.tabChosen),
+                            child: ColoredBox(key: const ValueKey('post-tab-underline'), color: DynamicPostTheme.tabChosen),
                           ),
                         ],
                       ),

@@ -144,7 +144,7 @@ void main() {
     showAsPhone(tester);
     final logger = Logger(session: 'test');
     environment = await AppEnvironment.load(
-      keychain: FakeKeychain(StoredCookies(Canned.cookies)),
+      keychain: FakeKeychain(const StoredCookies(Canned.cookies)),
       http: http,
       logger: logger,
     );

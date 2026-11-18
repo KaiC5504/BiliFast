@@ -75,6 +75,12 @@ enum NativeNetwork {
   none;
 }
 
+enum NativeInterfaceStyle {
+  system,
+  light,
+  dark;
+}
+
 
 class _PigeonCodec extends StandardMessageCodec {
   const _PigeonCodec();
@@ -94,6 +100,9 @@ class _PigeonCodec extends StandardMessageCodec {
       writeValue(buffer, value.index);
     }    else if (value is NativeNetwork) {
       buffer.putUint8(132);
+      writeValue(buffer, value.index);
+    }    else if (value is NativeInterfaceStyle) {
+      buffer.putUint8(133);
       writeValue(buffer, value.index);
     } else {
       super.writeValue(buffer, value);
@@ -115,6 +124,9 @@ class _PigeonCodec extends StandardMessageCodec {
       case 132:
         final value = readValue(buffer) as int?;
         return value == null ? null : NativeNetwork.values[value];
+      case 133:
+        final value = readValue(buffer) as int?;
+        return value == null ? null : NativeInterfaceStyle.values[value];
       default:
         return super.readValueOfType(type, buffer);
     }
@@ -560,6 +572,26 @@ class DeviceHostApi {
       binaryMessenger: pigeonVar_binaryMessenger,
     );
     final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(null);
+    final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
+
+    _extractReplyValueOrThrow(
+        pigeonVar_replyList,
+        pigeonVar_channelName,
+        isNullValid: true,
+    )
+    ;
+  }
+
+  /// The app's windows drawn light or dark (深色模式), or as iOS is set: iOS's own sheets, alerts, pickers and the
+  /// keyboard follow it.
+  Future<void> setInterfaceStyle(NativeInterfaceStyle style) async {
+    final pigeonVar_channelName = 'dev.flutter.pigeon.bilifast.DeviceHostApi.setInterfaceStyle$pigeonVar_messageChannelSuffix';
+    final pigeonVar_channel = BasicMessageChannel<Object?>(
+      pigeonVar_channelName,
+      pigeonChannelCodec,
+      binaryMessenger: pigeonVar_binaryMessenger,
+    );
+    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(<Object?>[style]);
     final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
 
     _extractReplyValueOrThrow(

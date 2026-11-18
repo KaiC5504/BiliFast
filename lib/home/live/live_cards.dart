@@ -204,7 +204,7 @@ class LiveMorePainter extends CustomPainter {
 
 /// A › of [color], [LiveTabTheme.chevronWidth] wide, centred in its box.
 class LiveChevronPainter extends CustomPainter {
-  const LiveChevronPainter({this.color = LiveTabTheme.chevronInk, this.left = false});
+  LiveChevronPainter({Color? color, this.left = false}) : color = color ?? LiveTabTheme.chevronInk;
 
   final Color color;
 

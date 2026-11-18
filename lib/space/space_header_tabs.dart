@@ -21,7 +21,7 @@ class SpaceTabRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const hairline = SizedBox(height: SpaceTheme.tabsHairline, child: ColoredBox(color: SpaceTheme.tabsHairlineInk));
+    final hairline = SizedBox(height: SpaceTheme.tabsHairline, child: ColoredBox(color: SpaceTheme.tabsHairlineInk));
     return ColoredBox(
       key: const ValueKey('space-tabs'),
       color: SpaceTheme.page,

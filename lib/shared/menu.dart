@@ -58,7 +58,7 @@ class MenuRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final color = onTap == null ? BiliColors.secondaryText : BiliColors.text;
     final titleStyle = TextStyle(fontSize: BiliMetrics.bodyText, color: color);
-    const noteStyle = TextStyle(fontSize: BiliMetrics.smallText, color: BiliColors.secondaryText);
+    final noteStyle = TextStyle(fontSize: BiliMetrics.smallText, color: BiliColors.secondaryText);
     return MergeSemantics(
       child: Semantics(
         button: true,

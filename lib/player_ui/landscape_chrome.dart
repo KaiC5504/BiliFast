@@ -1640,7 +1640,7 @@ class _NoEntryPainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     final p = _traced(_danmakuGrid, size);
     final centre = p(_noEntryCentre.dx, _noEntryCentre.dy);
-    final reach = _noEntryRadius * math.sqrt1_2;
+    const reach = _noEntryRadius * math.sqrt1_2;
     canvas.drawPath(
       Path()
         ..addOval(Rect.fromCircle(center: centre, radius: p(_noEntryRadius, 0).dx))

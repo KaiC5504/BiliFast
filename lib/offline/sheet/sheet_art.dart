@@ -15,7 +15,7 @@ abstract final class SheetArt {
 
 /// [asset] tinted [color], [width] wide at its own shape.
 class SheetIcon extends StatelessWidget {
-  const SheetIcon(this.asset, {super.key, required this.width, this.color = DownloadSheetTheme.ink});
+  SheetIcon(this.asset, {super.key, required this.width, Color? color}) : color = color ?? DownloadSheetTheme.ink;
 
   final String asset;
   final double width;

@@ -153,9 +153,9 @@ class _FilterChip extends StatelessWidget {
         behavior: HitTestBehavior.opaque,
         onTap: onTap,
         child: DecoratedBox(
-          decoration: const BoxDecoration(
+          decoration: BoxDecoration(
             color: SearchFilterTheme.chip,
-            borderRadius: BorderRadius.all(Radius.circular(SearchFilterTheme.chipRadius)),
+            borderRadius: const BorderRadius.all(Radius.circular(SearchFilterTheme.chipRadius)),
           ),
           child: Center(
             child: Text.rich(_spaced(label), maxLines: 1, style: style, strutStyle: BiliFonts.strutOf(context, style)),

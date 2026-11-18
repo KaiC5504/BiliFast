@@ -114,7 +114,7 @@ class RoomMoreSheet extends StatelessWidget {
       width: LiveRoomTheme.sheetCircle,
       height: LiveRoomTheme.sheetCircle,
       alignment: Alignment.center,
-      decoration: const BoxDecoration(color: LiveRoomTheme.sheetMoreFill, shape: BoxShape.circle),
+      decoration: BoxDecoration(color: LiveRoomTheme.sheetMoreFill, shape: BoxShape.circle),
       child: SizedBox.square(
         dimension: LiveRoomTheme.sheetCircle,
         child: Center(child: glyph),
@@ -176,7 +176,7 @@ class RoomMoreSheet extends StatelessWidget {
                         ),
                     ],
                   ),
-                  const Positioned(
+                  Positioned(
                     left: 0,
                     right: 0,
                     top: LiveRoomTheme.sheetRuleTop,
@@ -263,7 +263,7 @@ class _Slot extends StatelessWidget {
                 child: icon,
               ),
               if (dot)
-                const Positioned(
+                Positioned(
                   left: (LiveRoomTheme.sheetSlot + circle) / 2 - LiveRoomTheme.sheetDot,
                   top: 0,
                   width: LiveRoomTheme.sheetDot,

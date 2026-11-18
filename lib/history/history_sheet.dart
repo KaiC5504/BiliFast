@@ -178,7 +178,7 @@ class _Sheet extends StatelessWidget {
                       Container(
                         width: HistoryTheme.sheetCircle,
                         height: HistoryTheme.sheetCircle,
-                        decoration: const BoxDecoration(color: HistoryTheme.sheetCircleFill, shape: BoxShape.circle),
+                        decoration: BoxDecoration(color: HistoryTheme.sheetCircleFill, shape: BoxShape.circle),
                         child: const CustomPaint(painter: HistorySharePainter()),
                       ),
                       const SizedBox(height: HistoryTheme.sheetLabelGap),
@@ -190,7 +190,7 @@ class _Sheet extends StatelessWidget {
             ],
           ),
         ),
-        const SizedBox(
+        SizedBox(
           height: HistoryTheme.sheetDivider,
           child: ColoredBox(color: HistoryTheme.sheetDividerInk),
         ),
@@ -224,7 +224,7 @@ class _Sheet extends StatelessWidget {
             ],
           ),
         ),
-        const SizedBox(
+        SizedBox(
           height: HistoryTheme.sheetBand,
           child: ColoredBox(color: HistoryTheme.sheetBandFill),
         ),

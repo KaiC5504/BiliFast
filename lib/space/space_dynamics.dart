@@ -54,7 +54,7 @@ class SpaceDynamicsSliver extends StatefulWidget {
   final SpaceDynamicsPager pager;
 
   /// What the cards lie on.
-  static const fill = BiliColors.softGrey;
+  static Color get fill => BiliColors.softGrey;
 
   @override
   State<SpaceDynamicsSliver> createState() => _SpaceDynamicsSliverState();
@@ -72,7 +72,7 @@ class _SpaceDynamicsSliverState extends State<SpaceDynamicsSliver> with OwnPager
     final posts = pager.items;
     final failed = pager.failed;
     return DecoratedSliver(
-      decoration: const BoxDecoration(color: SpaceDynamicsSliver.fill),
+      decoration: BoxDecoration(color: SpaceDynamicsSliver.fill),
       sliver: SliverMainAxisGroup(
         slivers: [
           if (posts.isEmpty && (!pager.loaded || failed))

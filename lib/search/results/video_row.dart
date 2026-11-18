@@ -141,7 +141,7 @@ class SearchVideoRow extends StatelessWidget {
                       for (final run in title.runs)
                         TextSpan(
                           text: run.text,
-                          style: run.highlighted ? const TextStyle(color: SearchResultTheme.highlight) : null,
+                          style: run.highlighted ? TextStyle(color: SearchResultTheme.highlight) : null,
                         ),
                     ],
                   ),
@@ -173,7 +173,7 @@ class SearchVideoRow extends StatelessWidget {
                     ),
                     const SizedBox(height: SearchResultTheme.metaGap),
                     SearchMetaLine(
-                      glyph: const SearchGlyphIcon(
+                      glyph: SearchGlyphIcon(
                         SearchGlyph.play,
                         size: SearchResultTheme.metaGlyph,
                         color: SearchResultTheme.metaInk,
@@ -218,7 +218,7 @@ class SearchVideoRow extends StatelessWidget {
               ),
             ),
           ),
-          const Positioned(
+          Positioned(
             left: SearchResultTheme.gutter,
             right: 0,
             bottom: 0,
@@ -351,7 +351,7 @@ class _Cover extends StatelessWidget {
         fit: StackFit.expand,
         children: [
           if (video.cover.isEmpty)
-            const ColoredBox(key: ValueKey('search-cover-placeholder'), color: SearchResultTheme.coverPlaceholder)
+            ColoredBox(key: const ValueKey('search-cover-placeholder'), color: SearchResultTheme.coverPlaceholder)
           else
             RemoteImage(
               video.cover,

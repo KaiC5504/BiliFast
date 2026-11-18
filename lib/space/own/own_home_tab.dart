@@ -29,7 +29,7 @@ class OwnHomeSliver extends StatelessWidget {
   final OpenSpaceVideo? open;
 
   /// What the sections lie on.
-  static const fill = OwnSpaceTabsTheme.greyPage;
+  static Color get fill => OwnSpaceTabsTheme.greyPage;
 
   void _soon(BuildContext context) => showToast(context, '暂未开放');
 
@@ -140,7 +140,7 @@ class OwnHomeSliver extends StatelessWidget {
       ],
     ];
     return DecoratedSliver(
-      decoration: const BoxDecoration(color: fill),
+      decoration: BoxDecoration(color: fill),
       sliver: SliverMainAxisGroup(
         slivers: [
           SliverToBoxAdapter(
@@ -242,7 +242,7 @@ class _Section extends StatelessWidget {
                           child: Text('更多', maxLines: 1, style: moreStyle, strutStyle: BiliFonts.strut(moreStyle)),
                         ),
                         const SizedBox(width: OwnSpaceTabsTheme.moreChevronGap),
-                        const OwnChevron(color: OwnSpaceTabsTheme.moreInk),
+                        OwnChevron(color: OwnSpaceTabsTheme.moreInk),
                         const SizedBox(width: OwnSpaceTabsTheme.moreRight),
                       ],
                     ),

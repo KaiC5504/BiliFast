@@ -817,7 +817,7 @@ void main() {
       expect(MediaQuery.paddingOf(tester.element(find.byType(VerticalChrome))), const EdgeInsets.only(top: 62, bottom: 34));
       // The surface runs to 83% of the screen, so a fitted 16:9 picture centres at 41.5% as on 09.
       final surface = tester.getRect(find.byKey(const ValueKey('fake-video')));
-      expect(surface, Rect.fromLTWH(0, 0, 440, 956 * BiliMetrics.verticalVideoCentre * 2));
+      expect(surface, const Rect.fromLTWH(0, 0, 440, 956 * BiliMetrics.verticalVideoCentre * 2));
       expect(surface.center.dy, closeTo(397, 1));
 
       sessions.single
@@ -4398,7 +4398,7 @@ void main() {
 
     final video = find.byKey(const ValueKey('fake-video'));
     const box = Rect.fromLTWH(0, 62, 440, 440 / BiliMetrics.videoAspect);
-    final band = Rect.fromLTWH(0, 0, 440, 956 * BiliMetrics.verticalVideoCentre * 2);
+    const band = Rect.fromLTWH(0, 0, 440, 956 * BiliMetrics.verticalVideoCentre * 2);
     // 187's video is 4:3: its picture in the band is 330 tall, centred.
     final place = Rect.fromCenter(center: band.center, width: 440, height: 330);
 

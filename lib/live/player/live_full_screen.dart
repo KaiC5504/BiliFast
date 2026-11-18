@@ -688,13 +688,13 @@ class _GiftAndPlus extends StatelessWidget {
                       ),
                     ),
                   ),
-                  const Positioned(
+                  Positioned(
                     right: 0,
                     top: LivePlayerTheme.giftDotTop,
                     width: LivePlayerTheme.giftDot,
                     height: LivePlayerTheme.giftDot,
                     child: DecoratedBox(
-                      key: ValueKey('live-gift-dot'),
+                      key: const ValueKey('live-gift-dot'),
                       decoration: BoxDecoration(color: LivePlayerTheme.giftDotInk, shape: BoxShape.circle),
                     ),
                   ),

@@ -213,7 +213,7 @@ void main() {
     });
 
     test('a failed poll is tried on the next tick; 3 in a row stop the polls at 加载失败, and 重试 starts afresh', () {
-      final error = const BiliError.network('SocketException');
+      const error = BiliError.network('SocketException');
       final api = FakeQrLoginApi()..answers.addAll([error, const WebLoginWaiting(scanned: false), error, error]);
       run(api: api, (async, model, api, logins) {
         model.start();

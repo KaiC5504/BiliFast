@@ -167,8 +167,8 @@ class _WebLink extends StatelessWidget {
         textBaseline: TextBaseline.alphabetic,
         children: [
           // Without a baseline of its own the chain sits at the row's top.
-          const Padding(
-            padding: EdgeInsets.only(
+          Padding(
+            padding: const EdgeInsets.only(
               left: MessageChatTheme.linkGlyphGap,
               right: MessageChatTheme.linkGlyphGap,
               top: MessageChatTheme.linkGlyphDrop,

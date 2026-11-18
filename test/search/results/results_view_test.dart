@@ -766,7 +766,7 @@ void main() {
     });
 
     testWidgets('a refused 关注 turns back with a toast', (tester) async {
-      api.failures['follow'] = BiliAPIError(code: 22001, message: '不能关注自己');
+      api.failures['follow'] = const BiliAPIError(code: 22001, message: '不能关注自己');
       await showUsers(tester, [user(1)]);
       await tester.tap(find.byKey(const ValueKey('search-follow-701')));
       await settle(tester);

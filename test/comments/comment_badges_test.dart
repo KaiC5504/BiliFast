@@ -49,7 +49,7 @@ void main() {
 
   testWidgets('the fan number is two lines, as wide as its longer one', (tester) async {
     await tester.pumpWidget(
-      const Directionality(
+      Directionality(
         textDirection: TextDirection.ltr,
         child: Center(
           child: FanNumber(number: '017949', color: CommentRowTheme.fanNumber),

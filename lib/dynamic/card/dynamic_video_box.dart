@@ -414,7 +414,7 @@ class _Progress extends StatelessWidget {
       return FractionallySizedBox(
         key: const ValueKey('dynamic-video-progress'),
         widthFactor: share,
-        child: const SizedBox(
+        child: SizedBox(
           height: DynamicCardTheme.progress,
           child: ColoredBox(color: DynamicCardTheme.progressInk),
         ),

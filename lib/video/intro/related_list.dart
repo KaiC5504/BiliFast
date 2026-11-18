@@ -116,10 +116,10 @@ class _RelatedSliverState extends State<RelatedSliver> {
     if (widget.column) return top;
     return SliverMainAxisGroup(
       slivers: [
-        const SliverToBoxAdapter(
+        SliverToBoxAdapter(
           child: Padding(
-            key: ValueKey('related-hairline'),
-            padding: EdgeInsets.only(
+            key: const ValueKey('related-hairline'),
+            padding: const EdgeInsets.only(
               top: PadBodyTheme.relatedHairlineGap,
               left: PadBodyTheme.relatedHairlineInset,
               right: PadBodyTheme.relatedHairlineInset,
@@ -322,7 +322,7 @@ class _RelatedRow extends StatelessWidget {
                         left: first ? 0 : IntroListTheme.relatedDividerInset,
                         right: 0,
                         height: BiliMetrics.panelHairline,
-                        child: const ColoredBox(color: BiliColors.divider),
+                        child: ColoredBox(color: BiliColors.divider),
                       ),
                     Positioned(
                       left: m.gutter,

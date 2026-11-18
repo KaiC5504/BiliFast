@@ -52,8 +52,8 @@ class FixedSkins extends SkinModel {
 }
 
 /// 188's skin: KaiC's green second-page colour, black text.
-final greenSkin = Skin(
-  equip: const SkinEquip(
+const greenSkin = Skin(
+  equip: SkinEquip(
     id: 1,
     name: '测试装扮',
     ver: 1,

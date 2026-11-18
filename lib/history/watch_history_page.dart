@@ -159,7 +159,7 @@ class _WatchHistoryPageState extends State<WatchHistoryPage> {
                   children: [
                     SizedBox(height: top),
                     const _TitleBar(),
-                    const SizedBox(
+                    SizedBox(
                       height: HistoryTheme.barHairline,
                       child: ColoredBox(color: HistoryTheme.divider),
                     ),
@@ -303,7 +303,7 @@ class _SectionHeader extends SliverPersistentHeaderDelegate {
   Widget build(BuildContext context, double shrinkOffset, bool overlapsContent) => ColoredBox(
     color: BiliColors.card,
     child: Padding(
-      padding: EdgeInsets.only(left: HistoryTheme.headerInset, top: HistoryTheme.headerTextTop),
+      padding: const EdgeInsets.only(left: HistoryTheme.headerInset, top: HistoryTheme.headerTextTop),
       child: Align(
         alignment: Alignment.topLeft,
         child: Text(title, style: _style(HistoryTheme.headerText, BiliColors.text, height: 1)),
@@ -425,7 +425,7 @@ class _HistoryRow extends StatelessWidget {
             ),
           ),
           if (!last)
-            const Positioned(
+            Positioned(
               left: HistoryTheme.gutter,
               right: 0,
               bottom: 0,
@@ -576,7 +576,7 @@ class _Cover extends StatelessWidget {
               bottom: 0,
               height: HistoryTheme.progressHeight,
               width: math.max(fraction * HistoryTheme.coverWidth, HistoryTheme.progressMin),
-              child: const ColoredBox(key: ValueKey('history-progress-line'), color: HistoryTheme.progress),
+              child: ColoredBox(key: const ValueKey('history-progress-line'), color: HistoryTheme.progress),
             ),
         ],
       ),
@@ -622,7 +622,7 @@ class _PinkButton extends StatelessWidget {
       child: Container(
         height: height,
         padding: EdgeInsets.symmetric(horizontal: padX),
-        decoration: const ShapeDecoration(color: BiliColors.pink, shape: StadiumBorder()),
+        decoration: ShapeDecoration(color: BiliColors.pink, shape: const StadiumBorder()),
         child: Center(
           widthFactor: 1,
           child: Text(label, style: _style(text, BiliColors.onPink, weight: HistoryTheme.buttonWeight)),

@@ -18,7 +18,7 @@ typedef _T = MessageSettingsTheme;
 final class MessageSettingsBarLook {
   const MessageSettingsBarLook({required this.fill, required this.ink, required this.lightStatus});
 
-  static const stock = MessageSettingsBarLook(fill: _T.bar, ink: _T.barInk, lightStatus: false);
+  static MessageSettingsBarLook get stock => MessageSettingsBarLook(fill: _T.bar, ink: _T.barInk, lightStatus: false);
 
   factory MessageSettingsBarLook.of(Skin? skin) {
     final page = skin?.equip.colors.colorSecondPage;
@@ -215,16 +215,16 @@ class MessageSettingsGroup extends StatelessWidget {
           ),
         for (final (index, child) in children.indexed) ...[
           if (index > 0)
-            const SizedBox(
+            SizedBox(
               height: _T.rule,
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   Padding(
-                    padding: EdgeInsets.only(left: _T.hairlineInset),
+                    padding: const EdgeInsets.only(left: _T.hairlineInset),
                     child: ColoredBox(
                       color: _T.hairlineColor,
-                      child: SizedBox(height: _T.hairline),
+                      child: const SizedBox(height: _T.hairline),
                     ),
                   ),
                 ],
@@ -318,8 +318,8 @@ class MessageSettingsLinkRow extends StatelessWidget {
                   _text(value, _style(_T.valueText, _T.value), key: const ValueKey('message-settings-value')),
                   const SizedBox(width: _T.valueGap),
                 ],
-                const Chevron(
-                  size: Size(_T.chevronWidth, _T.chevronHeight),
+                Chevron(
+                  size: const Size(_T.chevronWidth, _T.chevronHeight),
                   stroke: _T.chevronStroke,
                   color: _T.chevron,
                 ),
@@ -392,9 +392,9 @@ class _Switch extends StatelessWidget {
         duration: motion,
         curve: Curves.easeOutCubic,
         alignment: on ? Alignment.centerRight : Alignment.centerLeft,
-        child: const DecoratedBox(
+        child: DecoratedBox(
           decoration: BoxDecoration(color: _T.switchKnobFill, shape: BoxShape.circle),
-          child: SizedBox.square(dimension: _T.switchKnob),
+          child: const SizedBox.square(dimension: _T.switchKnob),
         ),
       ),
     );
@@ -429,10 +429,10 @@ class MessageSettingsChoiceRow extends StatelessWidget {
           trailingRight: _T.checkEnd,
           textRight: _T.checkEnd + _check.width + _T.valueGap,
           trailing: chosen
-              ? CustomPaint(
-                  key: const ValueKey('message-settings-check'),
+              ? const CustomPaint(
+                  key: ValueKey('message-settings-check'),
                   size: _check,
-                  painter: const SettingsCheckPainter(_T.checkShort, _T.checkLong, _T.checkStroke),
+                  painter: SettingsCheckPainter(_T.checkShort, _T.checkLong, _T.checkStroke),
                 )
               : null,
         ),

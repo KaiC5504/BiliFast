@@ -56,7 +56,7 @@ String orderLabel(FollowingOrder order) => switch (order) {
 final class FollowingBarLook {
   const FollowingBarLook({required this.fill, required this.ink, required this.lightStatus});
 
-  static const stock = FollowingBarLook(
+  static FollowingBarLook get stock => FollowingBarLook(
     fill: FollowingListTheme.bar,
     ink: FollowingListTheme.barInk,
     lightStatus: false,
@@ -506,9 +506,9 @@ class _SearchSection extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        const ColoredBox(
+        ColoredBox(
           color: FollowingListTheme.hairline,
-          child: SizedBox(height: FollowingListTheme.barHairline),
+          child: const SizedBox(height: FollowingListTheme.barHairline),
         ),
         const SizedBox(height: FollowingListTheme.searchTop),
         Padding(
@@ -518,13 +518,13 @@ class _SearchSection extends StatelessWidget {
             child: Container(
               key: const ValueKey('following-search'),
               height: FollowingListTheme.fieldHeight,
-              decoration: const ShapeDecoration(color: FollowingListTheme.field, shape: StadiumBorder()),
+              decoration: ShapeDecoration(color: FollowingListTheme.field, shape: const StadiumBorder()),
               padding: const EdgeInsets.only(left: FollowingListTheme.magnifierLead),
               child: Row(
                 children: [
                   Transform.translate(
                     offset: const Offset(0, -FollowingListTheme.magnifierLift),
-                    child: const SearchGlyphIcon(
+                    child: SearchGlyphIcon(
                       SearchGlyph.magnifier,
                       size: FollowingListTheme.magnifier,
                       color: FollowingListTheme.magnifierInk,
@@ -572,7 +572,7 @@ class _SearchSection extends StatelessWidget {
                               key: const ValueKey('following-search-clear'),
                               behavior: HitTestBehavior.opaque,
                               onTap: onClear,
-                              child: const SizedBox(
+                              child: SizedBox(
                                 width: FollowingListTheme.clearTarget,
                                 child: Center(
                                   child: SearchGlyphIcon(
@@ -591,9 +591,9 @@ class _SearchSection extends StatelessWidget {
           ),
         ),
         const SizedBox(height: FollowingListTheme.searchBottom),
-        const ColoredBox(
+        ColoredBox(
           color: FollowingListTheme.hairline,
-          child: SizedBox(height: FollowingListTheme.searchRule),
+          child: const SizedBox(height: FollowingListTheme.searchRule),
         ),
       ],
     );
@@ -882,10 +882,10 @@ class _FollowingRow extends StatelessWidget {
                   height: FollowingListTheme.dot,
                   child: DecoratedBox(
                     key: ValueKey('following-dot-${user.mid}'),
-                    decoration: const BoxDecoration(color: FollowingListTheme.dotInk, shape: BoxShape.circle),
+                    decoration: BoxDecoration(color: FollowingListTheme.dotInk, shape: BoxShape.circle),
                   ),
                 ),
-              const Positioned(
+              Positioned(
                 left: FollowingListTheme.rowRuleInset,
                 right: FollowingListTheme.rowRuleInset,
                 bottom: 0,
@@ -925,7 +925,7 @@ class _Face extends StatelessWidget {
               width: FollowingListTheme.badge + FollowingListTheme.badgeRing * 2,
               height: FollowingListTheme.badge + FollowingListTheme.badgeRing * 2,
               padding: const EdgeInsets.all(FollowingListTheme.badgeRing),
-              decoration: const BoxDecoration(color: FollowingListTheme.page, shape: BoxShape.circle),
+              decoration: BoxDecoration(color: FollowingListTheme.page, shape: BoxShape.circle),
               child: CustomPaint(painter: VerifiedBoltPainter(badge)),
             ),
           ),
@@ -969,7 +969,7 @@ class _StateMessage extends StatelessWidget {
               height: FollowingListTheme.retryHeight,
               padding: const EdgeInsets.symmetric(horizontal: FollowingListTheme.retryPadX),
               alignment: Alignment.center,
-              decoration: const ShapeDecoration(
+              decoration: ShapeDecoration(
                 shape: StadiumBorder(
                   side: BorderSide(color: BiliColors.pink, width: FollowingListTheme.retryRim),
                 ),

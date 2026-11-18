@@ -297,7 +297,7 @@ void main() {
 
       // Where 209 puts them.
       expect(tester.getCenter(_key('live-back')).dx, closeTo(62 + LivePlayerTheme.backCentre, 0.01));
-      expect(tester.getCenter(_key('live-play')), Offset(62 + LivePlayerTheme.playCentre, 440 - 55));
+      expect(tester.getCenter(_key('live-play')), const Offset(62 + LivePlayerTheme.playCentre, 440 - 55));
       expect(tester.getCenter(_key('live-more')).dx, closeTo(956 - 62 - LivePlayerTheme.moreCentre, 0.01));
       expect(tester.getTopLeft(_key('live-anchor')).dx, 62 + LivePlayerTheme.anchorLeft);
       expect(find.text('12.4万点赞'), findsOneWidget);
@@ -402,7 +402,7 @@ void main() {
       await rig.controller.setFullScreen(true);
       await tester.pump();
       final lock = tester.getRect(_key('live-lock'));
-      expect(lock.center, Offset(62 + LivePlayerTheme.lockCentre, 220));
+      expect(lock.center, const Offset(62 + LivePlayerTheme.lockCentre, 220));
       expect(lock.width, closeTo(LivePlayerTheme.lockBox, 0.01));
       await tester.tap(_key('live-lock'));
       await tester.pump();

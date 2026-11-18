@@ -69,7 +69,7 @@ class _EmotePanelState extends State<EmotePanel> {
           ),
           SizedBox(
             height: widget.bottomInset,
-            child: const ColoredBox(color: ComposerTheme.tabBar),
+            child: ColoredBox(color: ComposerTheme.tabBar),
           ),
         ],
       ),
@@ -108,7 +108,7 @@ class _EmotePanelState extends State<EmotePanel> {
   Widget _content(EmotePackage package) {
     final recent = widget.recent;
     final showsRecent = recent.isNotEmpty && package.id == widget.packages?.first.id;
-    final emoteTop = (ComposerTheme.row - ComposerTheme.emote) / 2;
+    const emoteTop = (ComposerTheme.row - ComposerTheme.emote) / 2;
     return CustomScrollView(
       // Another package starts at its top.
       key: ValueKey('emote-grid-${package.id}'),

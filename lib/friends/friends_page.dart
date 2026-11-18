@@ -591,7 +591,7 @@ class _TabRow extends StatelessWidget {
                       ),
                     ),
                   ),
-                const Positioned(
+                Positioned(
                   left: 0,
                   right: 0,
                   top: FriendsTheme.tabRow,
@@ -604,10 +604,10 @@ class _TabRow extends StatelessWidget {
                   top: FriendsTheme.underlineBottom - FriendsTheme.underlineHeight,
                   width: FriendsTheme.underlineWidth,
                   height: FriendsTheme.underlineHeight,
-                  child: const DecoratedBox(
+                  child: DecoratedBox(
                     decoration: BoxDecoration(
                       color: FriendsTheme.tabChosen,
-                      borderRadius: BorderRadius.all(Radius.circular(FriendsTheme.underlineHeight / 2)),
+                      borderRadius: const BorderRadius.all(Radius.circular(FriendsTheme.underlineHeight / 2)),
                     ),
                   ),
                 ),
@@ -664,10 +664,10 @@ class _SearchField extends StatelessWidget {
               onTap: focus.requestFocus,
               child: DecoratedBox(
                 key: const ValueKey('friends-search'),
-                decoration: const ShapeDecoration(color: FriendsTheme.field, shape: StadiumBorder()),
+                decoration: ShapeDecoration(color: FriendsTheme.field, shape: const StadiumBorder()),
                 child: Stack(
                   children: [
-                    const Positioned(
+                    Positioned(
                       left: FriendsTheme.magnifierCentre - FriendsTheme.magnifier / 2,
                       width: FriendsTheme.magnifier,
                       top: 0,
@@ -730,7 +730,7 @@ class _SearchField extends StatelessWidget {
                             key: const ValueKey('friends-search-clear'),
                             behavior: HitTestBehavior.opaque,
                             onTap: onClear,
-                            child: const Center(
+                            child: Center(
                               child: SearchGlyphIcon(
                                 SearchGlyph.clear,
                                 size: FriendsTheme.clear,

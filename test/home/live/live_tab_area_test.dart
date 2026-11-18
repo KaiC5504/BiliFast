@@ -28,7 +28,7 @@ void main() {
     await pumpLive(tester, await liveServices(api: harness.api), harness.tab());
     await settle(tester);
 
-    final fadeFrom = LiveTabTheme.areaFadeFrom;
+    const fadeFrom = LiveTabTheme.areaFadeFrom;
     final words = find.text('测试分区4');
     expect(tester.getRect(words).right, greaterThan(fadeFrom));
     await tester.tapAt(tester.getTopLeft(find.byKey(const ValueKey('live-area-24-1'))) + const Offset(4, 20));

@@ -922,7 +922,7 @@ VideoDetail detail(String bvid) => VideoDetail(
   descParts: const [],
   copyright: 1,
   owner: const VideoOwner(mid: 9, name: 'UP主', face: ''),
-  stat: VideoStat(view: 0, danmaku: 0, reply: 30, favorite: 0, coin: 0, share: 0, like: 0),
+  stat: const VideoStat(view: 0, danmaku: 0, reply: 30, favorite: 0, coin: 0, share: 0, like: 0),
   pages: const [],
   season: null,
   staff: const [],

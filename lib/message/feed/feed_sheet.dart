@@ -136,9 +136,9 @@ class _FeedSheetLayerState extends State<FeedSheetLayer> with SingleTickerProvid
                   position: _slide,
                   child: DecoratedBox(
                     key: const ValueKey('feed-sheet'),
-                    decoration: const BoxDecoration(
+                    decoration: BoxDecoration(
                       color: MessageFeedTheme.sheetFill,
-                      borderRadius: BorderRadius.vertical(top: Radius.circular(MessageFeedTheme.sheetRadius)),
+                      borderRadius: const BorderRadius.vertical(top: Radius.circular(MessageFeedTheme.sheetRadius)),
                     ),
                     child: Padding(
                       padding: EdgeInsets.only(bottom: MessageFeedTheme.cardBottom + bottom),
@@ -146,13 +146,13 @@ class _FeedSheetLayerState extends State<FeedSheetLayer> with SingleTickerProvid
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           const SizedBox(height: MessageFeedTheme.grabberTop),
-                          const SizedBox(
+                          SizedBox(
                             width: MessageFeedTheme.grabberWidth,
                             height: MessageFeedTheme.grabberHeight,
                             child: DecoratedBox(
                               decoration: BoxDecoration(
                                 color: MessageFeedTheme.grabberInk,
-                                borderRadius: BorderRadius.all(Radius.circular(MessageFeedTheme.grabberHeight / 2)),
+                                borderRadius: const BorderRadius.all(Radius.circular(MessageFeedTheme.grabberHeight / 2)),
                               ),
                             ),
                           ),
@@ -182,8 +182,8 @@ class _FeedSheetLayerState extends State<FeedSheetLayer> with SingleTickerProvid
                                         ),
                                         onTap: () => _act(target, widget.onMute),
                                       ),
-                                      const Padding(
-                                        padding: EdgeInsets.only(left: MessageFeedTheme.sheetTextLeft),
+                                      Padding(
+                                        padding: const EdgeInsets.only(left: MessageFeedTheme.sheetTextLeft),
                                         child: SizedBox(
                                           height: MessageFeedTheme.sheetRule,
                                           width: double.infinity,

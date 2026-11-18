@@ -301,10 +301,10 @@ class _AuthorRow extends StatelessWidget {
               children: [
                 TextSpan(text: author.pubTime),
                 if (author.pubAction.isNotEmpty) ...[
-                  const WidgetSpan(
+                  WidgetSpan(
                     alignment: PlaceholderAlignment.middle,
                     child: Padding(
-                      padding: EdgeInsets.only(
+                      padding: const EdgeInsets.only(
                         left: DynamicCardTheme.timeDotBefore,
                         right: DynamicCardTheme.timeDotAfter,
                       ),
@@ -350,7 +350,7 @@ class _AuthorRow extends StatelessWidget {
               key: const ValueKey('dynamic-more'),
               behavior: HitTestBehavior.opaque,
               onTap: onMore,
-              child: const Center(
+              child: Center(
                 child: DynamicIcon(
                   DynamicArt.more,
                   width: DynamicCardTheme.moreWidth,
@@ -407,7 +407,7 @@ class _Face extends StatelessWidget {
               width: DynamicCardTheme.badge + ring * 2,
               height: DynamicCardTheme.badge + ring * 2,
               padding: const EdgeInsets.all(ring),
-              decoration: const BoxDecoration(color: DynamicCardTheme.fill, shape: BoxShape.circle),
+              decoration: BoxDecoration(color: DynamicCardTheme.fill, shape: BoxShape.circle),
               child: CustomPaint(painter: VerifiedBoltPainter(badge)),
             ),
           ),
@@ -562,7 +562,7 @@ class _Footer extends StatelessWidget {
 }
 
 class _FooterButton extends StatelessWidget {
-  const _FooterButton({
+  _FooterButton({
     super.key,
     required this.icon,
     required this.iconWidth,
@@ -570,8 +570,8 @@ class _FooterButton extends StatelessWidget {
     required this.text,
     required this.label,
     required this.onTap,
-    this.ink = DynamicCardTheme.footerInk,
-  });
+    Color? ink,
+  }) : ink = ink ?? DynamicCardTheme.footerInk;
 
   final String icon;
   final double iconWidth;

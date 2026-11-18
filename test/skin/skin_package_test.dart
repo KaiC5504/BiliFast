@@ -517,7 +517,7 @@ void main() {
         ),
         ['tail icons', 'selected tail icons'],
       );
-      expect(skinBarGaps(Skin(equip: _equip)), [
+      expect(skinBarGaps(const Skin(equip: _equip)), [
         'tail bg',
         'tail icons',
         'selected tail icons',

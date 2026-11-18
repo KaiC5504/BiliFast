@@ -182,7 +182,7 @@ class _LiveFollowingPageState extends State<LiveFollowingPage> with SkinRefreshR
       return _Failure(message: error, onRetry: () => unawaited(model.retry()));
     }
     if (model.answered && !model.loadingFirst) {
-      return _Words(LiveFollowingPage.emptyMessage, key: const ValueKey('live-following-empty'));
+      return const _Words(LiveFollowingPage.emptyMessage, key: ValueKey('live-following-empty'));
     }
     return const LoadingTvState(key: ValueKey('live-following-loading'));
   }
@@ -334,7 +334,7 @@ class _Failure extends StatelessWidget {
             height: LiveTabTheme.retryHeight,
             padding: const EdgeInsets.symmetric(horizontal: LiveTabTheme.retryPadX),
             alignment: Alignment.center,
-            decoration: const ShapeDecoration(
+            decoration: ShapeDecoration(
               shape: StadiumBorder(
                 side: BorderSide(color: BiliColors.pink, width: LiveTabTheme.retryRim),
               ),

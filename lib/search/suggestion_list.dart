@@ -75,7 +75,7 @@ class _Row extends StatelessWidget {
                           for (final run in text.runs)
                             TextSpan(
                               text: run.text,
-                              style: run.highlighted ? const TextStyle(color: SearchTheme.highlight) : null,
+                              style: run.highlighted ? TextStyle(color: SearchTheme.highlight) : null,
                             ),
                         ],
                       ),
@@ -87,8 +87,8 @@ class _Row extends StatelessWidget {
                   ),
                 ),
               ),
-              const Padding(
-                padding: EdgeInsets.only(left: SearchTheme.gutter),
+              Padding(
+                padding: const EdgeInsets.only(left: SearchTheme.gutter),
                 child: SizedBox(
                   height: SearchTheme.suggestionHairline,
                   child: ColoredBox(color: SearchTheme.suggestionHairlineColor),

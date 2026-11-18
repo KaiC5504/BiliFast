@@ -258,7 +258,7 @@ class _FolderBar extends StatelessWidget {
             'fav-folder-search',
             '搜索',
             FavouritesTheme.folderSearchRight,
-            const FavGlyphIcon(
+            FavGlyphIcon(
               FavGlyph.search,
               width: FavouritesTheme.folderSearch,
               height: FavouritesTheme.folderSearch,
@@ -270,7 +270,7 @@ class _FolderBar extends StatelessWidget {
             'fav-folder-select',
             '批量管理',
             FavouritesTheme.folderSelectRight,
-            const FavGlyphIcon(
+            FavGlyphIcon(
               FavGlyph.select,
               width: FavouritesTheme.folderSelectWidth,
               height: FavouritesTheme.folderSelectHeight,
@@ -282,7 +282,7 @@ class _FolderBar extends StatelessWidget {
             'fav-folder-more',
             '更多',
             FavouritesTheme.folderMoreRight,
-            const FavGlyphIcon(
+            FavGlyphIcon(
               FavGlyph.more,
               width: FavouritesTheme.folderMoreDot,
               height: FavouritesTheme.folderMoreDot + FavouritesTheme.folderMorePitch * 2,
@@ -379,7 +379,7 @@ class _FolderHeader extends StatelessWidget {
             0,
             '点赞',
             'fav-folder-like',
-            const ActionIcon(
+            ActionIcon(
               ActionGlyph.like,
               solid: true,
               size: FavouritesTheme.folderLikeInk / ActionIcon.inkShare,
@@ -393,7 +393,7 @@ class _FolderHeader extends StatelessWidget {
             'fav-folder-favourite',
             Transform.translate(
               offset: const Offset(0, FavouritesTheme.folderAddDrop),
-              child: const FavGlyphIcon(
+              child: FavGlyphIcon(
                 FavGlyph.folderAdd,
                 width: FavouritesTheme.folderAddWidth,
                 height: FavouritesTheme.folderAddHeight,
@@ -407,7 +407,7 @@ class _FolderHeader extends StatelessWidget {
             2,
             '分享',
             'fav-folder-share',
-            const ActionIcon(
+            ActionIcon(
               ActionGlyph.share,
               solid: true,
               size: FavouritesTheme.folderShareInk / ActionIcon.inkShare,

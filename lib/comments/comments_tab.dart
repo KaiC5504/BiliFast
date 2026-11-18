@@ -482,7 +482,7 @@ class _ClosedNotice extends StatelessWidget {
       ),
       child: Column(
         children: [
-          const ExcludeSemantics(
+          ExcludeSemantics(
             child: Icon(
               Icons.chat_bubble_outline,
               size: CommentListTheme.closedIcon,
@@ -521,7 +521,7 @@ class CommentWriteBar extends StatelessWidget {
     );
     return DecoratedBox(
       key: const ValueKey('comment-bar'),
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         color: CommentListTheme.background,
         border: Border(
           top: BorderSide(color: CommentListTheme.rule, width: CommentListTheme.barHairline),
@@ -549,7 +549,7 @@ class CommentWriteBar extends StatelessWidget {
                     behavior: HitTestBehavior.opaque,
                     onTap: () => onWrite(false),
                     child: DecoratedBox(
-                      decoration: const ShapeDecoration(color: CommentListTheme.fieldFill, shape: StadiumBorder()),
+                      decoration: ShapeDecoration(color: CommentListTheme.fieldFill, shape: const StadiumBorder()),
                       child: Padding(
                         padding: const EdgeInsets.symmetric(horizontal: CommentListTheme.fieldPadding),
                         child: Align(
@@ -658,7 +658,7 @@ class PadCommentWriteBar extends StatelessWidget {
     );
     return DecoratedBox(
       key: const ValueKey('comment-bar'),
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         color: CommentListTheme.background,
         border: Border(
           top: BorderSide(color: PadPageTheme.commentRule, width: CommentListTheme.barHairline),
@@ -675,7 +675,7 @@ class PadCommentWriteBar extends StatelessWidget {
               height: PadPageTheme.commentFieldHeight,
               child: DecoratedBox(
                 key: const ValueKey('comment-field-box'),
-                decoration: const ShapeDecoration(color: PadPageTheme.commentFieldFill, shape: StadiumBorder()),
+                decoration: ShapeDecoration(color: PadPageTheme.commentFieldFill, shape: const StadiumBorder()),
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
@@ -962,7 +962,7 @@ class PadCommentsHeader extends StatelessWidget {
     ).copyWith(fontWeight: PadPageTheme.headerTitleWeight);
     return DecoratedBox(
       key: const ValueKey('pad-comments-header'),
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         color: CommentListTheme.background,
         border: Border(
           top: BorderSide(color: PadPageTheme.ruleColour, width: PadPageTheme.rule),
@@ -1003,7 +1003,7 @@ class PadCommentsHeader extends StatelessWidget {
                       child: Container(
                         width: PadPageTheme.headerFieldWidth,
                         height: PadPageTheme.headerFieldHeight,
-                        decoration: const ShapeDecoration(color: PadPageTheme.headerFieldFill, shape: StadiumBorder()),
+                        decoration: ShapeDecoration(color: PadPageTheme.headerFieldFill, shape: const StadiumBorder()),
                         padding: const EdgeInsets.only(left: PadPageTheme.headerFieldPadding),
                         child: Row(
                           children: [
@@ -1067,7 +1067,7 @@ class PadCommentsHeader extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(width: PadPageTheme.headerRuleGap),
-                  const SizedBox(
+                  SizedBox(
                     width: PadPageTheme.rule,
                     height: PadPageTheme.headerRuleHeight,
                     child: ColoredBox(color: PadPageTheme.ruleColour),

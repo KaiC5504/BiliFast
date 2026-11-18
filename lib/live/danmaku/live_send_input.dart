@@ -283,9 +283,9 @@ class _LiveSendInputState extends State<LiveSendInput> {
                 child: _SuperChatPill(onTap: _unavailable),
               ),
               Container(
-                decoration: const BoxDecoration(
+                decoration: BoxDecoration(
                   color: LiveSendTheme.panelFill,
-                  borderRadius: BorderRadius.vertical(top: Radius.circular(LiveSendTheme.panelRadius)),
+                  borderRadius: const BorderRadius.vertical(top: Radius.circular(LiveSendTheme.panelRadius)),
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -425,7 +425,7 @@ class _LiveSendInputState extends State<LiveSendInput> {
     return Container(
       height: LiveSendTheme.fieldHeight,
       alignment: Alignment.centerLeft,
-      decoration: const ShapeDecoration(color: LiveSendTheme.fieldFill, shape: StadiumBorder()),
+      decoration: ShapeDecoration(color: LiveSendTheme.fieldFill, shape: const StadiumBorder()),
       child: Material(
         type: MaterialType.transparency,
         child: TextField(
@@ -543,9 +543,9 @@ class _SuperChatPill extends StatelessWidget {
       child: Container(
         height: LiveSendTheme.pillHeight,
         padding: const EdgeInsets.only(left: LiveSendTheme.pillPadLeft, right: LiveSendTheme.pillPadRight),
-        decoration: const ShapeDecoration(
+        decoration: ShapeDecoration(
           color: LiveSendTheme.pillFill,
-          shape: StadiumBorder(
+          shape: const StadiumBorder(
             side: BorderSide(color: LiveSendTheme.pillLine, width: LiveSendTheme.pillLineWidth),
           ),
         ),

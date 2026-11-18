@@ -72,7 +72,7 @@ class _ChatEmotePanelState extends State<ChatEmotePanel> {
               child: Stack(
                 children: [
                   Positioned.fill(child: _content(selected)),
-                  const Positioned(
+                  Positioned(
                     left: 0,
                     right: 0,
                     top: MessageChatTheme.panelLineTop,
@@ -105,7 +105,7 @@ class _ChatEmotePanelState extends State<ChatEmotePanel> {
           ),
           SizedBox(
             height: widget.bottomInset,
-            child: const ColoredBox(color: MessageChatTheme.bar),
+            child: ColoredBox(color: MessageChatTheme.bar),
           ),
         ],
       ),
@@ -221,7 +221,7 @@ class _ChatEmotePanelState extends State<ChatEmotePanel> {
           key: const ValueKey('chat-emote-settings'),
           label: '设置',
           onTap: widget.onUnavailable,
-          child: const ChatGlyph(
+          child: ChatGlyph(
             ChatArt.settings,
             width: MessageChatTheme.barGearWidth,
             height: MessageChatTheme.barGearHeight,
@@ -233,7 +233,7 @@ class _ChatEmotePanelState extends State<ChatEmotePanel> {
           label: '搜索',
           onTap: widget.onUnavailable,
           badge: const _NewTag(),
-          child: const ChatGlyph(
+          child: ChatGlyph(
             ChatArt.emoteSearch,
             width: MessageChatTheme.barGlyph,
             height: MessageChatTheme.barGlyph,
@@ -245,7 +245,7 @@ class _ChatEmotePanelState extends State<ChatEmotePanel> {
           label: '最近使用',
           selected: _recent,
           onTap: () => setState(() => _recent = true),
-          child: const ChatGlyph(
+          child: ChatGlyph(
             ChatArt.emoteRecent,
             width: MessageChatTheme.barGlyph,
             height: MessageChatTheme.barGlyph,
@@ -258,7 +258,7 @@ class _ChatEmotePanelState extends State<ChatEmotePanel> {
           onTap: widget.onUnavailable,
           child: Transform.translate(
             offset: const Offset(0, -MessageChatTheme.barStarLift),
-            child: const ChatGlyph(
+            child: ChatGlyph(
               ChatArt.emoteStar,
               width: MessageChatTheme.barStarWidth,
               height: MessageChatTheme.barStarHeight,

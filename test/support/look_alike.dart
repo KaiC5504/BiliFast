@@ -4,13 +4,16 @@ import 'dart:ui' as ui;
 
 import 'package:bilifast/app/form_factor.dart';
 import 'package:bilifast/app/phone_frame.dart';
+import 'package:bilifast/shared/theme.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 /// Sizes the test's view as KaiC's iPhone (440×956 at 3×, or 956×440 turned) with its safe areas, for a look-alike
 /// check against his screenshots.
-void showAsPhone(WidgetTester tester, {bool landscape = false}) {
+void showAsPhone(WidgetTester tester, {bool landscape = false, bool dark = false}) {
+  // Set before the first pump, as the app sets it before its first frame; the test config turns it off again.
+  BiliTheme.dark = dark;
   final size = landscape ? PhoneFrame.landscape : PhoneFrame.portrait;
   final padding = landscape ? PhoneFrame.landscapePadding : PhoneFrame.portraitPadding;
   final fake = FakeViewPadding(

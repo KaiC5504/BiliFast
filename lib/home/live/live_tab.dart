@@ -474,7 +474,7 @@ class _FollowingSection extends StatelessWidget {
                     style: count,
                   ),
                   const SizedBox(width: LiveTabTheme.sectionBarsGap - LiveTabTheme.barsInk),
-                  const LiveBars(color: LiveTabTheme.sectionBars),
+                  LiveBars(color: LiveTabTheme.sectionBars),
                   const Spacer(),
                   Semantics(
                     button: true,
@@ -489,7 +489,7 @@ class _FollowingSection extends StatelessWidget {
                         children: [
                           Text('查看全部', style: liveStyle(LiveTabTheme.sectionAllText, LiveTabTheme.secondary)),
                           const SizedBox(width: LiveTabTheme.chevronGap),
-                          const SizedBox(
+                          SizedBox(
                             width: LiveTabTheme.chevronWidth,
                             height: LiveTabTheme.chevronHeight,
                             child: CustomPaint(painter: LiveChevronPainter()),
@@ -791,7 +791,7 @@ class _Failure extends StatelessWidget {
             height: LiveTabTheme.retryHeight,
             padding: const EdgeInsets.symmetric(horizontal: LiveTabTheme.retryPadX),
             alignment: Alignment.center,
-            decoration: const ShapeDecoration(
+            decoration: ShapeDecoration(
               shape: StadiumBorder(
                 side: BorderSide(color: BiliColors.pink, width: LiveTabTheme.retryRim),
               ),

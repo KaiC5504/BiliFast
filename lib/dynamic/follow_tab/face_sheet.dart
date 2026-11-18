@@ -243,7 +243,7 @@ class _FaceSheetLayerState extends State<FaceSheetLayer> with SingleTickerProvid
                           sigmaX: DynamicFeedTheme.sheetBlur,
                           sigmaY: DynamicFeedTheme.sheetBlur,
                         ),
-                        child: const ColoredBox(color: DynamicFeedTheme.sheetFrost),
+                        child: ColoredBox(color: DynamicFeedTheme.sheetFrost),
                       ),
                     ),
                   ),
@@ -307,9 +307,9 @@ class _FaceSheetLayerState extends State<FaceSheetLayer> with SingleTickerProvid
     );
     return DecoratedBox(
       key: const ValueKey('face-sheet'),
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         color: DynamicFeedTheme.sheetFill,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(DynamicFeedTheme.sheetRadius)),
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(DynamicFeedTheme.sheetRadius)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -347,7 +347,7 @@ class _FaceSheetLayerState extends State<FaceSheetLayer> with SingleTickerProvid
                     key: const ValueKey('face-sheet-close'),
                     label: '关闭',
                     onTap: widget.controller.close,
-                    child: const Center(
+                    child: Center(
                       child: FollowCross(
                         size: DynamicFeedTheme.closeSize,
                         stroke: DynamicFeedTheme.closeStroke,
@@ -359,7 +359,7 @@ class _FaceSheetLayerState extends State<FaceSheetLayer> with SingleTickerProvid
               ],
             ),
           ),
-          const SizedBox(
+          SizedBox(
             height: DynamicFeedTheme.sheetRule,
             child: ColoredBox(color: DynamicFeedTheme.sheetRuleInk),
           ),

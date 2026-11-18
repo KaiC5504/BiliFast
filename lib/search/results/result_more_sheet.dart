@@ -156,9 +156,9 @@ class _ResultMoreSheetState extends State<ResultMoreSheet> with SingleTickerProv
                 onVerticalDragEnd: _released,
                 child: Container(
                   key: _sheetKey,
-                  decoration: const BoxDecoration(
+                  decoration: BoxDecoration(
                     color: SearchResultTheme.sheetFill,
-                    borderRadius: BorderRadius.vertical(top: Radius.circular(SearchResultTheme.sheetRadius)),
+                    borderRadius: const BorderRadius.vertical(top: Radius.circular(SearchResultTheme.sheetRadius)),
                   ),
                   padding: EdgeInsets.only(
                     left: SearchResultTheme.sheetInset,
@@ -169,19 +169,19 @@ class _ResultMoreSheetState extends State<ResultMoreSheet> with SingleTickerProv
                     mainAxisSize: MainAxisSize.min,
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      const SizedBox(
+                      SizedBox(
                         height: SearchResultTheme.sheetCardTop,
                         child: Align(
                           alignment: Alignment.topCenter,
                           child: Padding(
-                            padding: EdgeInsets.only(top: SearchResultTheme.grabberTop),
+                            padding: const EdgeInsets.only(top: SearchResultTheme.grabberTop),
                             child: SizedBox(
                               width: SearchResultTheme.grabberWidth,
                               height: SearchResultTheme.grabberHeight,
                               child: DecoratedBox(
                                 decoration: BoxDecoration(
                                   color: SearchResultTheme.grabberInk,
-                                  borderRadius: BorderRadius.all(Radius.circular(SearchResultTheme.grabberHeight / 2)),
+                                  borderRadius: const BorderRadius.all(Radius.circular(SearchResultTheme.grabberHeight / 2)),
                                 ),
                               ),
                             ),
@@ -193,16 +193,16 @@ class _ResultMoreSheetState extends State<ResultMoreSheet> with SingleTickerProv
                         height: SearchResultTheme.sheetCardHeight,
                         label: '添加至稍后再看',
                         onTap: () => unawaited(_watchLater()),
-                        child: const Row(
+                        child: Row(
                           children: [
-                            SizedBox(width: SearchResultTheme.sheetIconLeft),
+                            const SizedBox(width: SearchResultTheme.sheetIconLeft),
                             SearchGlyphIcon(
                               SearchGlyph.watchLater,
                               size: SearchResultTheme.sheetIcon,
                               color: SearchResultTheme.sheetInk,
                             ),
-                            SizedBox(width: SearchResultTheme.sheetIconGap),
-                            _Words('添加至稍后再看'),
+                            const SizedBox(width: SearchResultTheme.sheetIconGap),
+                            const _Words('添加至稍后再看'),
                           ],
                         ),
                       ),

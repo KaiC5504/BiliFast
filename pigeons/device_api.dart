@@ -18,6 +18,8 @@ enum NativeInterfaceOrientation { portrait, landscapeLeft, landscapeRight, unkno
 
 enum NativeNetwork { wifi, cellular, none }
 
+enum NativeInterfaceStyle { system, light, dark }
+
 /// Rotation, brightness and volume for full screen (DeviceChannel.swift, DeviceControls.swift). The rules about
 /// when to rotate live in Dart (lib/device/orientation.dart); the host only applies masks and reports.
 @HostApi()
@@ -94,6 +96,10 @@ abstract class DeviceHostApi {
   /// picture grid (220). iOS's picker needs no access, so the answer changes nothing; iOS asks only once.
   @async
   void requestPhotoAccess();
+
+  /// The app's windows drawn light or dark (深色模式), or as iOS is set: iOS's own sheets, alerts, pickers and the
+  /// keyboard follow it.
+  void setInterfaceStyle(NativeInterfaceStyle style);
 }
 
 @FlutterApi()

@@ -156,7 +156,7 @@ Future<ShellRig> showShell(
   final http = FeedHttp(loggedIn: loggedIn)..pages[1] = [for (var i = 0; i < 6; i++) feedItem('BV1f$i')];
   final logger = Logger(session: 'test');
   final environment = await AppEnvironment.load(
-    keychain: FakeKeychain(loggedIn ? StoredCookies(Canned.cookies) : const NoStoredCookies()),
+    keychain: FakeKeychain(loggedIn ? const StoredCookies(Canned.cookies) : const NoStoredCookies()),
     http: http,
     logger: logger,
   );

@@ -174,7 +174,7 @@ class FollowedSheet extends StatelessWidget {
         ),
         onTap: onUnfollow,
       ),
-      const SizedBox(height: FriendsTheme.actionGap, child: ColoredBox(color: FriendsTheme.actionGapFill)),
+      SizedBox(height: FriendsTheme.actionGap, child: ColoredBox(color: FriendsTheme.actionGapFill)),
       const _Rule(),
       PressHighlight(
         onTap: onCancel,
@@ -204,7 +204,7 @@ class _Rule extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) =>
-      const SizedBox(height: FriendsTheme.actionRule, child: ColoredBox(color: FriendsTheme.actionRuleInk));
+      SizedBox(height: FriendsTheme.actionRule, child: ColoredBox(color: FriendsTheme.actionRuleInk));
 }
 
 class _ActionRow extends StatelessWidget {

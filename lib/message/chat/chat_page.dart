@@ -327,7 +327,7 @@ class _ChatPageState extends State<ChatPage> {
                   SizedBox(
                     key: const ValueKey('chat-keyboard'),
                     height: math.max(media.viewInsets.bottom, safeBottom),
-                    child: const ColoredBox(color: MessageChatTheme.card),
+                    child: ColoredBox(color: MessageChatTheme.card),
                   ),
               ],
             ],
@@ -492,7 +492,7 @@ class _TitleRow extends StatelessWidget {
                 key: const ValueKey('chat-settings'),
                 behavior: HitTestBehavior.opaque,
                 onTap: settings,
-                child: const Center(
+                child: Center(
                   child: ChatGlyph(
                     ChatArt.settings,
                     width: MessageChatTheme.gearWidth,

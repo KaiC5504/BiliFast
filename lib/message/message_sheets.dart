@@ -166,7 +166,7 @@ class _ReadAllAlert extends StatelessWidget {
               ],
             ),
           ),
-          const SizedBox(
+          SizedBox(
             height: MessageTabTheme.alertRule,
             child: ColoredBox(color: MessageTabTheme.alertRuleInk),
           ),
@@ -299,9 +299,9 @@ class _SheetRoute extends PopupRoute<MessageSheetChoice> {
           type: MaterialType.transparency,
           child: DecoratedBox(
             key: const ValueKey('message-sheet'),
-            decoration: const BoxDecoration(
+            decoration: BoxDecoration(
               color: MessageTabTheme.sheetFill,
-              borderRadius: BorderRadius.vertical(top: Radius.circular(MessageTabTheme.sheetRadius)),
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(MessageTabTheme.sheetRadius)),
             ),
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -313,7 +313,7 @@ class _SheetRoute extends PopupRoute<MessageSheetChoice> {
                     child: Container(
                       width: MessageTabTheme.grabberWidth,
                       height: MessageTabTheme.grabberHeight,
-                      decoration: const ShapeDecoration(color: MessageTabTheme.grabberInk, shape: StadiumBorder()),
+                      decoration: ShapeDecoration(color: MessageTabTheme.grabberInk, shape: const StadiumBorder()),
                     ),
                   ),
                 ),
@@ -409,7 +409,7 @@ class _SheetRowState extends State<_SheetRow> {
                   child: Text(choice.label, maxLines: 1, style: style, strutStyle: BiliFonts.strut(style)),
                 ),
                 if (!widget.last)
-                  const Positioned(
+                  Positioned(
                     left: MessageTabTheme.sheetTextLeft,
                     right: 0,
                     bottom: 0,

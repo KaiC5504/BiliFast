@@ -326,7 +326,7 @@ void main() {
   testWidgets('a tap between the controls on the crates row does not close', (tester) async {
     final rig = Rig();
     await rig.mount(tester);
-    await tester.tapAt(Offset(220 + ActionTheme.crateSpacing, 956 * ActionTheme.cratesCentre + 60));
+    await tester.tapAt(const Offset(220 + ActionTheme.crateSpacing, 956 * ActionTheme.cratesCentre + 60));
     await tester.pumpAndSettle();
     expect(rig.closes, 0);
   });

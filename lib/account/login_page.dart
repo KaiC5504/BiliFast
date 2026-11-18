@@ -76,7 +76,7 @@ class _CloseButton extends StatelessWidget {
       key: const ValueKey('login-close'),
       behavior: HitTestBehavior.opaque,
       onTap: onTap,
-      child: const SizedBox.square(
+      child: SizedBox.square(
         dimension: LoginTheme.closeTarget,
         child: Icon(Icons.close, size: LoginTheme.closeIcon, color: LoginTheme.close),
       ),
@@ -333,7 +333,7 @@ class _Retry extends StatelessWidget {
             height: LoginTheme.retryHeight,
             padding: const EdgeInsets.symmetric(horizontal: LoginTheme.retryPadX),
             alignment: Alignment.center,
-            decoration: const ShapeDecoration(shape: StadiumBorder(side: BorderSide(color: LoginTheme.retry))),
+            decoration: ShapeDecoration(shape: StadiumBorder(side: BorderSide(color: LoginTheme.retry))),
             child: Text('重试', style: LoginTheme.retryStyle),
           ),
         ),

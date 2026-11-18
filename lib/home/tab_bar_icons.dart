@@ -199,7 +199,7 @@ class PostButtonPainter extends CustomPainter {
         ..shader = LinearGradient(
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
-          colors: const [TabIconTheme.postTop, TabIconTheme.postBottom],
+          colors: [TabIconTheme.postTop, TabIconTheme.postBottom],
         ).createShader(square),
     );
     final line = TabIconTheme.postPlusLine * scale;

@@ -702,7 +702,7 @@ class _Progress extends StatelessWidget {
         return FractionallySizedBox(
           key: const ValueKey('big-card-progress'),
           widthFactor: share,
-          child: const SizedBox(
+          child: SizedBox(
             height: FeedBigCardTheme.progress,
             child: ColoredBox(color: FeedBigCardTheme.progressInk),
           ),
@@ -730,7 +730,7 @@ class _TitleBand extends StatelessWidget {
   final VoidCallback onLike;
   final VoidCallback onMore;
 
-  static const _title = TextStyle(
+  static TextStyle get _title => TextStyle(
     fontSize: FeedBigCardTheme.titleText,
     color: FeedBigCardTheme.title,
     height: FeedBigCardTheme.titleLine / FeedBigCardTheme.titleText,
@@ -844,7 +844,7 @@ class _TitleBand extends StatelessWidget {
             key: const ValueKey('big-card-more'),
             behavior: HitTestBehavior.opaque,
             onTap: onMore,
-            child: const Center(
+            child: Center(
               child: Icon(Icons.more_vert, size: BiliMetrics.cardFooterText + 4, color: BiliColors.secondaryText),
             ),
           ),

@@ -44,7 +44,8 @@ class DeveloperGroup extends StatelessWidget {
 
 /// A row that does something at once: its title in [color], no ›.
 class DeveloperActionRow extends StatelessWidget {
-  const DeveloperActionRow({super.key, required this.title, required this.onTap, this.color = DevToolsTheme.actionInk});
+  DeveloperActionRow({super.key, required this.title, required this.onTap, Color? color})
+    : color = color ?? DevToolsTheme.actionInk;
 
   final String title;
 
@@ -109,7 +110,7 @@ class DeveloperCheckRow extends StatelessWidget {
                     Text(value, maxLines: 1, style: valueStyle, strutStyle: BiliFonts.strutOf(context, valueStyle)),
                   if (selected) ...[
                     const SizedBox(width: SettingsTheme.valueGap),
-                    const Icon(Icons.check, size: BiliMetrics.fontCheck, color: BiliColors.pink),
+                    Icon(Icons.check, size: BiliMetrics.fontCheck, color: BiliColors.pink),
                   ],
                 ],
               ),

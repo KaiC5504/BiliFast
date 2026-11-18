@@ -530,7 +530,7 @@ class _Header extends StatelessWidget {
           if (head != null)
             SkinDecodeGate.image(head, key: const ValueKey('message-head-art'))
           else
-            const ColoredBox(color: MessageTabTheme.bar),
+            ColoredBox(color: MessageTabTheme.bar),
           Positioned(
             left: 0,
             right: 0,

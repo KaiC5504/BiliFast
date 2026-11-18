@@ -203,7 +203,7 @@ class _Strip extends StatelessWidget {
                   onTap: onAll,
                   child: Container(
                     padding: const EdgeInsets.only(left: _T.allPadLeft, right: _T.allPadRight),
-                    decoration: const ShapeDecoration(color: _T.allFill, shape: StadiumBorder()),
+                    decoration: ShapeDecoration(color: _T.allFill, shape: const StadiumBorder()),
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [

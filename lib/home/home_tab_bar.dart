@@ -115,7 +115,7 @@ class HomeTabBar extends StatelessWidget {
   static double heightOf(BuildContext context) =>
       FormFactor.of(context).isPad ? PadHomeTheme.barHeight : HomeTabBarTheme.height;
 
-  static const _phone = (
+  static _BarShape get _phone => (
     height: HomeTabBarTheme.height,
     iconCentre: HomeTabBarTheme.iconCentre,
     labelTop: HomeTabBarTheme.labelTop,
@@ -127,7 +127,7 @@ class HomeTabBar extends StatelessWidget {
     selected: HomeTabBarTheme.selected,
   );
 
-  static const _pad = (
+  static _BarShape get _pad => (
     height: PadHomeTheme.barHeight,
     iconCentre: PadHomeTheme.barIconCentre,
     labelTop: PadHomeTheme.barLabelTop,
@@ -403,7 +403,7 @@ class TabCount extends StatelessWidget {
   Widget build(BuildContext context) {
     if (count <= 0) return const SizedBox.shrink();
     return DecoratedBox(
-      decoration: const ShapeDecoration(color: MessageTabTheme.countRim, shape: StadiumBorder()),
+      decoration: ShapeDecoration(color: MessageTabTheme.countRim, shape: const StadiumBorder()),
       child: Padding(
         padding: const EdgeInsets.all(MessageTabTheme.countRing),
         child: ConstrainedBox(
@@ -413,7 +413,7 @@ class TabCount extends StatelessWidget {
             maxHeight: MessageTabTheme.count,
           ),
           child: DecoratedBox(
-            decoration: const ShapeDecoration(color: MessageTabTheme.countFill, shape: StadiumBorder()),
+            decoration: ShapeDecoration(color: MessageTabTheme.countFill, shape: const StadiumBorder()),
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: MessageTabTheme.countPadX),
               child: Center(
@@ -442,3 +442,15 @@ class TabCount extends StatelessWidget {
     );
   }
 }
+
+typedef _BarShape = ({
+  double height,
+  double iconCentre,
+  double labelTop,
+  double labelText,
+  double? slot,
+  double? artWidth,
+  double hairline,
+  Color label,
+  Color selected,
+});

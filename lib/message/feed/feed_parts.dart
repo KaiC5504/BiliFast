@@ -193,6 +193,6 @@ class FeedRowRule extends StatelessWidget {
   @override
   Widget build(BuildContext context) => SizedBox(
     height: MessageFeedTheme.rowRule,
-    child: shown ? const ColoredBox(color: MessageFeedTheme.rowRuleInk) : null,
+    child: shown ? ColoredBox(color: MessageFeedTheme.rowRuleInk) : null,
   );
 }

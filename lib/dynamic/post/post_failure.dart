@@ -68,7 +68,7 @@ class _RetryPillState extends State<_RetryPill> {
           height: DynamicPostTheme.retryHeight,
           padding: const EdgeInsets.symmetric(horizontal: DynamicPostTheme.retryPadX),
           alignment: Alignment.center,
-          decoration: const ShapeDecoration(
+          decoration: ShapeDecoration(
             shape: StadiumBorder(
               side: BorderSide(color: DynamicPostTheme.retryInk, width: DynamicPostTheme.retryRim),
             ),

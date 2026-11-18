@@ -30,7 +30,7 @@ class FollowHeader extends StatelessWidget {
           if (head != null)
             SkinDecodeGate.image(head, key: const ValueKey('follow-head-art'))
           else
-            const ColoredBox(color: DynamicFeedTheme.bar),
+            ColoredBox(color: DynamicFeedTheme.bar),
           Positioned(
             left: 0,
             right: 0,

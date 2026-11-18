@@ -96,8 +96,8 @@ class _SearchHomeViewState extends State<SearchHomeView> {
                                     style: _style(SearchTheme.moreText, SearchTheme.grey, line: SearchTheme.headerLine),
                                   ),
                                   const SizedBox(width: SearchTheme.moreGap),
-                                  const Chevron(
-                                    size: Size(SearchTheme.moreChevronWidth, SearchTheme.moreChevronHeight),
+                                  Chevron(
+                                    size: const Size(SearchTheme.moreChevronWidth, SearchTheme.moreChevronHeight),
                                     stroke: SearchTheme.moreChevronStroke,
                                     color: SearchTheme.grey,
                                   ),
@@ -224,7 +224,7 @@ class _SearchHomeViewState extends State<SearchHomeView> {
                       child: Container(
                         width: SearchTheme.feedbackWidth,
                         height: SearchTheme.feedbackHeight,
-                        decoration: const ShapeDecoration(
+                        decoration: ShapeDecoration(
                           shape: StadiumBorder(
                             side: BorderSide(color: SearchTheme.rule, width: SearchTheme.feedbackRim),
                           ),
@@ -232,7 +232,7 @@ class _SearchHomeViewState extends State<SearchHomeView> {
                         child: Row(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            const SearchGlyphIcon(
+                            SearchGlyphIcon(
                               SearchGlyph.feedback,
                               size: SearchTheme.feedbackGlyph,
                               color: SearchTheme.dim,
@@ -406,7 +406,7 @@ class _HeaderRule extends StatelessWidget {
   const _HeaderRule();
 
   @override
-  Widget build(BuildContext context) => const Positioned(
+  Widget build(BuildContext context) => Positioned(
     right: SearchTheme.headerRule - SearchTheme.ruleWidth / 2,
     width: SearchTheme.ruleWidth,
     top: (SearchTheme.headerHeight - SearchTheme.ruleHeight) / 2,
@@ -578,7 +578,7 @@ class _DiscoveryCells extends StatelessWidget {
             if (word.suffix.isNotEmpty)
               TextSpan(
                 text: '·${word.suffix}',
-                style: const TextStyle(color: SearchTheme.suffix),
+                style: TextStyle(color: SearchTheme.suffix),
               ),
           ],
         ),

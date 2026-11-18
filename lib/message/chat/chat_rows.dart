@@ -152,7 +152,7 @@ class ChatBubbleRow extends StatelessWidget {
           children: [
             content,
             const SizedBox(height: MessageChatTheme.autoReplyGap),
-            const SizedBox(
+            SizedBox(
               height: MessageChatTheme.autoReplyRule,
               child: ColoredBox(color: MessageChatTheme.autoReplyRuleInk),
             ),
@@ -247,7 +247,7 @@ class _OwnFace extends StatelessWidget {
               child: Container(
                 key: const ValueKey('chat-own-vip'),
                 padding: const EdgeInsets.all(MessageChatTheme.vipRing),
-                decoration: const BoxDecoration(color: MessageChatTheme.vipRingInk, shape: BoxShape.circle),
+                decoration: BoxDecoration(color: MessageChatTheme.vipRingInk, shape: BoxShape.circle),
                 child: const SizedBox.square(
                   dimension: MessageChatTheme.vipDisc,
                   child: FittedBox(child: MeVipDisc()),

@@ -258,7 +258,7 @@ class _PicturePageState extends State<_PicturePage> with SingleTickerProviderSta
 
   /// In around the tapped point, or back out to the whole width; a long picture stays scrolled where it was.
   void _toggleZoom(Size screen, double contentHeight) {
-    final scale = CommentTextTheme.viewerDoubleTapScale;
+    const scale = CommentTextTheme.viewerDoubleTapScale;
     final point = _doubleTapAt;
     final Matrix4 end;
     if (_zoomed) {
@@ -404,7 +404,7 @@ class _LoadingPicture extends StatelessWidget {
             AnimatedOpacity(opacity: loading ? 0 : 1, duration: fade, curve: Curves.easeOut, child: child),
             if (loading)
               _centred(
-                const CupertinoActivityIndicator(
+                CupertinoActivityIndicator(
                   color: CommentTextTheme.viewerText,
                   radius: CommentTextTheme.viewerSpinnerRadius,
                 ),
@@ -448,7 +448,7 @@ class _PictureGlyphPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    final stroke = CommentTextTheme.viewerFailedGlyphStroke;
+    const stroke = CommentTextTheme.viewerFailedGlyphStroke;
     final paint = Paint()
       ..color = CommentTextTheme.viewerFailedGlyphColor
       ..style = PaintingStyle.stroke

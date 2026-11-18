@@ -107,7 +107,7 @@ class RoomBottomBar extends StatelessWidget {
                       excludeFromSemantics: true,
                     ),
                   ),
-                  const Positioned(
+                  Positioned(
                     right: 0,
                     top: LiveRoomTheme.giftDotTop,
                     width: LiveRoomTheme.giftDot,

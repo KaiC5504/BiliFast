@@ -13,7 +13,7 @@ typedef _T = OfflineListTheme;
 final class OfflineBarLook {
   const OfflineBarLook({required this.fill, required this.ink, required this.lightStatus});
 
-  static const stock = OfflineBarLook(fill: _T.bar, ink: _T.barInk, lightStatus: false);
+  static OfflineBarLook get stock => OfflineBarLook(fill: _T.bar, ink: _T.barInk, lightStatus: false);
 
   factory OfflineBarLook.of(Skin? skin) {
     final page = skin?.equip.colors.colorSecondPage;
@@ -236,13 +236,13 @@ class OfflineSearchBar extends StatelessWidget {
                 onTap: focus.requestFocus,
                 child: DecoratedBox(
                   key: const ValueKey('offline-search-field-box'),
-                  decoration: const ShapeDecoration(color: _T.field, shape: StadiumBorder()),
+                  decoration: ShapeDecoration(color: _T.field, shape: const StadiumBorder()),
                   child: Stack(
                     children: [
                       Positioned(
                         left: _T.fieldGlyphCentre - _T.fieldGlyph / 2,
                         top: _T.fieldHeight / 2 + _T.fieldGlyphDrop - _T.fieldGlyph / 2,
-                        child: const SearchGlyphIcon(SearchGlyph.magnifier, size: _T.fieldGlyph, color: _T.fieldHint),
+                        child: SearchGlyphIcon(SearchGlyph.magnifier, size: _T.fieldGlyph, color: _T.fieldHint),
                       ),
                       Positioned(
                         left: _T.fieldTextLeft,
@@ -296,7 +296,7 @@ class OfflineSearchBar extends StatelessWidget {
                                     key: const ValueKey('offline-search-clear'),
                                     behavior: HitTestBehavior.opaque,
                                     onTap: onClear,
-                                    child: const Center(
+                                    child: Center(
                                       child: SearchGlyphIcon(
                                         SearchGlyph.clear,
                                         size: _T.clearGlyph,

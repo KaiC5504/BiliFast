@@ -307,14 +307,14 @@ class _Uploader extends StatelessWidget {
                         borderRadius: BorderRadius.circular(LandscapeActionTheme.pillHeight / 2),
                       ),
                       padding: const EdgeInsets.only(left: LandscapeActionTheme.chargeShift),
-                      child: const Row(
+                      child: Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          CustomPaint(
+                          const CustomPaint(
                             size: Size(LandscapeActionTheme.boltWidth, LandscapeActionTheme.boltHeight),
                             painter: _BoltPainter(),
                           ),
-                          SizedBox(width: LandscapeActionTheme.boltGap),
+                          const SizedBox(width: LandscapeActionTheme.boltGap),
                           Text(
                             '充电',
                             style: TextStyle(color: BiliColors.pink, fontSize: LandscapeActionTheme.pillText),

@@ -32,7 +32,7 @@ Future<FeedMoreChoice?> showFeedMoreSheet(BuildContext context, FeedCard card) {
               label: '添加至稍后再看',
               icon: Transform.translate(
                 offset: const Offset(FeedDislikeTheme.watchLaterShift, 0),
-                child: const SearchGlyphIcon(
+                child: SearchGlyphIcon(
                   SearchGlyph.watchLater,
                   size: FeedDislikeTheme.watchLaterIcon,
                   color: FeedDislikeTheme.ink,
@@ -50,7 +50,7 @@ Future<FeedMoreChoice?> showFeedMoreSheet(BuildContext context, FeedCard card) {
                 FeedSheetRow(
                   key: const ValueKey('feed-more-dislike-video'),
                   label: '不感兴趣：当前视频',
-                  icon: const FeedDislikeGlyphIcon(
+                  icon: FeedDislikeGlyphIcon(
                     FeedDislikeGlyph.videoOff,
                     size: FeedDislikeTheme.rowIconBox,
                     color: FeedDislikeTheme.ink,
@@ -61,7 +61,7 @@ Future<FeedMoreChoice?> showFeedMoreSheet(BuildContext context, FeedCard card) {
                 FeedSheetRow(
                   key: const ValueKey('feed-more-dislike-uploader'),
                   label: '不感兴趣：UP',
-                  icon: const FeedDislikeGlyphIcon(
+                  icon: FeedDislikeGlyphIcon(
                     FeedDislikeGlyph.uploaderOff,
                     size: FeedDislikeTheme.rowIconBox,
                     color: FeedDislikeTheme.ink,
@@ -156,9 +156,9 @@ class _FeedSheetRoute<T> extends PopupRoute<T> {
             child: Container(
               key: _sheetKey,
               width: double.infinity,
-              decoration: const BoxDecoration(
+              decoration: BoxDecoration(
                 color: FeedDislikeTheme.sheetFill,
-                borderRadius: BorderRadius.vertical(top: Radius.circular(FeedDislikeTheme.sheetRadius)),
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(FeedDislikeTheme.sheetRadius)),
               ),
               padding: EdgeInsets.only(
                 left: FeedDislikeTheme.inset,
@@ -167,7 +167,7 @@ class _FeedSheetRoute<T> extends PopupRoute<T> {
               ),
               child: Stack(
                 children: [
-                  const Positioned(
+                  Positioned(
                     top: FeedDislikeTheme.grabberTop,
                     left: 0,
                     right: 0,
@@ -178,7 +178,7 @@ class _FeedSheetRoute<T> extends PopupRoute<T> {
                         child: DecoratedBox(
                           decoration: BoxDecoration(
                             color: FeedDislikeTheme.grabberInk,
-                            borderRadius: BorderRadius.all(Radius.circular(FeedDislikeTheme.grabberHeight / 2)),
+                            borderRadius: const BorderRadius.all(Radius.circular(FeedDislikeTheme.grabberHeight / 2)),
                           ),
                         ),
                       ),
@@ -241,7 +241,7 @@ class FeedSheetCard extends StatelessWidget {
               Stack(
                 children: [
                   child,
-                  const Positioned(
+                  Positioned(
                     left: FeedDislikeTheme.rowTextLeft,
                     right: 0,
                     bottom: 0,

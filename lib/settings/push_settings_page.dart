@@ -311,13 +311,13 @@ class _LinkRow extends StatelessWidget {
                   right: _textRight,
                   child: greyText(subtitle),
                 ),
-                const Positioned(
+                Positioned(
                   top: 0,
                   bottom: 0,
                   right: SettingsTheme.chevronRight,
                   child: Center(
                     child: Chevron(
-                      size: Size(SettingsTheme.chevronWidth, SettingsTheme.chevronHeight),
+                      size: const Size(SettingsTheme.chevronWidth, SettingsTheme.chevronHeight),
                       stroke: SettingsTheme.chevronStroke,
                       color: SettingsTheme.chevron,
                     ),

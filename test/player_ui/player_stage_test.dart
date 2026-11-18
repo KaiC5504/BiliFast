@@ -403,7 +403,7 @@ void main() {
     final rig = Rig();
     final timeline = DanmakuTimeline()
       ..add([
-        DisplayDanmaku(elem: const DanmakuElem(progressMs: 500, content: '前面'), text: '前面', isOwn: false),
+        const DisplayDanmaku(elem: DanmakuElem(progressMs: 500, content: '前面'), text: '前面', isOwn: false),
       ]);
     await rig.mount(tester, danmaku: timeline);
     final layer = tester.state<DanmakuLayerState>(find.byType(DanmakuLayer));

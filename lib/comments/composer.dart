@@ -308,9 +308,9 @@ class _ComposerState extends State<Composer> with SingleTickerProviderStateMixin
               position: _motion.drive(Tween(begin: const Offset(0, 1), end: Offset.zero)),
               child: DecoratedBox(
                 key: const ValueKey('composer-sheet'),
-                decoration: const BoxDecoration(
+                decoration: BoxDecoration(
                   color: ComposerTheme.sheet,
-                  borderRadius: BorderRadius.vertical(top: Radius.circular(ComposerTheme.sheetRadius)),
+                  borderRadius: const BorderRadius.vertical(top: Radius.circular(ComposerTheme.sheetRadius)),
                 ),
                 child: Material(
                   type: MaterialType.transparency,
@@ -447,26 +447,26 @@ class _ComposerState extends State<Composer> with SingleTickerProviderStateMixin
             label: emotes ? '键盘' : '表情',
             onTap: _toggleEmotes,
             child: emotes
-                ? const _Glyph(
+                ? _Glyph(
                     _GlyphKind.keyboard,
                     width: ComposerTheme.toolIcon,
                     height: ComposerTheme.keyboardIconHeight,
                     color: ComposerTheme.accent,
                     stroke: ComposerTheme.toolStroke,
                   )
-                : const _Glyph(_GlyphKind.face, color: ComposerTheme.tool, stroke: ComposerTheme.toolStroke),
+                : _Glyph(_GlyphKind.face, color: ComposerTheme.tool, stroke: ComposerTheme.toolStroke),
           ),
           _tool(
             key: const ValueKey('composer-mention'),
             label: '提及好友',
             onTap: _openMentions,
-            child: const _Glyph(_GlyphKind.at, color: ComposerTheme.tool, stroke: ComposerTheme.toolStroke),
+            child: _Glyph(_GlyphKind.at, color: ComposerTheme.tool, stroke: ComposerTheme.toolStroke),
           ),
           _tool(
             key: const ValueKey('composer-pictures'),
             label: '添加图片',
             onTap: () => unawaited(_addPictures()),
-            child: const _Glyph(_GlyphKind.plus, color: ComposerTheme.tool, stroke: ComposerTheme.toolStroke),
+            child: _Glyph(_GlyphKind.plus, color: ComposerTheme.tool, stroke: ComposerTheme.toolStroke),
           ),
           const Spacer(),
           _publishButton(model),
@@ -567,7 +567,7 @@ class _ComposerState extends State<Composer> with SingleTickerProviderStateMixin
                   color: model.canPost || posting ? ComposerTheme.accent : ComposerTheme.accentFaded,
                 ),
                 child: posting
-                    ? const CupertinoActivityIndicator(
+                    ? CupertinoActivityIndicator(
                         color: ComposerTheme.publishText,
                         radius: ComposerTheme.publishSpinnerRadius,
                       )

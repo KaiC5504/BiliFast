@@ -11,7 +11,7 @@ import '../space_header_glyphs.dart';
 final class OwnBarLook {
   const OwnBarLook({required this.fill, required this.ink, required this.lightStatus});
 
-  static const stock = OwnBarLook(fill: OwnSpaceTheme.bar, ink: OwnSpaceTheme.barInk, lightStatus: false);
+  static OwnBarLook get stock => OwnBarLook(fill: OwnSpaceTheme.bar, ink: OwnSpaceTheme.barInk, lightStatus: false);
 
   factory OwnBarLook.of(Skin? skin) {
     final page = skin?.equip.colors.colorSecondPage;

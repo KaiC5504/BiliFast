@@ -20,7 +20,7 @@ Paint _stroke(double width, Color color) => Paint()
 
 /// The top row's line icons, traced on 87 at 16× in a box [MeTheme.topGlyphBox] square, its ink centred.
 class MeTopGlyphPainter extends CustomPainter {
-  const MeTopGlyphPainter(this.glyph, {this.color = MeTheme.topGlyph});
+  MeTopGlyphPainter(this.glyph, {Color? color}) : color = color ?? MeTheme.topGlyph;
 
   final MeTopGlyph glyph;
   final Color color;

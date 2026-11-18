@@ -172,7 +172,7 @@ void main() {
         final pick = await pickPictures(limit: 9, picker: FakePicker(() async => throw PlatformException(code: code)));
         expect(pick.failure, PickFailure.noAccess, reason: code);
       }
-      final memory = await pickPictures(limit: 9, picker: FakePicker(() async => throw OutOfMemoryError()));
+      final memory = await pickPictures(limit: 9, picker: FakePicker(() async => throw const OutOfMemoryError()));
       expect(memory.failure, PickFailure.failed);
     });
 
@@ -220,7 +220,7 @@ void main() {
         final before = jpeg([segment(0xE0, ascii.encode('JFIF\x00\x01\x01')), exif(tiff(endian))]);
         final after = withoutLocation(before);
         expect(after.length, before.length);
-        final start = 2 + 11 + 4 + 6;
+        const start = 2 + 11 + 4 + 6;
         expect(
           after.sublist(0, start + 38),
           before.sublist(0, start + 38),
@@ -275,7 +275,7 @@ void main() {
       final photo = jpeg([exif(tiff(Endian.little))]);
       final broken = Uint8List.fromList([...photo.sublist(0, photo.length - 11), 0xFF, 0xE2, 0x7F, 0xFF]);
       final after = withoutLocation(broken);
-      final start = 2 + 4 + 6;
+      const start = 2 + 4 + 6;
       expect(after.sublist(start + 38, start + 92), everyElement(0));
       expect(after.length, broken.length);
     });
@@ -291,7 +291,7 @@ void main() {
       final drop = xmp('<exif:GPSLongitude>121,28.1E</exif:GPSLongitude>');
       final photo = jpeg([exif(tiff(Endian.big)), drop]);
       final expected = jpeg([exif(tiff(Endian.big))]);
-      final start = 2 + 4 + 6;
+      const start = 2 + 4 + 6;
       for (var index = start + 38; index < start + 92; index++) {
         expected[index] = 0;
       }

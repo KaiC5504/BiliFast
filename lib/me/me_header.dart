@@ -338,7 +338,7 @@ class _Avatar extends StatelessWidget {
             child: Container(
               key: const ValueKey('me-vip-badge'),
               padding: const EdgeInsets.all(MeTheme.vipRing),
-              decoration: const BoxDecoration(color: MeTheme.vipRingInk, shape: BoxShape.circle),
+              decoration: BoxDecoration(color: MeTheme.vipRingInk, shape: BoxShape.circle),
               child: const MeVipDisc(),
             ),
           ),
@@ -402,7 +402,7 @@ class _VipLabel extends StatelessWidget {
     key: const ValueKey('me-vip-label'),
     padding: const EdgeInsets.symmetric(horizontal: MeTheme.vipLabelPad),
     alignment: Alignment.center,
-    decoration: const ShapeDecoration(color: MeTheme.vipLabelFill, shape: StadiumBorder()),
+    decoration: ShapeDecoration(color: MeTheme.vipLabelFill, shape: const StadiumBorder()),
     child: Text(
       label,
       maxLines: 1,
@@ -471,7 +471,7 @@ class _Counts extends StatelessWidget {
             child: Stack(
               children: [
                 if (index > 0 && ink == null)
-                  const Positioned(
+                  Positioned(
                     left: 0,
                     top: lift,
                     width: MeTheme.countRuleWidth,
@@ -650,8 +650,8 @@ class _VipCard extends StatelessWidget {
                           ),
                         ),
                         const SizedBox(width: MeTheme.cardMoreChevronGap),
-                        const CustomPaint(
-                          size: Size(MeTheme.cardMoreChevronWidth, MeTheme.cardMoreChevronHeight),
+                        CustomPaint(
+                          size: const Size(MeTheme.cardMoreChevronWidth, MeTheme.cardMoreChevronHeight),
                           painter: MeChevronPainter(color: MeTheme.cardMore, stroke: MeTheme.cardMoreChevronStroke),
                         ),
                       ],
@@ -673,7 +673,7 @@ class _VipCard extends StatelessWidget {
           label: '会员中心',
           onTap: onOpen,
           child: DecoratedBox(
-            decoration: const ShapeDecoration(color: MeTheme.cardButtonFill, shape: StadiumBorder()),
+            decoration: ShapeDecoration(color: MeTheme.cardButtonFill, shape: const StadiumBorder()),
             child: Center(
               child: Text(
                 '会员中心',

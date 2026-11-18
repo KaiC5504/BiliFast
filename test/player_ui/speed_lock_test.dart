@@ -14,7 +14,7 @@ void main() {
 
   setUp(() {
     rig = Rig()..playing();
-    rig.session.video = VideoView(
+    rig.session.video = const VideoView(
       bvid: 'BV1',
       aid: 1,
       title: '',
@@ -141,7 +141,7 @@ void main() {
   testWidgets('another video opening ends the lock', (tester) async {
     await lock(tester);
     rig.session
-      ..part = VideoPage(cid: 2, page: 1, part: '', duration: 60)
+      ..part = const VideoPage(cid: 2, page: 1, part: '', duration: 60)
       ..changed();
     await tester.pump();
     expect(phase(), SpeedLockPhase.off);

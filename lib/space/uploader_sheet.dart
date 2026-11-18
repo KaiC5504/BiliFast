@@ -540,9 +540,9 @@ class _UploaderSheetState extends State<UploaderSheet> with SingleTickerProvider
       animation: _drag,
       builder: (context, child) => Transform.translate(offset: Offset(0, _drag.value), child: child),
       child: DecoratedBox(
-        decoration: const BoxDecoration(
+        decoration: BoxDecoration(
           color: UploaderSheetTheme.fill,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(UploaderSheetTheme.radius)),
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(UploaderSheetTheme.radius)),
         ),
         child: Stack(
           children: [

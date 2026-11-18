@@ -97,7 +97,7 @@ class _WealthBadgePainter extends CustomPainter {
     final h = size.height;
     Offset at(double x, double y) => Offset(x * w, y * h);
     final paint = Paint()
-      ..shader = const LinearGradient(
+      ..shader = LinearGradient(
         begin: Alignment.topCenter,
         end: Alignment.bottomCenter,
         colors: [LiveRoomTheme.wealthVTop, LiveRoomTheme.wealthVBottom],

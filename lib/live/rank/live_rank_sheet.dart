@@ -138,17 +138,17 @@ class _LiveRankSheetState extends State<LiveRankSheet> with SingleTickerProvider
           final t = _pageValue().clamp(0.0, 1.0);
           return Stack(
             children: [
-              const Positioned.fill(child: ColoredBox(color: LiveRankTheme.audiencePage)),
+              Positioned.fill(child: ColoredBox(color: LiveRankTheme.audiencePage)),
               Positioned.fill(
                 child: Opacity(
                   opacity: t,
-                  child: const DecoratedBox(
+                  child: DecoratedBox(
                     decoration: BoxDecoration(
                       gradient: LinearGradient(
                         begin: Alignment.topCenter,
                         end: Alignment.bottomCenter,
                         colors: [LiveRankTheme.guardTop, LiveRankTheme.guardBottom],
-                        stops: [0, LiveRankTheme.guardBottomStop],
+                        stops: const [0, LiveRankTheme.guardBottomStop],
                       ),
                     ),
                   ),

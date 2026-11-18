@@ -114,7 +114,7 @@ class SessionRow extends StatelessWidget {
                   child: messageLine(session.lastText, last, key: ValueKey('message-session-text-$id')),
                 ),
               ),
-              const Positioned(
+              Positioned(
                 left: MessageTabTheme.textLeft,
                 right: 0,
                 bottom: 0,
@@ -195,7 +195,7 @@ class _Badge extends StatelessWidget {
     width: MessageTabTheme.badge + MessageTabTheme.badgeRing * 2,
     height: MessageTabTheme.badge + MessageTabTheme.badgeRing * 2,
     padding: const EdgeInsets.all(MessageTabTheme.badgeRing),
-    decoration: const BoxDecoration(color: MessageTabTheme.badgeRim, shape: BoxShape.circle),
+    decoration: BoxDecoration(color: MessageTabTheme.badgeRim, shape: BoxShape.circle),
     child: child,
   );
 }
@@ -205,7 +205,7 @@ class _VipMark extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => DecoratedBox(
-    decoration: const BoxDecoration(color: MessageTabTheme.vipFill, shape: BoxShape.circle),
+    decoration: BoxDecoration(color: MessageTabTheme.vipFill, shape: BoxShape.circle),
     child: Center(
       child: Text(
         '大',

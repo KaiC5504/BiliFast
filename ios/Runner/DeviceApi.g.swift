@@ -109,6 +109,12 @@ enum NativeNetwork: Int, CaseIterable {
   case none = 2
 }
 
+enum NativeInterfaceStyle: Int, CaseIterable {
+  case system = 0
+  case light = 1
+  case dark = 2
+}
+
 private class DeviceApiPigeonCodecReader: FlutterStandardReader {
   override func readValue(ofType type: UInt8) -> Any? {
     switch type {
@@ -136,6 +142,12 @@ private class DeviceApiPigeonCodecReader: FlutterStandardReader {
         return NativeNetwork(rawValue: enumResultAsInt)
       }
       return nil
+    case 133:
+      let enumResultAsInt: Int? = nilOrValue(self.readValue() as! Int?)
+      if let enumResultAsInt = enumResultAsInt {
+        return NativeInterfaceStyle(rawValue: enumResultAsInt)
+      }
+      return nil
     default:
       return super.readValue(ofType: type)
     }
@@ -155,6 +167,9 @@ private class DeviceApiPigeonCodecWriter: FlutterStandardWriter {
       super.writeValue(value.rawValue)
     } else if let value = value as? NativeNetwork {
       super.writeByte(132)
+      super.writeValue(value.rawValue)
+    } else if let value = value as? NativeInterfaceStyle {
+      super.writeByte(133)
       super.writeValue(value.rawValue)
     } else {
       super.writeValue(value)
@@ -229,6 +244,9 @@ protocol DeviceHostApi {
   /// Asks iOS for the whole photo library (PHPhotoLibrary's read-write), as the official app holds for its own
   /// picture grid (220). iOS's picker needs no access, so the answer changes nothing; iOS asks only once.
   func requestPhotoAccess() async throws
+  /// The app's windows drawn light or dark (深色模式), or as iOS is set: iOS's own sheets, alerts, pickers and the
+  /// keyboard follow it.
+  func setInterfaceStyle(style: NativeInterfaceStyle) throws
 }
 
 /// Generated setup class from Pigeon to handle messages through the `binaryMessenger`.
@@ -576,6 +594,23 @@ class DeviceHostApiSetup {
       }
     } else {
       requestPhotoAccessChannel.setMessageHandler(nil)
+    }
+    /// The app's windows drawn light or dark (深色模式), or as iOS is set: iOS's own sheets, alerts, pickers and the
+    /// keyboard follow it.
+    let setInterfaceStyleChannel = FlutterBasicMessageChannel(name: "dev.flutter.pigeon.bilifast.DeviceHostApi.setInterfaceStyle\(channelSuffix)", binaryMessenger: binaryMessenger, codec: codec)
+    if let api = api {
+      setInterfaceStyleChannel.setMessageHandler { message, reply in
+        let args = message as! [Any?]
+        let styleArg = args[0] as! NativeInterfaceStyle
+        do {
+          try api.setInterfaceStyle(style: styleArg)
+          reply(wrapResult(nil))
+        } catch {
+          reply(wrapError(error))
+        }
+      }
+    } else {
+      setInterfaceStyleChannel.setMessageHandler(nil)
     }
   }
 }

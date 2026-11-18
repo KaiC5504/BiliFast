@@ -422,7 +422,7 @@ void main() {
       await open(tester, comment: const CommentFocus(root: 100));
       expect(find.byType(PadPageTabRow), findsNothing);
       expect(find.byType(ThreadView), findsOneWidget);
-      final column = 1194 - PadPageTheme.relatedWidth - PadPageTheme.rule;
+      const column = 1194 - PadPageTheme.relatedWidth - PadPageTheme.rule;
       expect(tester.getRect(find.byType(CommentOverlays)).width, column);
       expect(tester.getRect(find.byType(ThreadView)).width, column);
       await back(tester);

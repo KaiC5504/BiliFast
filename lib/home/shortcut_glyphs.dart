@@ -9,7 +9,7 @@ enum ShortcutGlyph { offline, history, star, later }
 
 /// The shortcuts' line icons, traced on 49 on a 32 pt box, in [color].
 class ShortcutPainter extends CustomPainter {
-  const ShortcutPainter(this.glyph, {this.color = BiliColors.text});
+  ShortcutPainter(this.glyph, {Color? color}) : color = color ?? BiliColors.text;
 
   final ShortcutGlyph glyph;
   final Color color;

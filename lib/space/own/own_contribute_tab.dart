@@ -20,7 +20,7 @@ class OwnContributeSliver extends StatelessWidget {
   final OpenSpaceVideo? open;
 
   /// What the videos and the empty page lie on.
-  static const fill = OwnSpaceTabsTheme.whitePage;
+  static Color get fill => OwnSpaceTabsTheme.whitePage;
 
   @override
   Widget build(BuildContext context) {
@@ -44,7 +44,7 @@ class OwnContributeSliver extends StatelessWidget {
     const pillTop = OwnSpaceTabsTheme.uploadPillCentre - OwnSpaceTabsTheme.uploadPillHeight / 2;
     const rewardTop = OwnSpaceTabsTheme.rewardCentre - OwnSpaceTabsTheme.rewardLine / 2;
     return DecoratedSliver(
-      decoration: const BoxDecoration(color: fill),
+      decoration: BoxDecoration(color: fill),
       sliver: SliverMainAxisGroup(
         slivers: [
           SliverToBoxAdapter(
@@ -53,14 +53,14 @@ class OwnContributeSliver extends StatelessWidget {
               height: rewardTop + OwnSpaceTabsTheme.rewardLine + OwnSpaceTabsTheme.emptyBottom,
               child: Stack(
                 children: [
-                  const Positioned(
+                  Positioned(
                     left: 0,
                     right: 0,
                     top: discTop,
                     child: Center(
                       child: DecoratedBox(
                         decoration: BoxDecoration(color: OwnSpaceTabsTheme.emptyDiscFill, shape: BoxShape.circle),
-                        child: SizedBox.square(
+                        child: const SizedBox.square(
                           dimension: OwnSpaceTabsTheme.emptyDisc,
                           child: Center(child: UploadGlyph()),
                         ),
@@ -92,7 +92,7 @@ class OwnContributeSliver extends StatelessWidget {
                           width: OwnSpaceTabsTheme.uploadPillWidth,
                           height: OwnSpaceTabsTheme.uploadPillHeight,
                           alignment: Alignment.center,
-                          decoration: const ShapeDecoration(
+                          decoration: ShapeDecoration(
                             shape: StadiumBorder(
                               side: BorderSide(
                                 color: OwnSpaceTabsTheme.uploadPillInk,
@@ -120,7 +120,7 @@ class OwnContributeSliver extends StatelessWidget {
                           children: [
                             Text('去创作中心领奖', maxLines: 1, style: reward, strutStyle: BiliFonts.strut(reward)),
                             const SizedBox(width: OwnSpaceTabsTheme.rewardChevronGap),
-                            const OwnChevron(color: OwnSpaceTabsTheme.rewardInk),
+                            OwnChevron(color: OwnSpaceTabsTheme.rewardInk),
                           ],
                         ),
                       ),

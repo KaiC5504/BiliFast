@@ -27,7 +27,7 @@ final class ActionRowMetrics {
     this.cell,
   });
 
-  static const phone = ActionRowMetrics(
+  static ActionRowMetrics get phone => ActionRowMetrics(
     gutter: BiliMetrics.gutter,
     topGap: ActionTheme.topGap,
     icon: ActionTheme.iconSize,
@@ -40,7 +40,7 @@ final class ActionRowMetrics {
   );
 
   /// ipad/03.
-  static const pad = ActionRowMetrics(
+  static ActionRowMetrics get pad => ActionRowMetrics(
     gutter: PadBodyTheme.gutter,
     topGap: PadBodyTheme.actionTopGap,
     icon: PadBodyTheme.actionIcon,
@@ -73,7 +73,7 @@ final class ActionRowMetrics {
 /// 点赞 不喜欢 投币 收藏 分享 under the title (03). Holding 点赞 fills rings around 点赞, 投币 and 收藏 and does 三连.
 /// The row owns the gap above its icons and ends [ActionRowMetrics.bottom] below its counts' line.
 class ActionRow extends StatefulWidget {
-  const ActionRow({super.key, required this.actions, this.metrics = ActionRowMetrics.phone});
+  ActionRow({super.key, required this.actions, ActionRowMetrics? metrics}) : metrics = metrics ?? ActionRowMetrics.phone;
 
   final VideoActions actions;
   final ActionRowMetrics metrics;

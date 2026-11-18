@@ -275,11 +275,11 @@ class _DanmakuListViewState extends State<DanmakuListView> {
                     onTap: () => _hide(menu.row),
                     child: Stack(
                       children: [
-                        Positioned(
+                        const Positioned(
                           left: 0,
                           right: 0,
                           top: DanmakuListTheme.popoverIconCentre - DanmakuListTheme.popoverIconHeight / 2,
-                          child: const Center(
+                          child: Center(
                             child: CustomPaint(
                               size: Size(DanmakuListTheme.popoverIconWidth, DanmakuListTheme.popoverIconHeight),
                               painter: _EyeSlashPainter(),
@@ -394,12 +394,12 @@ class _DanmakuRow extends StatelessWidget {
                       ),
                     ),
                   ),
-                Positioned(
+                const Positioned(
                   right: DanmakuListTheme.dividerCentre - DanmakuListTheme.dividerWidth / 2,
                   width: DanmakuListTheme.dividerWidth,
                   top: (DanmakuListTheme.rowMinHeight - DanmakuListTheme.dividerHeight) / 2,
                   height: DanmakuListTheme.dividerHeight,
-                  child: const ColoredBox(color: DanmakuListTheme.divider),
+                  child: ColoredBox(color: DanmakuListTheme.divider),
                 ),
                 Positioned(
                   right: 0,

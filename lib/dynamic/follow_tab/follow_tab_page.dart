@@ -459,7 +459,7 @@ class _Band extends StatelessWidget {
   const _Band();
 
   @override
-  Widget build(BuildContext context) => const SizedBox(
+  Widget build(BuildContext context) => SizedBox(
     height: DynamicFeedTheme.band,
     child: ColoredBox(color: DynamicFeedTheme.bandFill),
   );

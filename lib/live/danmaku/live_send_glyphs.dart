@@ -147,7 +147,7 @@ class _BubblePainter extends CustomPainter {
         Offset(size.width * 0.22, size.height),
       ], true);
     final paint = Paint()
-      ..shader = const LinearGradient(
+      ..shader = LinearGradient(
         begin: Alignment.topCenter,
         end: Alignment.bottomCenter,
         colors: [LiveSendTheme.pillMarkTop, LiveSendTheme.pillMarkBottom],

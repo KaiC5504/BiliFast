@@ -54,16 +54,16 @@ class FollowSwitch extends StatelessWidget {
 
 /// A section's title at its left, and 更多 › or 全部 › at its right when [more] is given.
 class FollowSectionTitle extends StatelessWidget {
-  const FollowSectionTitle({
+  FollowSectionTitle({
     super.key,
     required this.title,
     this.more,
     this.moreKey,
     this.moreText = DynamicFeedTheme.moreText,
-    this.moreInk = DynamicFeedTheme.moreInk,
+    Color? moreInk,
     this.moreGap = DynamicFeedTheme.moreGap,
     this.onMore,
-  });
+  }) : moreInk = moreInk ?? DynamicFeedTheme.moreInk;
 
   final String title;
   final String? more;
@@ -112,8 +112,8 @@ class FollowSectionTitle extends StatelessWidget {
                     children: [
                       Text(more, style: followStyle(moreText, moreInk)),
                       SizedBox(width: moreGap),
-                      const Chevron(
-                        size: Size(DynamicFeedTheme.chevronWidth, DynamicFeedTheme.chevronHeight),
+                      Chevron(
+                        size: const Size(DynamicFeedTheme.chevronWidth, DynamicFeedTheme.chevronHeight),
                         stroke: DynamicFeedTheme.chevronStroke,
                         color: DynamicFeedTheme.chevronInk,
                       ),
@@ -164,7 +164,7 @@ class FollowFace extends StatelessWidget {
                 clipBehavior: Clip.none,
                 children: [
                   Positioned.fill(child: ClipOval(child: RemoteImage.avatar(up.face))),
-                  const Positioned.fill(
+                  Positioned.fill(
                     child: DecoratedBox(
                       decoration: ShapeDecoration(
                         shape: CircleBorder(
@@ -180,13 +180,13 @@ class FollowFace extends StatelessWidget {
                       top: dotLeft,
                       width: DynamicFeedTheme.dotRing,
                       height: DynamicFeedTheme.dotRing,
-                      child: const DecoratedBox(
-                        decoration: ShapeDecoration(color: BiliColors.card, shape: CircleBorder()),
+                      child: DecoratedBox(
+                        decoration: ShapeDecoration(color: BiliColors.card, shape: const CircleBorder()),
                         child: Center(
                           child: SizedBox.square(
                             dimension: DynamicFeedTheme.dot,
                             child: DecoratedBox(
-                              decoration: ShapeDecoration(color: DynamicFeedTheme.dotInk, shape: CircleBorder()),
+                              decoration: ShapeDecoration(color: DynamicFeedTheme.dotInk, shape: const CircleBorder()),
                             ),
                           ),
                         ),

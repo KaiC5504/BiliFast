@@ -228,7 +228,7 @@ class _Cover extends StatelessWidget {
         fit: StackFit.expand,
         children: [
           if (item.cover.isEmpty)
-            const ColoredBox(color: WatchLaterTheme.coverPlaceholder)
+            ColoredBox(color: WatchLaterTheme.coverPlaceholder)
           else
             RemoteImage(
               item.cover,

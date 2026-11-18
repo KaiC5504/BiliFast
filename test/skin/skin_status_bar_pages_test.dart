@@ -73,7 +73,7 @@ void main() {
     final http = FeedHttp()..pages[1] = [for (var i = 0; i < 6; i++) feedItem('BV1s$i')];
     final logger = Logger(session: 'test');
     final environment = await AppEnvironment.load(
-      keychain: FakeKeychain(StoredCookies(Canned.cookies)),
+      keychain: FakeKeychain(const StoredCookies(Canned.cookies)),
       http: http,
       logger: logger,
     );

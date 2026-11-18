@@ -55,10 +55,10 @@ class _Card extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Container(
     height: OwnSpaceTabsTheme.cardHeight,
-    decoration: const BoxDecoration(
+    decoration: BoxDecoration(
       color: OwnSpaceTabsTheme.cardFill,
-      borderRadius: BorderRadius.all(Radius.circular(OwnSpaceTabsTheme.cardRadius)),
-      boxShadow: [
+      borderRadius: const BorderRadius.all(Radius.circular(OwnSpaceTabsTheme.cardRadius)),
+      boxShadow: const [
         BoxShadow(
           color: OwnSpaceTabsTheme.cardShadow,
           blurRadius: OwnSpaceTabsTheme.cardShadowBlur,

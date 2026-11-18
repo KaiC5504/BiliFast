@@ -212,7 +212,7 @@ class _WatchLaterPageState extends State<WatchLaterPage> {
                       SizedBox(height: top),
                       _Bar(editing: model.editing, active: model.editing || model.hasRows, onManage: _manage),
                       _Strip(model: model, onPlayAll: _playAll),
-                      const SizedBox(
+                      SizedBox(
                         height: WatchLaterTheme.listGap,
                         child: Align(
                           alignment: Alignment.topCenter,

@@ -81,7 +81,7 @@ void main() {
     final row = tester.getRect(_key('message-session-7'));
     expect(row, const Rect.fromLTWH(0, 0, 440, MessageTabTheme.row));
     final face = tester.getRect(find.byType(SessionFace));
-    expect(face, Rect.fromLTWH(MessageTabTheme.faceLeft, (71 - 40) / 2, 40, 40));
+    expect(face, const Rect.fromLTWH(MessageTabTheme.faceLeft, (71 - 40) / 2, 40, 40));
     expect(find.descendant(of: find.byType(SessionFace), matching: find.byType(RemoteImage)), findsOneWidget);
     expect(find.byType(NoticeBoxIcon), findsNothing);
     expect(find.text('演示用户'), findsOneWidget);
@@ -106,7 +106,7 @@ void main() {
         matching: find.byWidgetPredicate((w) => w is ColoredBox && w.color == MessageTabTheme.hairlineInk),
       ),
     );
-    expect(hairline, Rect.fromLTRB(MessageTabTheme.textLeft, 71 - MessageTabTheme.hairline, 440, 71));
+    expect(hairline, const Rect.fromLTRB(MessageTabTheme.textLeft, 71 - MessageTabTheme.hairline, 440, 71));
     expect(tester.widget<Text>(_key('message-session-name-7')).style?.color, MessageTabTheme.name);
     expect(tester.widget<Text>(_key('message-session-text-7')).style?.color, MessageTabTheme.last);
     expect(tester.widget<Text>(_key('message-session-text-7')).maxLines, 1);

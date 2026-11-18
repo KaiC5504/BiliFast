@@ -64,7 +64,7 @@ class DownloadRow extends StatelessWidget {
           size,
           key: const ValueKey('download-size'),
           maxLines: 1,
-          style: const TextStyle(fontSize: DownloadSheetTheme.sizeText, height: 1, color: BiliColors.secondaryText),
+          style: TextStyle(fontSize: DownloadSheetTheme.sizeText, height: 1, color: BiliColors.secondaryText),
         ),
         const SizedBox(width: DownloadSheetTheme.sizeGap),
       ],
@@ -81,10 +81,10 @@ class DownloadRow extends StatelessWidget {
   InlineSpan _title() => TextSpan(
     children: [
       if (entry.current)
-        const WidgetSpan(
+        WidgetSpan(
           alignment: PlaceholderAlignment.middle,
           child: Padding(
-            padding: EdgeInsets.only(right: DownloadSheetTheme.playingGap),
+            padding: const EdgeInsets.only(right: DownloadSheetTheme.playingGap),
             child: PanelGlyph(PanelGlyphKind.playing, color: DownloadSheetTheme.playingBars),
           ),
         ),

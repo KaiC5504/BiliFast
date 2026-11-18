@@ -16,7 +16,7 @@ class NoticeBoxIcon extends StatelessWidget {
     dimension: size,
     child: switch (box) {
       NoticeBox.service || NoticeBox.community => DecoratedBox(
-        decoration: const BoxDecoration(color: MessageTabTheme.boxFill, shape: BoxShape.circle),
+        decoration: BoxDecoration(color: MessageTabTheme.boxFill, shape: BoxShape.circle),
         child: CustomPaint(painter: _BoxGlyphPainter(box)),
       ),
       NoticeBox.system => _apkFace('assets/images/message/tab_box_system.png'),

@@ -69,7 +69,7 @@ abstract final class FollowPosts {
     crossAxisAlignment: CrossAxisAlignment.stretch,
     children: [
       if (bandAbove)
-        const SizedBox(
+        SizedBox(
           height: DynamicFeedTheme.band,
           child: ColoredBox(color: DynamicFeedTheme.bandFill),
         ),
@@ -172,7 +172,7 @@ class FollowPinkButton extends StatelessWidget {
     child: Container(
       height: height,
       padding: EdgeInsets.symmetric(horizontal: padX),
-      decoration: const ShapeDecoration(color: BiliColors.pink, shape: StadiumBorder()),
+      decoration: ShapeDecoration(color: BiliColors.pink, shape: const StadiumBorder()),
       child: Center(
         widthFactor: 1,
         child: Text(label, style: followStyle(text, BiliColors.onPink, weight: DynamicFeedTheme.buttonWeight)),

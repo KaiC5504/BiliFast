@@ -165,7 +165,7 @@ void main() {
     const middle = 425.5 / 2;
 
     final cover = rig.rect(tester, 'end-cover');
-    expect(cover, Rect.fromLTWH(50, middle - 18.75, 224, 126));
+    expect(cover, const Rect.fromLTWH(50, middle - 18.75, 224, 126));
     expect(tester.getRect(find.text('推荐视频')).left, 51);
     expect(tester.getRect(find.text('推荐视频')).center.dy, closeTo(middle - 34.25, 0.5));
     expect(rig.rect(tester, 'end-title').left, 285);

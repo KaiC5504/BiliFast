@@ -23,7 +23,7 @@ class OwnFavouritesSliver extends StatefulWidget {
   final int? count;
 
   /// What the list lies on.
-  static const fill = OwnSpaceTabsTheme.whitePage;
+  static Color get fill => OwnSpaceTabsTheme.whitePage;
 
   @override
   State<OwnFavouritesSliver> createState() => _OwnFavouritesSliverState();
@@ -87,7 +87,7 @@ class _OwnFavouritesSliverState extends State<OwnFavouritesSliver> with OwnPager
     final loaded = pager.loaded;
     final failed = pager.failed;
     return DecoratedSliver(
-      decoration: const BoxDecoration(color: OwnFavouritesSliver.fill),
+      decoration: BoxDecoration(color: OwnFavouritesSliver.fill),
       sliver: SliverMainAxisGroup(
         slivers: [
           SliverToBoxAdapter(
@@ -175,7 +175,7 @@ class _Header extends StatelessWidget {
                 turns: open ? 0 : 0.5,
                 duration: MediaQuery.disableAnimationsOf(context) ? Duration.zero : OwnSpaceTabsTheme.folderChevronTurn,
                 // 我的收藏's › turned to stand up as ^.
-                child: const RotatedBox(
+                child: RotatedBox(
                   quarterTurns: 3,
                   child: FavGlyphIcon(
                     FavGlyph.chevron,
@@ -219,7 +219,7 @@ class _Band extends StatelessWidget {
   const _Band();
 
   @override
-  Widget build(BuildContext context) => const SizedBox(
+  Widget build(BuildContext context) => SizedBox(
     height: OwnSpaceTabsTheme.folderBand,
     child: ColoredBox(color: OwnSpaceTabsTheme.folderBandInk),
   );

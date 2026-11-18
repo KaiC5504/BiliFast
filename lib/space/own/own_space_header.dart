@@ -144,7 +144,7 @@ class _Top extends StatelessWidget {
     final foot = OwnSpaceTheme.bannerHeight + stretch;
     final alignY = own?.bannerAlignIn(MediaQuery.sizeOf(context).width, foot) ?? 0;
     final Widget still = banner == null || banner.isEmpty
-        ? const ColoredBox(key: ValueKey('own-space-banner-default'), color: SpaceTheme.bannerDefault)
+        ? ColoredBox(key: const ValueKey('own-space-banner-default'), color: SpaceTheme.bannerDefault)
         : OwnSpaceBanner(key: const ValueKey('own-space-banner'), url: banner, alignY: alignY);
     return Stack(
       clipBehavior: Clip.none,
@@ -207,7 +207,7 @@ class _Top extends StatelessWidget {
               key: const ValueKey('own-space-skin'),
               behavior: HitTestBehavior.opaque,
               onTap: onSoon,
-              child: const Center(child: OwnSkinGlyph(color: OwnSpaceTheme.skinInk)),
+              child: Center(child: OwnSkinGlyph(color: OwnSpaceTheme.skinInk)),
             ),
           ),
         ),
@@ -396,7 +396,7 @@ class _Face extends StatelessWidget {
             Positioned.fill(
               child: Container(
                 padding: const EdgeInsets.all(SpaceTheme.faceRing),
-                decoration: const BoxDecoration(color: SpaceTheme.faceRingInk, shape: BoxShape.circle),
+                decoration: BoxDecoration(color: SpaceTheme.faceRingInk, shape: BoxShape.circle),
                 child: ClipOval(child: RemoteImage.avatar(profile.face)),
               ),
             ),
@@ -409,7 +409,7 @@ class _Face extends StatelessWidget {
               child: Container(
                 key: const ValueKey('own-space-vip-badge'),
                 padding: const EdgeInsets.all(OwnSpaceTheme.vipRing),
-                decoration: const BoxDecoration(color: OwnSpaceTheme.vipRingInk, shape: BoxShape.circle),
+                decoration: BoxDecoration(color: OwnSpaceTheme.vipRingInk, shape: BoxShape.circle),
                 child: const FittedBox(child: MeVipDisc()),
               ),
             ),
@@ -428,8 +428,8 @@ class _Stats extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     const ruleTop = SpaceTheme.statsRuleTop - (SpaceTheme.countCentre - SpaceTheme.countLine / 2);
-    const rule = Padding(
-      padding: EdgeInsets.only(top: ruleTop),
+    final rule = Padding(
+      padding: const EdgeInsets.only(top: ruleTop),
       child: SizedBox(
         width: SpaceTheme.statsRuleWidth,
         height: SpaceTheme.statsRule,
@@ -636,7 +636,7 @@ class _MedalPill extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const SpaceGlyphIcon(
+          SpaceGlyphIcon(
             SpaceGlyph.plus,
             width: OwnSpaceTheme.pillPlus,
             height: OwnSpaceTheme.pillPlus,
@@ -795,7 +795,7 @@ class _Tag extends StatelessWidget {
   Widget build(BuildContext context) {
     final icon = tag.icon;
     final Widget? glyph = tag.text.startsWith('IP属地')
-        ? const SpaceGlyphIcon(
+        ? SpaceGlyphIcon(
             SpaceGlyph.ip,
             width: SpaceTheme.tagIconWidth,
             height: SpaceTheme.tagIconHeight,
@@ -819,7 +819,7 @@ class _Tag extends StatelessWidget {
         Flexible(child: spaceLine(tag.text, style)),
         if (tag.link) ...[
           const SizedBox(width: SpaceTheme.tagChevronGap),
-          const SpaceGlyphIcon(
+          SpaceGlyphIcon(
             SpaceGlyph.chevron,
             width: SpaceTheme.tagChevronWidth,
             height: SpaceTheme.tagChevronHeight,

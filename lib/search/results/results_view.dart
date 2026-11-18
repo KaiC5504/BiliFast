@@ -614,7 +614,7 @@ class _PillState extends State<_Pill> {
             height: SearchResultTheme.retryHeight,
             padding: const EdgeInsets.symmetric(horizontal: SearchResultTheme.retryPadX),
             alignment: Alignment.center,
-            decoration: const ShapeDecoration(
+            decoration: ShapeDecoration(
               shape: StadiumBorder(
                 side: BorderSide(color: BiliColors.pink, width: SearchResultTheme.retryRim),
               ),
@@ -681,7 +681,7 @@ class _Header extends StatelessWidget {
           ),
         ),
         if (tab == SearchTab.users) const _SortRow(),
-        const SizedBox(
+        SizedBox(
           height: SearchResultTheme.hairline,
           child: ColoredBox(color: SearchResultTheme.hairlineInk),
         ),

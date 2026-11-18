@@ -118,7 +118,7 @@ class SpaceVideoMenu extends StatelessWidget {
               key: const ValueKey('space-menu-watch-later'),
               label: '添加至稍后再看',
               iconCentre: SpaceVideosTheme.menuWatchLaterCentre,
-              icon: const SearchGlyphIcon(
+              icon: SearchGlyphIcon(
                 SearchGlyph.watchLater,
                 size: SpaceVideosTheme.menuWatchLaterIcon,
                 color: SpaceVideosTheme.menuIconInk,
@@ -130,7 +130,7 @@ class SpaceVideoMenu extends StatelessWidget {
               label: '分享',
               iconCentre: SpaceVideosTheme.menuShareCentre,
               iconLift: SpaceVideosTheme.menuShareLift,
-              icon: const ActionIcon(
+              icon: ActionIcon(
                 ActionGlyph.share,
                 solid: false,
                 size: SpaceVideosTheme.menuShareIcon,

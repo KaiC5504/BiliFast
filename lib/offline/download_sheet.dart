@@ -192,7 +192,7 @@ class _DownloadSheetState extends State<DownloadSheet> {
                 ),
               ],
               if (collection)
-                const SizedBox(
+                SizedBox(
                   height: DownloadSheetTheme.footerCentre + DownloadSheetTheme.footerBottom,
                   child: Stack(
                     children: [
@@ -221,7 +221,7 @@ class _DownloadSheetState extends State<DownloadSheet> {
     );
   }
 
-  static const _footer = TextStyle(fontSize: BiliMetrics.sheetFooterText, color: BiliColors.sheetHint);
+  static TextStyle get _footer => TextStyle(fontSize: BiliMetrics.sheetFooterText, color: BiliColors.sheetHint);
 }
 
 /// A box a line of the sheet's small text is centred in.
@@ -234,8 +234,8 @@ class _Header extends StatelessWidget {
   final String name;
   final VoidCallback? onTap;
 
-  static const _label = TextStyle(fontSize: DownloadSheetTheme.headerText, color: DownloadSheetTheme.grey);
-  static const _name = TextStyle(fontSize: DownloadSheetTheme.headerText, color: BiliColors.text);
+  static TextStyle get _label => TextStyle(fontSize: DownloadSheetTheme.headerText, color: DownloadSheetTheme.grey);
+  static TextStyle get _name => TextStyle(fontSize: DownloadSheetTheme.headerText, color: BiliColors.text);
 
   @override
   Widget build(BuildContext context) => SizedBox(
@@ -315,9 +315,9 @@ class _Bar extends StatelessWidget {
   final VoidCallback queueAll;
   final VoidCallback openList;
 
-  static const _button = TextStyle(fontSize: DownloadSheetTheme.barButtonText, color: BiliColors.text);
-  static const _label = TextStyle(fontSize: DownloadSheetTheme.barSpaceText, color: BiliColors.secondaryText);
-  static const _value = TextStyle(
+  static TextStyle get _button => TextStyle(fontSize: DownloadSheetTheme.barButtonText, color: BiliColors.text);
+  static TextStyle get _label => TextStyle(fontSize: DownloadSheetTheme.barSpaceText, color: BiliColors.secondaryText);
+  static TextStyle get _value => TextStyle(
     fontSize: DownloadSheetTheme.barSpaceValueText,
     fontWeight: DownloadSheetTheme.barSpaceValueWeight,
     color: BiliColors.text,
@@ -363,10 +363,10 @@ class _Bar extends StatelessWidget {
       key: const ValueKey('download-space'),
       TextSpan(
         children: [
-          const TextSpan(text: '已使用 ', style: _label),
+          TextSpan(text: '已使用 ', style: _label),
           TextSpan(text: DownloadSheet.space(used), style: _value),
-          const TextSpan(text: ' / ', style: _label),
-          const TextSpan(text: '剩余 ', style: _label),
+          TextSpan(text: ' / ', style: _label),
+          TextSpan(text: '剩余 ', style: _label),
           TextSpan(text: DownloadSheet.space(free), style: _value),
         ],
       ),
@@ -374,7 +374,7 @@ class _Bar extends StatelessWidget {
     );
     return Container(
       height: DownloadSheetTheme.barHeight + bottom,
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         color: DownloadSheetTheme.card,
         border: Border(
           top: BorderSide(color: DownloadSheetTheme.hairline, width: BiliMetrics.panelHairline),

@@ -1063,7 +1063,7 @@ void main() {
     expect(
       tester.getRect(glyph),
       rectMoreOrLessEquals(
-        Rect.fromLTWH(
+        const Rect.fromLTWH(
           78 + LandscapeActionTheme.musicLead,
           127 - LandscapeActionTheme.musicGlyphHeight / 2,
           LandscapeActionTheme.musicGlyphWidth,

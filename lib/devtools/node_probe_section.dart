@@ -358,8 +358,8 @@ class _Body extends StatelessWidget {
   final NodeProbeModel model;
   final NodeChoice current;
 
-  static TextStyle style({Color color = NodeProbeTheme.secondary, double size = NodeProbeTheme.noteText}) =>
-      TextStyle(fontFamily: BiliFonts.family, fontSize: size, color: color);
+  static TextStyle style({Color? color, double size = NodeProbeTheme.noteText}) =>
+      TextStyle(fontFamily: BiliFonts.family, fontSize: size, color: color ?? NodeProbeTheme.secondary);
 
   String get _status {
     final done = model.results.length;

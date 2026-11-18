@@ -127,9 +127,9 @@ class _ThreadViewState extends State<ThreadView> {
                           showsDivider: false,
                         ),
                       ),
-                      const SliverToBoxAdapter(
+                      SliverToBoxAdapter(
                         child: SizedBox(
-                          key: ValueKey('thread-band'),
+                          key: const ValueKey('thread-band'),
                           height: CommentListTheme.bandHeight,
                           child: ColoredBox(color: CommentListTheme.band),
                         ),
@@ -190,7 +190,7 @@ class _Header extends StatelessWidget {
     key: const ValueKey('thread-header'),
     height: CommentListTheme.threadHeaderHeight,
     child: DecoratedBox(
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         color: CommentListTheme.background,
         border: Border(
           bottom: BorderSide(color: CommentListTheme.rule, width: CommentListTheme.threadHairline),
@@ -247,9 +247,9 @@ class _CloseGlyphPainter extends CustomPainter {
       ..strokeCap = StrokeCap.round
       ..isAntiAlias = true;
     // The ink spans the square, round ends included.
-    final inset = CommentListTheme.closeStroke / 2;
+    const inset = CommentListTheme.closeStroke / 2;
     canvas
-      ..drawLine(Offset(inset, inset), Offset(size.width - inset, size.height - inset), paint)
+      ..drawLine(const Offset(inset, inset), Offset(size.width - inset, size.height - inset), paint)
       ..drawLine(Offset(size.width - inset, inset), Offset(inset, size.height - inset), paint);
   }
 

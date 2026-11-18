@@ -89,8 +89,8 @@ FollowingUser followingUser(int mid, {String? name, bool vipPink = false, Dynami
 List<FollowingUser> followingUsers(int count) => [for (var i = 1; i <= count; i++) followingUser(i)];
 
 /// A skin like 129's: a light second-page colour and black text.
-final violetSkin = Skin(
-  equip: const SkinEquip(
+const violetSkin = Skin(
+  equip: SkinEquip(
     id: 1,
     name: '测试装扮',
     ver: 1,

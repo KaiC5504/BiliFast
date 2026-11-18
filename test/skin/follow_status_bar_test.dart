@@ -65,8 +65,8 @@ void main() {
   });
 
   test("unmeasured, 关注 goes by the skin's color_mode as 首页 does", () {
-    final light = Skin(
-      equip: const SkinEquip(
+    const light = Skin(
+      equip: SkinEquip(
         id: 1,
         name: '测试装扮',
         ver: 1,

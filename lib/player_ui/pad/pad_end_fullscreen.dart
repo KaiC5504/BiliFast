@@ -346,7 +346,7 @@ class _Uploader extends StatelessWidget {
                           border: Border.all(color: BiliColors.pink, width: LandscapeActionTheme.pillBorder),
                           borderRadius: BorderRadius.circular(PadFullScreenTheme.endPillRadius),
                         ),
-                        child: const Text(
+                        child: Text(
                           '为TA充电',
                           maxLines: 1,
                           softWrap: false,

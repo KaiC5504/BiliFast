@@ -119,7 +119,7 @@ Future<SheetRig> pumpSheetRig(
         key: SheetRig.shot,
         child: Stack(
           children: [
-            const Positioned.fill(child: ColoredBox(color: BiliColors.card)),
+            Positioned.fill(child: ColoredBox(color: BiliColors.card)),
             Positioned(
               left: 0,
               right: 0,

@@ -59,7 +59,7 @@ class ChatComposer extends StatelessWidget {
               label: '图片',
               onTap: onPicture,
               trailing: false,
-              child: const ChatGlyph(
+              child: ChatGlyph(
                 ChatArt.picture,
                 width: MessageChatTheme.toolWidth,
                 height: MessageChatTheme.pictureGlyphHeight,
@@ -74,7 +74,7 @@ class ChatComposer extends StatelessWidget {
                 child: Container(
                   constraints: const BoxConstraints(minHeight: MessageChatTheme.fieldHeight),
                   alignment: Alignment.centerLeft,
-                  decoration: const ShapeDecoration(color: MessageChatTheme.fieldFill, shape: StadiumBorder()),
+                  decoration: ShapeDecoration(color: MessageChatTheme.fieldFill, shape: const StadiumBorder()),
                   child: Material(
                     type: MaterialType.transparency,
                     child: TextField(
@@ -124,13 +124,13 @@ class ChatComposer extends StatelessWidget {
               onTap: onToggleEmotes,
               trailing: true,
               child: showingEmotes
-                  ? const ChatGlyph(
+                  ? ChatGlyph(
                       ChatArt.keyboard,
                       width: MessageChatTheme.toolWidth,
                       height: MessageChatTheme.keyboardGlyphHeight,
                       color: MessageChatTheme.keyboardInk,
                     )
-                  : const ChatGlyph(
+                  : ChatGlyph(
                       ChatArt.emote,
                       width: MessageChatTheme.toolWidth,
                       height: MessageChatTheme.emoteGlyphHeight,

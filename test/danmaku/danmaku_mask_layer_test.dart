@@ -17,7 +17,7 @@ final class Rig {
   final wake = ValueNotifier(0);
   final timeline = DanmakuTimeline()
     ..add([
-      DisplayDanmaku(elem: const DanmakuElem(progressMs: 500, content: '弹幕'), text: '弹幕', isOwn: false),
+      const DisplayDanmaku(elem: DanmakuElem(progressMs: 500, content: '弹幕'), text: '弹幕', isOwn: false),
     ]);
   final feed = FakeMaskFeed();
   late final mask = ValueNotifier<MaskFeed?>(feed);
@@ -126,7 +126,7 @@ void main() {
       );
       expect(
         videoPicture(const Size(956, 440), fit: FitMode.ratio4x3, video: const Size(1920, 1080)),
-        rectMoreOrLessEquals(Rect.fromLTWH((956 - 440 * 4 / 3) / 2, 0, 440 * 4 / 3, 440)),
+        rectMoreOrLessEquals(const Rect.fromLTWH((956 - 440 * 4 / 3) / 2, 0, 440 * 4 / 3, 440)),
       );
     });
 

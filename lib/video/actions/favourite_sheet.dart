@@ -61,7 +61,7 @@ class _Palette {
   final Color field;
   final Color pressed;
 
-  static const light = _Palette(
+  static _Palette get light => _Palette(
     text: BiliColors.text,
     secondary: BiliColors.secondaryText,
     divider: BiliColors.divider,
@@ -230,9 +230,9 @@ class _FavouriteSheetState extends State<FavouriteSheet> with SingleTickerProvid
                 Transform.translate(offset: Offset(0, (1 - widget.motion.value) * hidden + _drag.value), child: child),
             child: _frame(
               child: DecoratedBox(
-                decoration: const BoxDecoration(
+                decoration: BoxDecoration(
                   color: BiliColors.card,
-                  borderRadius: BorderRadius.vertical(top: Radius.circular(BiliMetrics.sheetRadius)),
+                  borderRadius: const BorderRadius.vertical(top: Radius.circular(BiliMetrics.sheetRadius)),
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -402,7 +402,7 @@ class _FavouriteSheetState extends State<FavouriteSheet> with SingleTickerProvid
     } else {
       final label = Row(
         children: [
-          const Icon(Icons.add, size: FavouriteTheme.plusIcon, color: BiliColors.pink),
+          Icon(Icons.add, size: FavouriteTheme.plusIcon, color: BiliColors.pink),
           const SizedBox(width: FavouriteTheme.plusGap),
           Text(
             '新建收藏夹',

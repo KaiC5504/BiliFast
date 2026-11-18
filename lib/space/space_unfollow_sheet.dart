@@ -119,9 +119,9 @@ class _SpaceUnfollowSheetState extends State<SpaceUnfollowSheet> with SingleTick
                   position: Tween(begin: const Offset(0, 1), end: Offset.zero).animate(_curve),
                   child: DecoratedBox(
                     key: const ValueKey('space-sheet'),
-                    decoration: const BoxDecoration(
+                    decoration: BoxDecoration(
                       color: SpaceTheme.sheetFill,
-                      boxShadow: [BoxShadow(color: SpaceTheme.sheetShadow, blurRadius: SpaceTheme.sheetShadowBlur)],
+                      boxShadow: const [BoxShadow(color: SpaceTheme.sheetShadow, blurRadius: SpaceTheme.sheetShadowBlur)],
                     ),
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
@@ -144,7 +144,7 @@ class _SpaceUnfollowSheetState extends State<SpaceUnfollowSheet> with SingleTick
                           onTap: () => _then(widget.onUnfollow),
                           rule: true,
                         ),
-                        const SizedBox(height: SpaceTheme.sheetGap, child: ColoredBox(color: SpaceTheme.sheetGapFill)),
+                        SizedBox(height: SpaceTheme.sheetGap, child: ColoredBox(color: SpaceTheme.sheetGapFill)),
                         PressHighlight(
                           onTap: _close,
                           child: Semantics(
@@ -210,7 +210,7 @@ class _Row extends StatelessWidget {
               ),
             ),
             if (rule)
-              const Positioned(
+              Positioned(
                 left: SpaceTheme.sheetInset,
                 right: 0,
                 top: 0,

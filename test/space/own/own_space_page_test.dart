@@ -421,12 +421,12 @@ void main() {
     final logs = MemorySink();
     Logger.shared.add(logs);
     addTearDown(() => Logger.shared.remove(logs));
-    api.answer = SpaceProfile(
+    api.answer = const SpaceProfile(
       mid: _mid,
       name: '测试账号',
       face: '',
       tabs: _tabs,
-      own: const OwnSpace(
+      own: OwnSpace(
         banner: 'https://i0.hdslb.com/bfs/garb/made-up/banner.png',
         bannerVideo: 'https://upos-hz-mirrorakam.akamaized.net/made-up/banner.mp4?e=made-up',
         bannerVideoBackups: ['https://upos-sz-mirrorcos.bilivideo.com/made-up/banner.mp4?e=made-up'],
@@ -624,12 +624,12 @@ void main() {
   });
 
   testWidgets('收藏\'s header counts the space\'s folders at once', (tester) async {
-    api.answer = SpaceProfile(
+    api.answer = const SpaceProfile(
       mid: _mid,
       name: '测试账号',
       face: '',
       tabs: _tabs,
-      own: const OwnSpace(favourites: SpaceSection(count: 7)),
+      own: OwnSpace(favourites: SpaceSection(count: 7)),
     );
     favourites.holds['folders'] = Completer<void>();
     await showOwn(tester);
@@ -745,12 +745,12 @@ void main() {
   });
 
   testWidgets('a picture banner has the status bar light until the bar comes in', (tester) async {
-    api.answer = SpaceProfile(
+    api.answer = const SpaceProfile(
       mid: _mid,
       name: '测试账号',
       face: '',
       tabs: _tabs,
-      own: const OwnSpace(banner: 'https://i0.hdslb.com/bfs/garb/banner.png'),
+      own: OwnSpace(banner: 'https://i0.hdslb.com/bfs/garb/banner.png'),
     );
     await showOwn(tester);
     expect(statusStyle(tester), SystemUiOverlayStyle.light);
@@ -927,12 +927,12 @@ void main() {
       NetworkImage(OwnSpaceBanner.address(url, 440), headers: BiliClient.mediaHeaders),
       () => completer,
     );
-    api.answer = SpaceProfile(
+    api.answer = const SpaceProfile(
       mid: _mid,
       name: '测试账号',
       face: '',
       tabs: _tabs,
-      own: const OwnSpace(banner: url),
+      own: OwnSpace(banner: url),
     );
     await showOwn(tester);
     for (var i = 0; i < 5; i++) {
@@ -951,12 +951,12 @@ void main() {
   });
 
   testWidgets('an animated banner is muted when a page covers the space and when the space goes', (tester) async {
-    api.answer = SpaceProfile(
+    api.answer = const SpaceProfile(
       mid: _mid,
       name: '测试账号',
       face: '',
       tabs: _tabs,
-      own: const OwnSpace(
+      own: OwnSpace(
         banner: 'https://i0.hdslb.com/bfs/garb/banner.png',
         bannerVideo: 'https://i0.hdslb.com/bfs/garb/banner.mp4',
       ),

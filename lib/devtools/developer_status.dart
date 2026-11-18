@@ -103,10 +103,10 @@ class _Item extends StatelessWidget {
 }
 
 /// Tabular figures only for the numbers: they widen a host's hyphens too (cn-hk-eq-01-13).
-TextStyle _subStyle({Color color = DevToolsTheme.sub, bool figures = false}) => TextStyle(
+TextStyle _subStyle({Color? color, bool figures = false}) => TextStyle(
   fontFamily: BiliFonts.family,
   fontSize: DevToolsTheme.subText,
-  color: color,
+  color: color ?? DevToolsTheme.sub,
   fontFeatures: figures ? const [FontFeature.tabularFigures()] : null,
 );
 

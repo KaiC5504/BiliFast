@@ -185,7 +185,7 @@ class OfflineDeleteConfirm extends StatelessWidget {
                           ),
                         ),
                       ),
-                      const SizedBox(
+                      SizedBox(
                         height: _T.confirmRule,
                         child: ColoredBox(color: _T.confirmRuleInk),
                       ),

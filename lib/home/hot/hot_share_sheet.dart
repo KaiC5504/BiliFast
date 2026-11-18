@@ -144,9 +144,9 @@ class _ShareSheetRoute extends PopupRoute<_Choice> {
           child: Container(
             key: const ValueKey('hot-share-sheet'),
             height: HotListTheme.sheetHeight + bottom,
-            decoration: const BoxDecoration(
+            decoration: BoxDecoration(
               color: HotListTheme.sheetFill,
-              borderRadius: BorderRadius.vertical(top: Radius.circular(HotListTheme.sheetRadius)),
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(HotListTheme.sheetRadius)),
             ),
             child: Stack(
               children: [
@@ -206,7 +206,7 @@ class _ShareSheetRoute extends PopupRoute<_Choice> {
                     ],
                   ),
                 ),
-                const Positioned(
+                Positioned(
                   left: 0,
                   right: 0,
                   top: HotListTheme.ruleTop,

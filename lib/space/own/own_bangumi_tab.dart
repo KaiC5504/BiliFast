@@ -17,7 +17,7 @@ class OwnBangumiSliver extends StatefulWidget {
   static const endMessage = '再怎么找也没有啦';
 
   /// What the posters lie on.
-  static const fill = OwnSpaceTabsTheme.greyPage;
+  static Color get fill => OwnSpaceTabsTheme.greyPage;
 
   @override
   State<OwnBangumiSliver> createState() => _OwnBangumiSliverState();
@@ -56,7 +56,7 @@ class _OwnBangumiSliverState extends State<OwnBangumiSliver> with OwnPagerView<O
     final end = ownStyle(OwnSpaceTabsTheme.endText, OwnSpaceTabsTheme.endInk, line: OwnSpaceTabsTheme.endLine);
     const endTop = OwnSpaceTabsTheme.endCentre - OwnSpaceTabsTheme.endLine / 2;
     return DecoratedSliver(
-      decoration: const BoxDecoration(color: OwnBangumiSliver.fill),
+      decoration: BoxDecoration(color: OwnBangumiSliver.fill),
       sliver: SliverMainAxisGroup(
         slivers: [
           if (posters.isEmpty && (!pager.loaded || failed))

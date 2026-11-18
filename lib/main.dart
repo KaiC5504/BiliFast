@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io' show Directory, File, FileSystemEntity, Platform;
 
 import 'package:bili_core/devlog.dart';
+import 'package:flutter/cupertino.dart' show CupertinoThemeData;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show SystemUiOverlayStyle;
 import 'package:flutter_localizations/flutter_localizations.dart';
@@ -13,11 +14,13 @@ import 'account/keychain_store.dart';
 import 'app/app_environment.dart';
 import 'app/form_factor.dart';
 import 'app/app_scope.dart';
+import 'app/appearance.dart';
 import 'app/phone_frame.dart';
 import 'app/reduce_motion.dart';
 import 'app/route_observer.dart';
 import 'comments/emote_store.dart';
 import 'danmaku/danmaku_settings_store.dart';
+import 'device/ios/device_api.g.dart' show DeviceHostApi;
 import 'device/launch_form_factor.dart';
 import 'device/orientation.dart';
 import 'device/player_device.dart';
@@ -93,6 +96,7 @@ Future<void> main(List<String> args) async {
   final CodecMemory codecMemory;
   final MeProfileStore meProfile;
   final MessagePrefs messagePrefs;
+  final AppearanceModel appearance;
   final FollowBaselines followBaselines;
   final HistoryOutbox historyOutbox;
   try {
@@ -108,6 +112,10 @@ Future<void> main(List<String> args) async {
     codecMemory = await CodecMemory.load(codecMemoryPath());
     meProfile = await MeProfileStore.load(supportFilePath('me.json'));
     messagePrefs = await MessagePrefs.load(supportFilePath('message_prefs.json'));
+    appearance = await AppearanceModel.load(
+      supportFilePath('appearance.json'),
+      native: Platform.isIOS ? (style) => unawaited(DeviceHostApi().setInterfaceStyle(style)) : null,
+    );
     followBaselines = await FollowBaselines.load(supportFilePath('follow_badge.json'));
     historyOutbox = await HistoryOutbox.load(supportFilePath('history_outbox.json'));
   } catch (error, stack) {
@@ -185,6 +193,7 @@ Future<void> main(List<String> args) async {
     dynamicApi: fakeAccount ? FakeDynamicApi.demo() : null,
     meProfile: meProfile,
     messagePrefs: messagePrefs,
+    appearance: appearance,
     followBaselines: followBaselines,
     skinApi: fakeAccount ? FakeSkinApi.demo() : null,
     // The demo skin keeps a folder of its own, so a later run never starts from it.
@@ -219,6 +228,10 @@ Future<void> main(List<String> args) async {
   unawaited(offline.start());
   unawaited(sideload.start());
   NotifyTaps(host: services.notify, navigator: services.navigator).start();
+  // PC checks: dark for this run, nothing saved.
+  appearance
+    ..forced = args.contains('--dark')
+    ..attach();
   runApp(BiliFastApp(services: services, initialLink: _argument(args, '--play=')));
 }
 
@@ -301,7 +314,7 @@ class LaunchFailedApp extends StatelessWidget {
               child: Padding(
                 padding: const EdgeInsets.all(BiliMetrics.gutter),
                 child: Builder(builder: (context) {
-                  const title =
+                  final title =
                       TextStyle(fontSize: BiliMetrics.titleText, color: BiliColors.text, fontWeight: FontWeight.w600);
                   const detail = TextStyle(fontSize: BiliMetrics.smallText, color: BiliColors.failure);
                   return Column(
@@ -338,8 +351,10 @@ class DefaultStatusBar extends StatelessWidget {
   final Widget child;
 
   @override
-  Widget build(BuildContext context) =>
-      AnnotatedRegion<SystemUiOverlayStyle>(value: SystemUiOverlayStyle.dark, child: child);
+  Widget build(BuildContext context) => AnnotatedRegion<SystemUiOverlayStyle>(
+    value: BiliTheme.dark ? SystemUiOverlayStyle.light : SystemUiOverlayStyle.dark,
+    child: child,
+  );
 }
 
 class BiliFastApp extends StatelessWidget {
@@ -349,7 +364,10 @@ class BiliFastApp extends StatelessWidget {
   final String? initialLink;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context) => AppearanceRedraw(model: services.appearance, builder: _app);
+
+  Widget _app(BuildContext context) {
+    final dark = BiliTheme.dark;
     return MaterialApp(
       title: 'BiliFast',
       debugShowCheckedModeBanner: false,
@@ -360,7 +378,13 @@ class BiliFastApp extends StatelessWidget {
         fontFamily: BiliFonts.family,
         fontFamilyFallback: BiliFonts.fallback,
         textTheme: BiliFonts.untracked,
-        colorScheme: ColorScheme.fromSeed(seedColor: BiliColors.pink, primary: BiliColors.pink),
+        brightness: dark ? Brightness.dark : Brightness.light,
+        colorScheme: ColorScheme.fromSeed(
+          seedColor: BiliColors.pink,
+          primary: BiliColors.pink,
+          brightness: dark ? Brightness.dark : Brightness.light,
+        ),
+        cupertinoOverrideTheme: CupertinoThemeData(brightness: dark ? Brightness.dark : Brightness.light),
         scaffoldBackgroundColor: BiliColors.pageGrey,
         // iOS has no ripples; rows show their own press highlight.
         splashFactory: NoSplash.splashFactory,

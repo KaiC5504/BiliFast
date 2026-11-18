@@ -10,7 +10,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 import '../support/space_host.dart';
 
-const _style = TextStyle(fontSize: 15, height: 25 / 15, color: BiliColors.text);
+final _style = TextStyle(fontSize: 15, height: 25 / 15, color: BiliColors.text);
 const _emoteUrl = 'https://i0.hdslb.com/bfs/emote/a.png';
 
 final class Rig {
@@ -35,7 +35,7 @@ final class Rig {
     int? maxLines,
     bool marksReplyTarget = true,
     bool linksOpen = true,
-    TextStyle style = _style,
+    TextStyle? style,
   }) async {
     await tester.pumpWidget(
       MediaQuery(
@@ -49,7 +49,7 @@ final class Rig {
                 width: 372,
                 child: CommentText(
                   runs: runs,
-                  style: style,
+                  style: style ?? _style,
                   leading: leading,
                   maxLines: maxLines,
                   onSeek: seeks ? this.seeks.add : null,
@@ -101,7 +101,7 @@ Future<void> _expireToast(WidgetTester tester) async {
 void main() {
   testWidgets('plain text as it is, the leading span first, and an ellipsis once maxLines runs out', (tester) async {
     final rig = Rig();
-    const leading = TextSpan(
+    final leading = TextSpan(
       text: 'HYSSNH: ',
       style: TextStyle(color: BiliColors.secondaryText),
     );
@@ -172,7 +172,7 @@ void main() {
       expect(tester.getSize(_paragraph).height, moreOrLessEquals(plainHeight + CommentTextTheme.emoteLineGrowth));
       // The line grows below its text only, so its baseline is the text's.
       final painter = TextPainter(
-        text: const TextSpan(text: '重打了', style: _style),
+        text: TextSpan(text: '重打了', style: _style),
         textDirection: TextDirection.ltr,
       )..layout();
       addTearDown(painter.dispose);

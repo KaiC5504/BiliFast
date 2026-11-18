@@ -51,11 +51,11 @@ class OfflineSearchPainter extends CustomPainter {
     final origin = size.center(Offset.zero) - const Offset(_T.searchBox / 2, _T.searchBox / 2 + _T.searchLift);
     const centre = Offset(_T.searchRingCentre, _T.searchRingCentre);
     final paint = _line(color, _T.searchStroke);
-    final along = _T.searchRingRadius / math.sqrt2;
+    const along = _T.searchRingRadius / math.sqrt2;
     canvas
       ..drawCircle(origin + centre, _T.searchRingRadius, paint)
       ..drawLine(
-        origin + centre + Offset(along, along),
+        origin + centre + const Offset(along, along),
         origin + const Offset(_T.searchHandleEnd, _T.searchHandleEnd),
         paint,
       );
@@ -75,7 +75,7 @@ class OfflineEditPainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     final origin = size.center(Offset.zero) - const Offset(_T.editWidth / 2, _T.editHeight / 2 + _T.editLift);
     final paint = _line(color, _T.editStroke);
-    final middle = _T.editHeight / 2;
+    const middle = _T.editHeight / 2;
     for (final step in const [-1, 0, 1]) {
       final y = middle + step * _T.editPitch;
       canvas.drawLine(origin + Offset(_T.editBarLeft, y), origin + Offset(_T.editBarRight, y), paint);

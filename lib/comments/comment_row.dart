@@ -117,10 +117,10 @@ class CommentRow extends StatelessWidget {
                 onOpen: _spaceOpener(context, comment),
               ),
             ),
-            SizedBox(height: CommentRowTheme.textTop - nameTop - CommentRowTheme.nameLine),
+            const SizedBox(height: CommentRowTheme.textTop - nameTop - CommentRowTheme.nameLine),
             if (hasText)
               ConstrainedBox(
-                constraints: BoxConstraints(minHeight: CommentRowTheme.textMinBottom - CommentRowTheme.textTop),
+                constraints: const BoxConstraints(minHeight: CommentRowTheme.textMinBottom - CommentRowTheme.textTop),
                 child: Padding(
                   padding: textLeft,
                   child: Align(
@@ -175,9 +175,9 @@ class CommentRow extends StatelessWidget {
               ),
             ),
             if (showsReplies && comment.upLiked) const _UpLiked(),
-            if (upChip) ...[SizedBox(height: CommentRowTheme.upChipTop), const _UpLikedChip()],
+            if (upChip) ...[const SizedBox(height: CommentRowTheme.upChipTop), const _UpLikedChip()],
             if (repliesBox) ...[
-              SizedBox(height: CommentRowTheme.boxGap),
+              const SizedBox(height: CommentRowTheme.boxGap),
               Padding(
                 padding: const EdgeInsets.only(left: CommentRowTheme.boxLeading, right: CommentRowTheme.gutter),
                 child: _RepliesBox(comment: comment, onOpen: () => callbacks.openThread(comment)),
@@ -206,12 +206,12 @@ class CommentRow extends StatelessWidget {
             child: FanCard(image: card, number: member.fanCardNumber, color: member.fanCardColor),
           ),
         if (showsDivider)
-          const Positioned(
+          Positioned(
             left: CommentRowTheme.dividerLeading,
             right: 0,
             bottom: 0,
             height: CommentRowTheme.divider,
-            child: ColoredBox(key: ValueKey('comment-divider'), color: CommentRowTheme.dividerColour),
+            child: ColoredBox(key: const ValueKey('comment-divider'), color: CommentRowTheme.dividerColour),
           ),
       ],
     );
@@ -526,7 +526,7 @@ class _UpLiked extends StatelessWidget {
       height: CommentRowTheme.upLikedHeight,
       child: Row(
         children: [
-          const CommentThumb(solid: true, width: CommentRowTheme.upLikedIcon, color: CommentRowTheme.upLiked),
+          CommentThumb(solid: true, width: CommentRowTheme.upLikedIcon, color: CommentRowTheme.upLiked),
           const SizedBox(width: CommentRowTheme.upLikedGap),
           Text(
             'UP主觉得很赞',
@@ -550,9 +550,9 @@ class _UpLikedChip extends StatelessWidget {
       alignment: Alignment.topLeft,
       child: DecoratedBox(
         key: const ValueKey('comment-up-liked'),
-        decoration: const BoxDecoration(
+        decoration: BoxDecoration(
           color: CommentRowTheme.upChipFill,
-          borderRadius: BorderRadius.all(Radius.circular(CommentRowTheme.upChipRadius)),
+          borderRadius: const BorderRadius.all(Radius.circular(CommentRowTheme.upChipRadius)),
         ),
         child: SizedBox(
           height: CommentRowTheme.upChipHeight,
@@ -682,7 +682,7 @@ class _PreviewLineState extends State<_PreviewLine> {
         children: [
           TextSpan(
             text: reply.member.name,
-            style: const TextStyle(color: CommentRowTheme.previewName),
+            style: TextStyle(color: CommentRowTheme.previewName),
             recognizer: _writerMid(reply) > 0 ? _name : null,
           ),
           const TextSpan(text: ': '),
@@ -707,13 +707,13 @@ class _PreviewLineState extends State<_PreviewLine> {
               mainAxisSize: MainAxisSize.min,
               children: [
                 const SizedBox(width: CommentRowTheme.previewRuleGap),
-                const SizedBox(
+                SizedBox(
                   width: CommentRowTheme.previewRuleWidth,
                   height: CommentRowTheme.previewRuleHeight,
                   child: ColoredBox(color: CommentRowTheme.dividerColour),
                 ),
                 const SizedBox(width: CommentRowTheme.previewRuleGap),
-                const CommentThumb(color: CommentRowTheme.action),
+                CommentThumb(color: CommentRowTheme.action),
                 const SizedBox(width: CommentRowTheme.thumbCountGap),
                 Text(
                   CountFormat.short(reply.likes),

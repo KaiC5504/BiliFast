@@ -877,8 +877,8 @@ void main() {
     ) async {
       await show(tester, 0.5);
       await tester.tapAt(const Offset(220, 100));
-      await tester.tapAt(Offset(CollapseTheme.backLeft + 4, bar / 2));
-      await tester.tapAt(Offset(440 - CollapseTheme.moreRight, bar / 2));
+      await tester.tapAt(const Offset(CollapseTheme.backLeft + 4, bar / 2));
+      await tester.tapAt(const Offset(440 - CollapseTheme.moreRight, bar / 2));
       expect(calls, ['resume', 'resume', 'resume']);
 
       calls.clear();

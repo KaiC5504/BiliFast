@@ -195,7 +195,7 @@ void main() {
     await shoot(tester, '74-space-video-more-menu-ours');
 
     final menu = tester.getRect(find.byKey(const ValueKey('space-menu')));
-    expect(menu, Rect.fromLTRB(235, 1874 / 3, 435, 1874 / 3 + 104));
+    expect(menu, const Rect.fromLTRB(235, 1874 / 3, 435, 1874 / 3 + 104));
     // 74's tip is at 420.83, the dots' centre at 420.
     expect(tester.widget<SpaceVideoMenu>(find.byType(SpaceVideoMenu)).arrowX, closeTo(1262.5 / 3 - 235, 0.01));
   });

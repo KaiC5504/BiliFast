@@ -356,7 +356,7 @@ void main() {
       jpegFallback: _at(633, 475),
     );
     expect(avif, StoredNetworkImage(_feedAvif, box: const Size(633, 475), jpegFallback: _at(633, 475)));
-    expect(avif.hashCode, StoredNetworkImage(_feedAvif, box: const Size(633, 475)).hashCode);
+    expect(avif.hashCode, const StoredNetworkImage(_feedAvif, box: Size(633, 475)).hashCode);
     expect(avif, isNot(const StoredNetworkImage(_feedAvif, box: Size(633, 475), preset: CoverPreset.feed)));
   });
 

@@ -289,7 +289,7 @@ class _Thumbnail extends StatelessWidget {
                   cacheWidth: pixels,
                   gaplessPlayback: true,
                   excludeFromSemantics: true,
-                  errorBuilder: (context, error, stack) => const ColoredBox(color: BiliColors.pageGrey),
+                  errorBuilder: (context, error, stack) => ColoredBox(color: BiliColors.pageGrey),
                 ),
               ),
             ),
@@ -317,7 +317,7 @@ class _Thumbnail extends StatelessWidget {
                     width: MentionTheme.removeSize,
                     height: MentionTheme.removeSize,
                     decoration: const BoxDecoration(color: MentionTheme.removeFill, shape: BoxShape.circle),
-                    child: const Icon(
+                    child: Icon(
                       Icons.close,
                       size: MentionTheme.removeGlyph,
                       color: MentionTheme.removeGlyphColor,

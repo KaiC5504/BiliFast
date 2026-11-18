@@ -138,9 +138,9 @@ class _LikesPageState extends State<LikesPage> with SkinRefreshRoom, FeedPageSta
                             refreshRoom: refreshRoom,
                             refreshTrigger: refreshTrigger,
                             onRefreshFailed: toast,
-                            empty: const ColoredBox(
+                            empty: ColoredBox(
                               color: MessageFeedTheme.emptyFill,
-                              child: FeedEmpty(
+                              child: const FeedEmpty(
                                 top: MessageFeedTheme.emptyTop,
                                 textCentre: MessageFeedTheme.emptyTextCentre,
                               ),

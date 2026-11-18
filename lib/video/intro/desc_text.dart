@@ -159,7 +159,7 @@ class _DescriptionTextState extends State<DescriptionText> {
   }
 
   InlineSpan _span(RichRun run) {
-    const linked = TextStyle(color: BiliColors.link);
+    final linked = TextStyle(color: BiliColors.link);
     return switch (run) {
       TextRun(:final text) => TextSpan(text: text),
       EmoteRun(:final token) => TextSpan(text: token),

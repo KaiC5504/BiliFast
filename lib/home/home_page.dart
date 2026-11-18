@@ -1405,7 +1405,7 @@ class _RetryMessage extends StatelessWidget {
           message,
           key: messageKey,
           textAlign: TextAlign.center,
-          style: const TextStyle(fontSize: BiliMetrics.bodyText, color: BiliColors.secondaryText),
+          style: TextStyle(fontSize: BiliMetrics.bodyText, color: BiliColors.secondaryText),
           strutStyle: BiliFonts.strutOf(context, const TextStyle(fontSize: BiliMetrics.bodyText)),
         ),
         const SizedBox(height: BiliMetrics.rowGap),
@@ -1418,10 +1418,10 @@ class _RetryMessage extends StatelessWidget {
             height: BiliMetrics.pillHeight,
             padding: const EdgeInsets.symmetric(horizontal: BiliMetrics.sectionGap),
             alignment: Alignment.center,
-            decoration: const ShapeDecoration(
+            decoration: ShapeDecoration(
               shape: StadiumBorder(side: BorderSide(color: BiliColors.pink)),
             ),
-            child: const Text(
+            child: Text(
               '重试',
               style: TextStyle(fontSize: BiliMetrics.bodyText, color: BiliColors.pink),
             ),

@@ -192,14 +192,14 @@ class _ActionPanel extends StatelessWidget {
   Widget build(BuildContext context) {
     final bottom = MediaQuery.paddingOf(context).bottom;
     return DecoratedBox(
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         color: WatchLaterTheme.sheetFill,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(WatchLaterTheme.sheetRadius)),
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(WatchLaterTheme.sheetRadius)),
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const _Grabber(color: WatchLaterTheme.grabberInk),
+          _Grabber(color: WatchLaterTheme.grabberInk),
           const SizedBox(height: WatchLaterTheme.groupTop - WatchLaterTheme.grabberTop - WatchLaterTheme.grabberHeight),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: WatchLaterTheme.groupInset),
@@ -300,7 +300,7 @@ class _ActionRowState extends State<_ActionRow> {
                   child: Text(action.label, maxLines: 1, style: style, strutStyle: BiliFonts.strut(style)),
                 ),
                 if (!widget.last)
-                  const Positioned(
+                  Positioned(
                     left: textLeft,
                     right: 0,
                     bottom: 0,
@@ -409,13 +409,13 @@ class _FolderPanelState extends State<_FolderPanel> {
     }
     return Container(
       height: height,
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         color: WatchLaterTheme.folderSheetFill,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(WatchLaterTheme.sheetRadius)),
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(WatchLaterTheme.sheetRadius)),
       ),
       child: Stack(
         children: [
-          const Positioned(left: 0, right: 0, top: 0, child: _Grabber(color: WatchLaterTheme.folderGrabberInk)),
+          Positioned(left: 0, right: 0, top: 0, child: _Grabber(color: WatchLaterTheme.folderGrabberInk)),
           const Positioned(
             left: WatchLaterTheme.folderIconLeft,
             top: WatchLaterTheme.folderIconTop,
@@ -509,7 +509,7 @@ class _FolderRow extends StatelessWidget {
                 child: Text(words, maxLines: 1, style: metaStyle, strutStyle: BiliFonts.strut(metaStyle)),
               ),
               if (!first)
-                const Positioned(
+                Positioned(
                   left: WatchLaterTheme.gutter,
                   right: WatchLaterTheme.gutter,
                   top: 0,
@@ -605,7 +605,7 @@ class EditBar extends StatelessWidget {
                   ),
                 ),
               ),
-              const SizedBox(
+              SizedBox(
                 height: WatchLaterTheme.editBarHairline,
                 child: ColoredBox(color: WatchLaterTheme.hairlineInk),
               ),

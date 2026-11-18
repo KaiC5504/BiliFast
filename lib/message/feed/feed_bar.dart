@@ -138,7 +138,7 @@ class FeedBar extends StatelessWidget {
               right: 0,
               bottom: 0,
               height: MessageFeedTheme.barHairline,
-              child: const ColoredBox(color: MessageFeedTheme.hairline),
+              child: ColoredBox(color: MessageFeedTheme.hairline),
             ),
             Positioned(
               left: MessageFeedTheme.buttonCentreX + half,
@@ -221,7 +221,7 @@ class FeedPlainBar extends StatelessWidget {
                 right: 0,
                 top: top + MessageFeedTheme.plainRuleTop,
                 height: MessageFeedTheme.plainRule,
-                child: const ColoredBox(color: MessageFeedTheme.plainRuleInk),
+                child: ColoredBox(color: MessageFeedTheme.plainRuleInk),
               ),
               Positioned(
                 left: MessageFeedTheme.plainBackCentreX + half,

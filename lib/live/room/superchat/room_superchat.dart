@@ -295,9 +295,9 @@ class RoomSuperChatActions extends StatelessWidget {
           bottom: 0,
           child: Container(
             key: const ValueKey('live-sc-actions'),
-            decoration: const BoxDecoration(
+            decoration: BoxDecoration(
               color: LiveRoomTheme.actionFill,
-              borderRadius: BorderRadius.vertical(top: Radius.circular(LiveRoomTheme.actionRadius)),
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(LiveRoomTheme.actionRadius)),
             ),
             padding: EdgeInsets.only(bottom: bottom),
             child: Column(
@@ -316,7 +316,7 @@ class RoomSuperChatActions extends StatelessWidget {
                   liveStyle(LiveRoomTheme.actionText, LiveRoomTheme.ink),
                   key: const ValueKey('live-sc-report'),
                 ),
-                const SizedBox(
+                SizedBox(
                   height: LiveRoomTheme.actionBandHeight,
                   child: ColoredBox(color: LiveRoomTheme.actionBand),
                 ),

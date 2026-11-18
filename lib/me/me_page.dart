@@ -646,8 +646,8 @@ class _ServiceRow extends StatelessWidget {
           Positioned(
             right: MeTheme.spaceRight,
             top: (MeTheme.serviceRow - MeTheme.chevronHeight) / 2,
-            child: const CustomPaint(
-              size: Size(MeTheme.chevronWidth, MeTheme.chevronHeight),
+            child: CustomPaint(
+              size: const Size(MeTheme.chevronWidth, MeTheme.chevronHeight),
               painter: MeChevronPainter(color: MeTheme.serviceChevron, stroke: MeTheme.chevronStroke),
             ),
           ),

@@ -117,7 +117,7 @@ class MenuEdgePainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     const notch = FollowingListTheme.notchHeight;
     const half = FollowingListTheme.notchWidth / 2;
-    final base = notch + FollowingListTheme.barHairline / 2;
+    const base = notch + FollowingListTheme.barHairline / 2;
     canvas.drawRect(
       Rect.fromLTWH(0, notch, size.width, FollowingListTheme.barHairline),
       Paint()..color = FollowingListTheme.hairline,

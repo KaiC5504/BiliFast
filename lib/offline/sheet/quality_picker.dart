@@ -58,7 +58,7 @@ class _QualityPickerState extends State<QualityPicker> with SingleTickerProvider
     });
   }
 
-  static const _size = TextStyle(fontSize: DownloadSheetTheme.detailText, color: BiliColors.secondaryText);
+  static TextStyle get _size => TextStyle(fontSize: DownloadSheetTheme.detailText, color: BiliColors.secondaryText);
 
   Widget _row(BuildContext context, QualityOption option, {required bool last}) {
     final chosen = option.id == widget.selected;
@@ -80,7 +80,7 @@ class _QualityPickerState extends State<QualityPicker> with SingleTickerProvider
         padding: const EdgeInsets.only(right: DownloadSheetTheme.pickerRowLead),
         decoration: last
             ? null
-            : const BoxDecoration(
+            : BoxDecoration(
                 border: Border(
                   bottom: BorderSide(color: DownloadSheetTheme.hairline, width: BiliMetrics.panelHairline),
                 ),
@@ -151,9 +151,9 @@ class _QualityPickerState extends State<QualityPicker> with SingleTickerProvider
                   behavior: HitTestBehavior.opaque,
                   onTap: () {},
                   child: DecoratedBox(
-                    decoration: const BoxDecoration(
+                    decoration: BoxDecoration(
                       color: DownloadSheetTheme.sheet,
-                      borderRadius: BorderRadius.vertical(top: Radius.circular(BiliMetrics.sheetRadius)),
+                      borderRadius: const BorderRadius.vertical(top: Radius.circular(BiliMetrics.sheetRadius)),
                     ),
                     child: Column(
                       children: [

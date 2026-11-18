@@ -48,7 +48,7 @@ class RecentsPage extends StatelessWidget {
             backgroundColor: BiliColors.card,
             surfaceTintColor: BiliColors.card,
             centerTitle: true,
-            title: const Text(
+            title: Text(
               '最近打开',
               style: TextStyle(fontSize: BiliMetrics.titleText, color: BiliColors.text),
             ),
@@ -57,12 +57,12 @@ class RecentsPage extends StatelessWidget {
                 TextButton(
                   key: const ValueKey('recents-clear'),
                   onPressed: () => _confirmClear(context, recents),
-                  child: const Text('清空', style: TextStyle(color: BiliColors.pink)),
+                  child: Text('清空', style: TextStyle(color: BiliColors.pink)),
                 ),
             ],
           ),
           body: items.isEmpty
-              ? const Center(
+              ? Center(
                   child: Text(
                     '还没有打开过视频',
                     style: TextStyle(fontSize: BiliMetrics.bodyText, color: BiliColors.secondaryText),
@@ -71,7 +71,7 @@ class RecentsPage extends StatelessWidget {
               : ListView.separated(
                   itemCount: items.length,
                   separatorBuilder: (context, index) =>
-                      const Divider(height: 0.5, thickness: 0.5, indent: 64, color: BiliColors.divider),
+                      Divider(height: 0.5, thickness: 0.5, indent: 64, color: BiliColors.divider),
                   itemBuilder: (context, index) => _RecentRow(item: items[index]),
                 ),
         );
@@ -105,14 +105,14 @@ class _RecentRow extends StatelessWidget {
                   width: BiliMetrics.recentsTile,
                   height: BiliMetrics.recentsTile,
                   decoration: BoxDecoration(
-                    gradient: const LinearGradient(
+                    gradient: LinearGradient(
                       begin: Alignment.topCenter,
                       end: Alignment.bottomCenter,
                       colors: [BiliColors.recentsTileTop, BiliColors.pink],
                     ),
                     borderRadius: BorderRadius.circular(BiliMetrics.recentsTileRadius),
                   ),
-                  child: const Icon(
+                  child: Icon(
                     Icons.play_arrow_rounded,
                     color: BiliColors.card,
                     size: BiliMetrics.recentsTileIcon,
@@ -127,7 +127,7 @@ class _RecentRow extends StatelessWidget {
                         item.title,
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(fontSize: BiliMetrics.bodyText, color: BiliColors.text),
+                        style: TextStyle(fontSize: BiliMetrics.bodyText, color: BiliColors.text),
                         strutStyle: BiliFonts.strutOf(context, const TextStyle(fontSize: BiliMetrics.bodyText)),
                       ),
                       if (item.pageCount > 1)
@@ -135,13 +135,13 @@ class _RecentRow extends StatelessWidget {
                           'P${item.page} ${item.part}',
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(fontSize: BiliMetrics.smallText, color: BiliColors.secondaryText),
+                          style: TextStyle(fontSize: BiliMetrics.smallText, color: BiliColors.secondaryText),
                           strutStyle: BiliFonts.strutOf(context, const TextStyle(fontSize: BiliMetrics.smallText)),
                         ),
                     ],
                   ),
                 ),
-                const Icon(Icons.chevron_right, color: BiliColors.divider),
+                Icon(Icons.chevron_right, color: BiliColors.divider),
               ],
             ),
           ),

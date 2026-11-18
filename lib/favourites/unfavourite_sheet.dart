@@ -155,7 +155,7 @@ class _Sheet extends StatelessWidget {
                   onTap: onRemove,
                   child: Stack(
                     children: [
-                      const Positioned(
+                      Positioned(
                         top: FavouritesTheme.sheetStarTop,
                         left: 0,
                         right: 0,
@@ -184,7 +184,7 @@ class _Sheet extends StatelessWidget {
             ],
           ),
         ),
-        const SizedBox(
+        SizedBox(
           height: FavouritesTheme.sheetBand,
           child: ColoredBox(color: FavouritesTheme.sheetBandFill),
         ),

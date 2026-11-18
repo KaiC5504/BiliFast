@@ -68,7 +68,7 @@ class _DanmakuGlyphPainter extends CustomPainter {
       case DanmakuGlyphKind.reset:
         _reset(canvas);
       case DanmakuGlyphKind.chevronDown:
-        final inset = DanmakuPanelTheme.chevronStroke / 2;
+        const inset = DanmakuPanelTheme.chevronStroke / 2;
         canvas.drawPath(
           Path()
             ..moveTo(inset, inset)
@@ -77,7 +77,7 @@ class _DanmakuGlyphPainter extends CustomPainter {
           _line(DanmakuPanelTheme.chevronStroke),
         );
       case DanmakuGlyphKind.buttonChevron || DanmakuGlyphKind.listChevron:
-        final inset = DanmakuPanelTheme.chevronStroke / 2;
+        const inset = DanmakuPanelTheme.chevronStroke / 2;
         canvas.drawPath(
           Path()
             ..moveTo(inset, inset)
@@ -221,8 +221,8 @@ class _DanmakuGlyphPainter extends CustomPainter {
     const radius = DanmakuPanelTheme.badgeRadius;
     final paint = _line(DanmakuPanelTheme.glyphStroke);
     canvas.drawCircle(centre, radius, paint);
-    final reach = radius * math.sqrt1_2;
-    canvas.drawLine(centre - Offset(reach, reach), centre + Offset(reach, reach), paint..strokeCap = StrokeCap.butt);
+    const reach = radius * math.sqrt1_2;
+    canvas.drawLine(centre - const Offset(reach, reach), centre + const Offset(reach, reach), paint..strokeCap = StrokeCap.butt);
   }
 
   /// ↻: two arcs on one circle, each ending in a right-angled head whose corner sits on the circle, the pair

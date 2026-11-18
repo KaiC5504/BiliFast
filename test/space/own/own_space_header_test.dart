@@ -99,7 +99,7 @@ void main() {
       expect(key('own-space-sound-off'), findsOneWidget);
       final button = tester.getRect(key('own-space-sound-off'));
       expect(button.size, const Size.square(OwnSpaceTheme.soundSize));
-      expect(button.center, offsetMoreOrLessEquals(Offset(417, OwnSpaceTheme.bannerHeight - 63)));
+      expect(button.center, offsetMoreOrLessEquals(const Offset(417, OwnSpaceTheme.bannerHeight - 63)));
       await tester.tap(key('own-space-sound'));
       await tester.pump();
       expect(muted.value, isFalse);

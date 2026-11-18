@@ -14,7 +14,7 @@ class FeedDivider extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const style = TextStyle(fontSize: FeedBatchTheme.text, color: FeedBatchTheme.ink);
+    final style = TextStyle(fontSize: FeedBatchTheme.text, color: FeedBatchTheme.ink);
     return Semantics(
       button: true,
       label: label,

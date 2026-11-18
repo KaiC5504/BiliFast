@@ -77,7 +77,7 @@ void main() {
     if (skin != null && load) await SkinPictures.load(tester, skin);
     final logger = Logger(session: 'test');
     final environment = await AppEnvironment.load(
-      keychain: FakeKeychain(StoredCookies(Canned.cookies)),
+      keychain: FakeKeychain(const StoredCookies(Canned.cookies)),
       http: http,
       logger: logger,
     );

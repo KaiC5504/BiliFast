@@ -44,7 +44,7 @@ void main() {
 
   tearDown(() => controller.dispose());
 
-  final gaps = PlaybackController.detailRetryGaps;
+  const gaps = PlaybackController.detailRetryGaps;
   int asks() => http.to(Canned.signedViewPath).length;
   FakeTimer? retry(int attempt) => timers.activeWith(gaps[attempt]);
 

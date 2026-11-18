@@ -462,15 +462,15 @@ class _Chip extends StatelessWidget {
           child: Stack(
             children: [
               if (!chosen)
-                const Positioned.fill(
+                Positioned.fill(
                   child: Padding(
-                    padding: EdgeInsets.all(SpaceVideosTheme.chipRimInset),
+                    padding: const EdgeInsets.all(SpaceVideosTheme.chipRimInset),
                     child: DecoratedBox(
                       decoration: BoxDecoration(
                         border: Border.fromBorderSide(
                           BorderSide(color: SpaceVideosTheme.chipRim, width: SpaceVideosTheme.chipRimWidth),
                         ),
-                        borderRadius: BorderRadius.all(
+                        borderRadius: const BorderRadius.all(
                           Radius.circular(SpaceVideosTheme.chipRadius - SpaceVideosTheme.chipRimInset),
                         ),
                       ),
@@ -671,7 +671,7 @@ class _RetryPillState extends State<_RetryPill> {
           height: SpaceVideosTheme.retryHeight,
           padding: const EdgeInsets.symmetric(horizontal: SpaceVideosTheme.retryPadX),
           alignment: Alignment.center,
-          decoration: const ShapeDecoration(
+          decoration: ShapeDecoration(
             shape: StadiumBorder(
               side: BorderSide(color: BiliColors.pink, width: SpaceVideosTheme.retryRim),
             ),

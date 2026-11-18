@@ -149,7 +149,7 @@ void main() {
       final box = tester.getRect(find.descendant(of: dressedBox(tab), matching: find.byType(SkinPicture)).first);
       final expected = tab == HomeTab.post
           ? Rect.fromCenter(
-              center: Offset(220, _barTop + HomeTabBarTheme.skinPostCentre),
+              center: const Offset(220, _barTop + HomeTabBarTheme.skinPostCentre),
               width: HomeTabBarTheme.skinPostSize,
               height: HomeTabBarTheme.skinPostSize,
             )
@@ -402,9 +402,9 @@ void main() {
     }
     expect(find.byKey(const ValueKey('home-tab-post-rise')), findsNothing, reason: "发布's picture stays under the top");
     expect(pageTaps, 0);
-    final rise = _barTop - HomeTabBarTheme.skinIconOverhang;
+    const rise = _barTop - HomeTabBarTheme.skinIconOverhang;
     for (final at in [
-      Offset(44, rise - 1),
+      const Offset(44, rise - 1),
       const Offset(88, _barTop - 8),
       const Offset(220, _barTop - 8),
       const Offset(5, _barTop - 8),

@@ -121,26 +121,26 @@ class _PortraitMoreSheetState extends State<PortraitMoreSheet> {
     final cards = <List<Widget>>[
       [
         _SheetRow(
-          icon: const PanelGlyph(PanelGlyphKind.speed, color: DownloadSheetTheme.ink),
+          icon: PanelGlyph(PanelGlyphKind.speed, color: DownloadSheetTheme.ink),
           title: '倍速',
           overlay: _SpeedStrip(rate: session.rate, onSelect: rows.setRate),
         ),
         if (vertical)
           _ToggleRow(
-            icon: const PanelGlyph(PanelGlyphKind.autoplay, color: DownloadSheetTheme.ink),
+            icon: PanelGlyph(PanelGlyphKind.autoplay, color: DownloadSheetTheme.ink),
             title: '自动上滑',
             value: false,
             onChanged: (_) => _soon(),
           )
         else ...[
           _ToggleRow(
-            icon: const PanelGlyph(PanelGlyphKind.autoplay, color: DownloadSheetTheme.ink),
+            icon: PanelGlyph(PanelGlyphKind.autoplay, color: DownloadSheetTheme.ink),
             title: '自动连播',
             value: session.autoplayNext,
             onChanged: session.setAutoplayNext,
           ),
           _SheetRow(
-            icon: const PanelGlyph(PanelGlyphKind.loop, color: DownloadSheetTheme.ink),
+            icon: PanelGlyph(PanelGlyphKind.loop, color: DownloadSheetTheme.ink),
             title: '循环播放',
             trailing: _Cells(
               items: [for (final mode in LoopMode.values) (mode, mode.label)],
@@ -151,7 +151,7 @@ class _PortraitMoreSheetState extends State<PortraitMoreSheet> {
         ],
         _SheetRow(
           key: const ValueKey('more-timer'),
-          icon: const PanelGlyph(PanelGlyphKind.timer, color: DownloadSheetTheme.ink),
+          icon: PanelGlyph(PanelGlyphKind.timer, color: DownloadSheetTheme.ink),
           title: '定时关闭',
           onTap: () => _go(_Page.timer),
           trailing: ValueListenableBuilder(
@@ -164,14 +164,14 @@ class _PortraitMoreSheetState extends State<PortraitMoreSheet> {
         ),
         if (vertical)
           _SheetRow(
-            icon: const PanelGlyph(PanelGlyphKind.gesture, color: DownloadSheetTheme.ink),
+            icon: PanelGlyph(PanelGlyphKind.gesture, color: DownloadSheetTheme.ink),
             title: '单双击手势',
             onTap: _soon,
             trailing: const _Disclosure(text: '单击暂停'),
           ),
         _ToggleRow(
           key: const ValueKey('more-background-listen'),
-          icon: const PanelGlyph(PanelGlyphKind.listen, color: DownloadSheetTheme.ink),
+          icon: PanelGlyph(PanelGlyphKind.listen, color: DownloadSheetTheme.ink),
           title: '后台听视频',
           value: session.backgroundListen,
           onChanged: rows.setBackgroundListen,
@@ -179,7 +179,7 @@ class _PortraitMoreSheetState extends State<PortraitMoreSheet> {
         if (vertical)
           _SheetRow(
             key: const ValueKey('more-quality'),
-            icon: const PanelGlyph(PanelGlyphKind.quality, color: DownloadSheetTheme.ink),
+            icon: PanelGlyph(PanelGlyphKind.quality, color: DownloadSheetTheme.ink),
             title: '清晰度',
             onTap: () => _ui.panels.open(PlayerPanel.quality),
             trailing: _Disclosure(
@@ -191,7 +191,7 @@ class _PortraitMoreSheetState extends State<PortraitMoreSheet> {
           )
         else
           _ToggleRow(
-            icon: const PanelGlyph(PanelGlyphKind.subtitle, color: DownloadSheetTheme.ink),
+            icon: PanelGlyph(PanelGlyphKind.subtitle, color: DownloadSheetTheme.ink),
             title: '字幕',
             value: false,
             onChanged: (_) => _soon(),
@@ -199,7 +199,7 @@ class _PortraitMoreSheetState extends State<PortraitMoreSheet> {
         if (_ui.danmaku != null)
           _SheetRow(
             key: const ValueKey('more-danmaku-settings'),
-            icon: const Icon(
+            icon: Icon(
               CustomIcons.danmakuSettings,
               size: BiliMetrics.panelRowIcon,
               color: DownloadSheetTheme.ink,
@@ -209,14 +209,14 @@ class _PortraitMoreSheetState extends State<PortraitMoreSheet> {
             trailing: const _Disclosure(),
           ),
         _ToggleRow(
-          icon: const PanelGlyph(PanelGlyphKind.mirror, color: DownloadSheetTheme.ink),
+          icon: PanelGlyph(PanelGlyphKind.mirror, color: DownloadSheetTheme.ink),
           title: '镜像翻转',
           value: session.mirrored,
           onChanged: rows.setMirrored,
         ),
         _SheetRow(
           key: const ValueKey('more-fit'),
-          icon: const PanelGlyph(PanelGlyphKind.fit, color: DownloadSheetTheme.ink),
+          icon: PanelGlyph(PanelGlyphKind.fit, color: DownloadSheetTheme.ink),
           title: '画面尺寸',
           onTap: () => _go(_Page.fit),
           trailing: _Disclosure(text: session.fit.label),
@@ -225,13 +225,13 @@ class _PortraitMoreSheetState extends State<PortraitMoreSheet> {
       if (widget.devTools)
         [
           _ToggleRow(
-            icon: const Icon(Icons.bolt, size: BiliMetrics.panelRowIcon, color: DownloadSheetTheme.ink),
+            icon: Icon(Icons.bolt, size: BiliMetrics.panelRowIcon, color: DownloadSheetTheme.ink),
             title: 'BTR 加速',
             value: session.btr,
             onChanged: rows.setBtr,
           ),
           _ToggleRow(
-            icon: const Icon(Icons.bar_chart, size: BiliMetrics.panelRowIcon, color: DownloadSheetTheme.ink),
+            icon: Icon(Icons.bar_chart, size: BiliMetrics.panelRowIcon, color: DownloadSheetTheme.ink),
             title: '显示统计',
             value: session.showStats,
             onChanged: session.setShowStats,
@@ -378,7 +378,7 @@ class _Tile extends StatelessWidget {
   final VoidCallback? onTap;
   final double glyphWidth;
 
-  static const _label = TextStyle(fontSize: DownloadSheetTheme.tileLabelText, color: DownloadSheetTheme.grey);
+  static TextStyle get _label => TextStyle(fontSize: DownloadSheetTheme.tileLabelText, color: DownloadSheetTheme.grey);
 
   @override
   Widget build(BuildContext context) => SheetTap(
@@ -460,7 +460,7 @@ class _SheetRow extends StatelessWidget {
   final Widget? overlay;
   final VoidCallback? onTap;
 
-  static const _style = TextStyle(fontSize: DownloadSheetTheme.rowText, color: DownloadSheetTheme.ink);
+  static TextStyle get _style => TextStyle(fontSize: DownloadSheetTheme.rowText, color: DownloadSheetTheme.ink);
 
   @override
   Widget build(BuildContext context) {
@@ -585,7 +585,7 @@ class _Disclosure extends StatelessWidget {
         ),
         const SizedBox(width: BiliMetrics.panelChevronGap),
       ],
-      const PanelGlyph(PanelGlyphKind.chevron, color: BiliColors.secondaryText),
+      PanelGlyph(PanelGlyphKind.chevron, color: BiliColors.secondaryText),
       const SizedBox(width: BiliMetrics.panelChevronTrailing),
     ],
   );
@@ -772,7 +772,7 @@ class _SheetPage extends StatelessWidget {
   final List<Widget> rows;
   final List<Widget> below;
 
-  static const _title = TextStyle(fontSize: DownloadSheetTheme.pageTitleText, color: DownloadSheetTheme.ink);
+  static TextStyle get _title => TextStyle(fontSize: DownloadSheetTheme.pageTitleText, color: DownloadSheetTheme.ink);
 
   @override
   Widget build(BuildContext context) => SingleChildScrollView(
@@ -797,7 +797,7 @@ class _SheetPage extends StatelessWidget {
                   key: const ValueKey('more-page-back'),
                   label: '返回',
                   onTap: back,
-                  child: const Center(
+                  child: Center(
                     child: Icon(
                       Icons.arrow_back_ios_new,
                       size: DownloadSheetTheme.pageBackGlyph,

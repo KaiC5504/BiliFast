@@ -323,8 +323,8 @@ void main() {
       );
       final session = FakePlayerSession()
         ..episodesAreParts = false
-        ..episodes = [episode, Episode(bvid: 'BV2', cid: 2, title: 'P2 第二集', current: true)]
-        ..detail = VideoDetail(
+        ..episodes = [episode, const Episode(bvid: 'BV2', cid: 2, title: 'P2 第二集', current: true)]
+        ..detail = const VideoDetail(
           bvid: 'BV2',
           aid: 2,
           title: '',
@@ -332,13 +332,13 @@ void main() {
           pubdate: 0,
           duration: 66,
           desc: '',
-          descParts: const [],
+          descParts: [],
           copyright: 1,
           owner: VideoOwner.empty,
           stat: VideoStat.zero,
-          pages: const [],
-          season: const UgcSeason(id: 1, title: 'MAD 系列 2024', intro: 'Thanks 求订阅！谢谢大家 2024', sections: []),
-          staff: const [],
+          pages: [],
+          season: UgcSeason(id: 1, title: 'MAD 系列 2024', intro: 'Thanks 求订阅！谢谢大家 2024', sections: []),
+          staff: [],
           width: 1920,
           height: 1080,
           honor: null,

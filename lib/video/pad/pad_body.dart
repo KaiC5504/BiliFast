@@ -394,8 +394,8 @@ class PadDanmakuCapsule extends StatelessWidget {
       width: on ? PadBodyTheme.capsuleWidth : PadBodyTheme.capsuleToggleOff,
       height: PadBodyTheme.capsuleHeight,
       clipBehavior: Clip.antiAlias,
-      decoration: const ShapeDecoration(color: BiliColors.softGrey, shape: StadiumBorder()),
-      foregroundDecoration: const ShapeDecoration(
+      decoration: ShapeDecoration(color: BiliColors.softGrey, shape: const StadiumBorder()),
+      foregroundDecoration: ShapeDecoration(
         shape: StadiumBorder(
           side: BorderSide(color: BiliColors.divider, width: PadBodyTheme.capsuleBorder),
         ),
@@ -723,14 +723,14 @@ class _MetaLine extends StatelessWidget {
         child: Row(
           children: [
             const SizedBox(width: PadBodyTheme.metaLead),
-            const CustomPaint(
+            CustomPaint(
               size: icon,
               painter: CountPainter(CountGlyph.views, color: BiliColors.secondaryText),
             ),
             iconGap,
             Text(CountFormat.short(detail.stat.view), style: text, strutStyle: strut),
             group,
-            const CustomPaint(
+            CustomPaint(
               size: icon,
               painter: CountPainter(CountGlyph.danmaku, color: BiliColors.secondaryText),
             ),

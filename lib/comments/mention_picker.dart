@@ -101,9 +101,9 @@ class _MentionPickerState extends State<MentionPicker> {
       decoration: TextDecoration.none,
     ),
     child: DecoratedBox(
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         color: BiliColors.card,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(BiliMetrics.sheetRadius)),
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(BiliMetrics.sheetRadius)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -139,7 +139,7 @@ class _MentionPickerState extends State<MentionPicker> {
                   key: ValueKey('mention-searching'),
                   radius: MentionTheme.fieldSpinnerRadius,
                 )
-              : const Icon(Icons.search, size: MentionTheme.fieldIcon, color: BiliColors.secondaryText),
+              : Icon(Icons.search, size: MentionTheme.fieldIcon, color: BiliColors.secondaryText),
         ),
         const SizedBox(width: MentionTheme.fieldIconGap),
         Expanded(
@@ -190,8 +190,8 @@ class _MentionPickerState extends State<MentionPicker> {
                         child: Container(
                           width: MentionTheme.clearSize,
                           height: MentionTheme.clearSize,
-                          decoration: const BoxDecoration(color: MentionTheme.clearFill, shape: BoxShape.circle),
-                          child: const Icon(
+                          decoration: BoxDecoration(color: MentionTheme.clearFill, shape: BoxShape.circle),
+                          child: Icon(
                             Icons.close,
                             size: MentionTheme.clearGlyph,
                             color: MentionTheme.clearGlyphColor,
@@ -371,7 +371,7 @@ class _CandidateRowState extends State<_CandidateRow> {
       spans.add(
         TextSpan(
           text: name.substring(at, at + needle.length),
-          style: const TextStyle(color: MentionTheme.match),
+          style: TextStyle(color: MentionTheme.match),
         ),
       );
       from = at + needle.length;

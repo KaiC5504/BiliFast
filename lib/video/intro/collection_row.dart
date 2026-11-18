@@ -66,7 +66,7 @@ class CollectionRow extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(width: BiliMetrics.gutter),
-                    const PlayingBars(color: BiliColors.secondaryText),
+                    PlayingBars(color: BiliColors.secondaryText),
                     const SizedBox(width: IntroListTheme.collectionBarsGap),
                     Text(
                       place,
@@ -78,8 +78,8 @@ class CollectionRow extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(width: IntroListTheme.collectionChevronGap),
-                    const Chevron(
-                      size: Size(IntroListTheme.collectionChevronWidth, IntroListTheme.collectionChevronHeight),
+                    Chevron(
+                      size: const Size(IntroListTheme.collectionChevronWidth, IntroListTheme.collectionChevronHeight),
                       stroke: IntroListTheme.chevronStroke,
                       color: BiliColors.secondaryText,
                     ),

@@ -131,7 +131,7 @@ class _AnchorCapsule extends StatelessWidget {
                     child: Container(
                       key: const ValueKey('live-anchor-verified'),
                       padding: const EdgeInsets.all(LiveRoomTheme.verifyRing),
-                      decoration: const BoxDecoration(color: LiveRoomTheme.verifyRingInk, shape: BoxShape.circle),
+                      decoration: BoxDecoration(color: LiveRoomTheme.verifyRingInk, shape: BoxShape.circle),
                       child: CustomPaint(painter: VerifiedBoltPainter(badge)),
                     ),
                   ),

@@ -110,7 +110,7 @@ class _PanelFrame extends StatelessWidget {
   @override
   Widget build(BuildContext context) => DecoratedBox(
     decoration: BoxDecoration(
-      gradient: const LinearGradient(
+      gradient: LinearGradient(
         begin: Alignment.topCenter,
         end: Alignment.bottomCenter,
         colors: [LiveRankTheme.panelWashTop, LiveRankTheme.panelWashBottom],
@@ -200,7 +200,7 @@ class _TopCard extends StatelessWidget {
       height: LiveRankTheme.cardHeight,
       padding: const EdgeInsets.symmetric(horizontal: LiveRankTheme.cardFaceGap),
       decoration: BoxDecoration(
-        gradient: const LinearGradient(
+        gradient: LinearGradient(
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
           colors: [LiveRankTheme.cardTop, LiveRankTheme.cardBottom],
@@ -264,7 +264,7 @@ class _GuardInfo extends StatelessWidget {
             children: [
               Flexible(child: RankText(note, rankStyle(LiveRankTheme.infoText, LiveRankTheme.guardInfoInk))),
               const SizedBox(width: LiveRankTheme.helpGap),
-              const RankGlyph(RankArt.help, size: LiveRankTheme.helpSize, color: LiveRankTheme.guardHelpInk),
+              RankGlyph(RankArt.help, size: LiveRankTheme.helpSize, color: LiveRankTheme.guardHelpInk),
             ],
           ),
         ),
@@ -405,11 +405,11 @@ class _Badge extends StatelessWidget {
       Container(
         width: LiveRankTheme.badgeGlowWidth,
         height: LiveRankTheme.badgeGlowHeight,
-        decoration: const BoxDecoration(gradient: RadialGradient(colors: [LiveRankTheme.badgeGlow, Color(0x00000000)])),
+        decoration: BoxDecoration(gradient: RadialGradient(colors: [LiveRankTheme.badgeGlow, const Color(0x00000000)])),
       ),
       ShaderMask(
         blendMode: BlendMode.srcIn,
-        shaderCallback: (bounds) => const LinearGradient(
+        shaderCallback: (bounds) => LinearGradient(
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
           colors: [LiveRankTheme.badgeTop, LiveRankTheme.badgeBottom],
@@ -431,8 +431,8 @@ class _BoardButton extends StatelessWidget {
     key: const ValueKey('rank-board'),
     height: LiveRankTheme.boardHeight,
     padding: const EdgeInsets.only(left: LiveRankTheme.boardAnchorLeft, right: LiveRankTheme.boardPadRight),
-    decoration: const ShapeDecoration(
-      shape: StadiumBorder(),
+    decoration: ShapeDecoration(
+      shape: const StadiumBorder(),
       gradient: LinearGradient(colors: [LiveRankTheme.boardStart, LiveRankTheme.boardEnd]),
     ),
     child: Row(
