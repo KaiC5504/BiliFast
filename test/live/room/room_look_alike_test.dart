@@ -56,11 +56,15 @@ void main() {
     LiveChatDanmaku(LiveChatMessage(id: 'c', user: viewer(4, '演示仓库'), text: '又欠你演示没沟通了', time: roomNow)),
   ];
 
-  Future<TestRoomModel> show(WidgetTester tester, {List<LiveSuperChat> superChats = const []}) async {
+  Future<TestRoomModel> show(
+    WidgetTester tester, {
+    List<LiveSuperChat> superChats = const [],
+    bool dark = false,
+  }) async {
     final saved = BiliFonts.family;
     addTearDown(() => BiliFonts.family = saved);
     await tester.runAsync(loadSystemFontStandIns);
-    showAsPhone(tester);
+    showAsPhone(tester, dark: dark);
     BiliFonts.family = BiliFonts.system;
     final services = await roomServices();
     final model = TestRoomModel(
@@ -127,6 +131,21 @@ void main() {
     await show(tester);
     await save(tester, 'live-207');
     expect(find.byKey(const ValueKey('live-chat-room-card')), findsOneWidget);
+    await toastGone(tester);
+  });
+
+  testWidgets('248: 深色模式 keeps the room as it is but for the + capsule', (tester) async {
+    await show(tester, dark: true);
+    await save(tester, 'live-248');
+    Color? fill(Finder box) => (tester.widget<DecoratedBox>(box).decoration as BoxDecoration).color;
+    final plus = find.descendant(of: find.byKey(const ValueKey('live-bar-plus')), matching: find.byType(DecoratedBox));
+    expect(fill(plus.first), const Color(0xFFDC6D94));
+    final follow = find.descendant(of: find.byKey(const ValueKey('live-follow')), matching: find.byType(DecoratedBox));
+    expect(fill(follow.first), const Color(0xFFFF6699));
+    final row = tester.widget<Text>(find.byKey(const ValueKey('live-chat-danmaku-b')));
+    expect(row.textSpan!.style!.color, const Color(0xFFFFFFFF));
+    final page = find.descendant(of: find.byKey(const ValueKey('live-room-page')), matching: find.byType(ColoredBox));
+    expect(tester.widget<ColoredBox>(page.first).color, const Color(0xFF050A19));
     await toastGone(tester);
   });
 

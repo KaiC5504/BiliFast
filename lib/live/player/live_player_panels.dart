@@ -453,7 +453,7 @@ class _QualityRow extends StatelessWidget {
           color: LivePlayerTheme.qualityRowFill,
           borderRadius: BorderRadius.circular(LivePlayerTheme.qualityRowRadius),
         ),
-        child: _text(name, LivePlayerTheme.qualityRowText, color: current ? BiliColors.pink : BiliColors.panelText),
+        child: _text(name, LivePlayerTheme.qualityRowText, color: current ? LiveRoomTheme.pink : BiliColors.panelText),
       ),
     ),
   );

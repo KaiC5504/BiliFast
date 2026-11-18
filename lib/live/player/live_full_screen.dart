@@ -409,7 +409,7 @@ class _AnchorCapsule extends StatelessWidget {
                 height: LivePlayerTheme.followHeight,
                 alignment: Alignment.center,
                 decoration: BoxDecoration(
-                  color: BiliColors.pink,
+                  color: LiveRoomTheme.pink,
                   borderRadius: BorderRadius.circular(LivePlayerTheme.followHeight / 2),
                 ),
                 child: Transform.translate(

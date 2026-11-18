@@ -9217,17 +9217,20 @@ abstract final class LiveTabTheme {
 
 /// A room's header, chat, bottom bar, 醒目留言 and sheets in portrait (207, 208, 221, 224, 228, 229), measured in
 /// px / 3. Heights count from the safe area's top (62 on the Pro Max) unless they say otherwise.
+///
+/// The room is dark in both modes: 248 (深色模式) matches 207 to a level or two everywhere but the + capsule, so its
+/// colours stay (关注 too, still #FF6699) and only [plusFill] takes the palette's night value.
 abstract final class LiveRoomTheme {
   /// The official app draws each room's own picture behind the page; the room's answers carry none, so one dark tone
   /// stands in for 207's navy.
-  static Color get page => tone(0xFF050A19, 0xFF050A19); // night?
+  static const page = Color(0xFF050A19);
 
   /// Every translucent box on the page (the header's capsules, the chips, the chat's rows and cards): white at 8%.
   static const glass = Color(0x14FFFFFF);
-  static Color get ink => tone(0xFFFFFFFF, 0xFF17181A);
+  static const ink = Color(0xFFFFFFFF);
 
   /// The chat's names without a colour of their own.
-  static Color get nameBlue => tone(0xFFAEEBFF, 0xFFAEEBFF); // night?
+  static const nameBlue = Color(0xFFAEEBFF);
 
   /// ‹: its ink 8.67 wide and 14.67 tall from 16.33 on the capsule's middle, a 2 pt round stroke; the path is the ink
   /// less the stroke.
@@ -9265,14 +9268,14 @@ abstract final class LiveRoomTheme {
   /// 6 from the name's ink, less the glyph's own side.
   static const followGap = 5.5;
   static const followText = 12.0;
-  static Color get pink => tone(0xFFFF6699, 0xFFD44E7D);
+  static const pink = Color(0xFFFF6699);
 
   /// The verified disc on the face's lower right: 9.33 across in a 1 pt white ring.
   static const verifyDisc = 28 / 3;
   static const verifyRing = 1.0;
-  static Color get verifyPerson => tone(0xFFFFC62E, 0xFFFFC62E); // night?
-  static Color get verifyOrganisation => tone(0xFF3EA2F4, 0xFF3EA2F4); // night?
-  static Color get verifyRingInk => tone(0xFFFFFFFF, 0xFF17181A);
+  static const verifyPerson = Color(0xFFFFC62E);
+  static const verifyOrganisation = Color(0xFF3EA2F4);
+  static const verifyRingInk = Color(0xFFFFFFFF);
 
   /// The three top faces: 23.67 across in a 1 pt ring (gold, silver, bronze), 18.67 apart, the first's left 327.33
   /// from the screen's left, the leftmost on top; the count capsule 22.67 tall under them, from the last face's middle
@@ -9319,13 +9322,13 @@ abstract final class LiveRoomTheme {
   static const pillAmountGap = 4.0;
   static const pillAmountText = 13.0;
   static const pillPadRight = 10.0;
-  static Color get batteryInk => tone(0xFFFDE369, 0xFFFDE369); // night?
-  static Color get batteryBolt => tone(0xFFFFFFFF, 0xFF17181A);
+  static const batteryInk = Color(0xFFFDE369);
+  static const batteryBolt = Color(0xFFFFFFFF);
 
   /// What a pill's colour is darkened by where its time has run out.
   static const pillSpent = 0.47;
-  static Color get superChatFallback => tone(0xFF2A60B2, 0xFF2A60B2); // night?
-  static Color get superChatHeaderFallback => tone(0xFFEDF5FF, 0xFFEDF5FF); // night?
+  static const superChatFallback = Color(0xFF2A60B2);
+  static const superChatHeaderFallback = Color(0xFFEDF5FF);
 
   /// The chat: from the box (or the strip) down to 15 above the bottom bar, 12 to 330 across; a 40 pt fade at its top.
   static const chatLeft = 12.0;
@@ -9342,7 +9345,7 @@ abstract final class LiveRoomTheme {
   static const rowLine = 20.0;
   static const rowChipGap = 11 / 3;
   static const rowNameGap = 14 / 3;
-  static Color get tipInk => tone(0xFFF394AE, 0xFFF394AE); // night?
+  static const tipInk = Color(0xFFF394AE);
   static const emoteInline = 20.0;
   static const emoteBig = 56.0;
 
@@ -9358,7 +9361,7 @@ abstract final class LiveRoomTheme {
   static const roomTextSize = 12.0;
   static const roomTimeLine = 16.0;
   static const roomPadBottom = 5.0;
-  static Color get roomTimeInk => tone(0xFFCCCCCC, 0xFFCCCCCC); // night?
+  static const roomTimeInk = Color(0xFFCCCCCC);
 
   /// A 醒目留言 row (228): a 1 pt border, 6 pt corners, the header band 24 with the medal 8 in and the 电池 5.33 from
   /// the end, the message band 14 pt on a 25.67 band 10 in.
@@ -9369,7 +9372,7 @@ abstract final class LiveRoomTheme {
   static const scRowHeaderPad = 8.0;
   static const scRowPriceRight = 16 / 3;
   static const scRowBodyPad = 10.0;
-  static Color get scHeaderInk => tone(0xFF333333, 0xFF333333); // night?
+  static const scHeaderInk = Color(0xFF333333);
 
   /// The card over the chat (228): 8 in from both sides, 14 under the strip, its 1 pt border opaque; the header band
   /// 49.67 with the framed face's middle 25.83 in and 26.17 down (the face 27 across), the name 14 pt centred 15.67 down
@@ -9391,7 +9394,7 @@ abstract final class LiveRoomTheme {
   static const cardMoreRight = 34 / 3;
   static const cardMoreDot = 10 / 3;
   static const cardMoreStep = 17 / 3;
-  static Color get cardMoreInk => tone(0xFF757575, 0xFF757575); // night?
+  static const cardMoreInk = Color(0xFF757575);
   static const cardBodyPad = 32 / 3;
 
   /// The card's bands and the chat's 醒目留言 rows let 20% of what is under them through (228: the body's orange reads
@@ -9403,15 +9406,15 @@ abstract final class LiveRoomTheme {
 
   /// 229: rows 48 tall from the sheet's top (12 pt grey 管理本条醒目留言, 14 pt 举报) 20.67 in, an 8 pt band, then
   /// 取消 16 pt centred in 56 over the home indicator.
-  static Color get actionFill => tone(0xFF1F2022, 0xFF1F2022); // night?
-  static Color get actionBand => tone(0xFF0F1011, 0xFF0F1011); // night?
+  static const actionFill = Color(0xFF1F2022);
+  static const actionBand = Color(0xFF0F1011);
   static const actionRow = 48.0;
   static const actionBandHeight = 8.0;
   static const actionCancel = 56.0;
   static const actionLeft = 62 / 3;
   static const actionRadius = 12.0;
   static const actionManageText = 12.0;
-  static Color get actionManageInk => tone(0xFF999999, 0xFF999999); // night?
+  static const actionManageInk = Color(0xFF999999);
   static const actionText = 14.0;
   static const actionCancelText = 16.0;
 
@@ -9430,16 +9433,16 @@ abstract final class LiveRoomTheme {
   static const inputFill = Color(0x38FFFFFF);
   static const inputText = 14.0;
   static const inputPad = 32 / 3;
-  static Color get inputInk => tone(0xFFFFFFFF, 0xFF17181A);
+  static const inputInk = Color(0xFFFFFFFF);
   static const emoteFace = 24.0;
-  static Color get emoteFaceFill => tone(0xFFC4C5C8, 0xFFC4C5C8); // night?
-  static Color get emoteFaceInk => tone(0xFF393D43, 0xFF393D43); // night?
+  static const emoteFaceFill = Color(0xFFC4C5C8);
+  static const emoteFaceInk = Color(0xFF393D43);
   static const emoteFaceEnd = 7.0;
   static const giftLeft = 337.0;
   static const giftArt = 36.0;
   static const giftDot = 6.0;
   static const giftDotTop = 2.0;
-  static Color get giftDotInk => tone(0xFFFA5A57, 0xFFFA5A57); // night?
+  static const giftDotInk = Color(0xFFFA5A57);
   static const plusRight = 12.0;
   static const plusWidth = 48.0;
   static Color get plusFill => tone(0xFFE84B85, 0xFFDC6D94);
@@ -9452,7 +9455,7 @@ abstract final class LiveRoomTheme {
   /// 221: from 662 on the screen to the bottom; 分享 14 pt centred 20.17 down 12.67 in; the targets in 64 wide slots from
   /// 12, their 44 circles centred 63.67 down and their 12 pt names 102 down; a 1 pt #333 line 130 down; the settings'
   /// circles centred 172.67 down, names 210 down.
-  static Color get sheetFill => tone(0xFF110F1A, 0xFF110F1A); // night?
+  static const sheetFill = Color(0xFF110F1A);
   static const sheetTitleText = 14.0;
   static const sheetTitleCentre = 20.17;
   static const sheetTitleLeft = 12.67;
@@ -9463,15 +9466,15 @@ abstract final class LiveRoomTheme {
   static const sheetShareLabel = 102.0;
   static const sheetRuleTop = 130.0;
   static const sheetRule = 1.0;
-  static Color get sheetRuleInk => tone(0xFF333333, 0xFF333333); // night?
+  static const sheetRuleInk = Color(0xFF333333);
   static const sheetMoreCentre = 172.67;
   static const sheetMoreLabel = 210.0;
   static const sheetLabelText = 12.0;
   static const sheetLabelLine = 16.0;
-  static Color get sheetLabelInk => tone(0xFFE6E6E6, 0xFFE6E6E6); // night?
-  static Color get sheetMoreFill => tone(0xFF323232, 0xFF323232); // night?
+  static const sheetLabelInk = Color(0xFFE6E6E6);
+  static const sheetMoreFill = Color(0xFF323232);
   static const sheetHeight = 294.0;
-  static Color get sheetDotInk => tone(0xFFFF4D4F, 0xFFFF4D4F); // night?
+  static const sheetDotInk = Color(0xFFFF4D4F);
   static const sheetDot = 6.0;
 
   /// 助TA必火's flame is the APK's 48 px art drawn 28.67 across (its ink 20.67 × 24.67); 消费管理's and 色觉优化's
@@ -9493,10 +9496,10 @@ abstract final class LiveRoomTheme {
 
   /// On the chat's dark: 1-10, 11-30 and from 31 (208); on 高能榜's white sheet (230, 232) one pale blue.
   static const wealthFills = [Color(0xFF3F547B), Color(0xFF3A5387), Color(0xFF35508F)];
-  static Color get wealthLightFill => tone(0xFF97B2E3, 0xFF97B2E3); // night?
-  static Color get wealthVTop => tone(0xFFE2F0FF, 0xFFE2F0FF); // night?
-  static Color get wealthVBottom => tone(0xFF9DB8EC, 0xFF9DB8EC); // night?
-  static Color get wealthVShade => tone(0xFF7FA0E0, 0xFF7FA0E0); // night?
+  static const wealthLightFill = Color(0xFF97B2E3);
+  static const wealthVTop = Color(0xFFE2F0FF);
+  static const wealthVBottom = Color(0xFF9DB8EC);
+  static const wealthVShade = Color(0xFF7FA0E0);
 
   /// A medal chip: 15 tall, 9 pt bold words 4.33 / 3.67 from its ends, the level 2 after the name; the guard's anchor
   /// 17 across over its left end.
@@ -9505,8 +9508,8 @@ abstract final class LiveRoomTheme {
   static const medalPadLeft = 13 / 3;
   static const medalPadRight = 11 / 3;
   static const medalLevelGap = 2.0;
-  static Color get medalFill => tone(0xFF2E759E, 0xFF2E759E); // night?
-  static Color get medalUnlit => tone(0xFF8C8C8C, 0xFF8C8C8C); // night?
+  static const medalFill = Color(0xFF2E759E);
+  static const medalUnlit = Color(0xFF8C8C8C);
   static const medalGuard = 17.0;
 
   /// A guard frame's hole is 0.7 of the frame's width (the APK's 200 px frames, 140 px hole).
@@ -9736,7 +9739,7 @@ abstract final class LivePlayerTheme {
   static const switchKnobWidth = 24.0;
   static const switchKnobInset = 1.0;
   static const switchRight = 20.0;
-  static Color get switchOn => BiliColors.pink;
+  static const switchOn = LiveRoomTheme.pink;
 
   /// Portrait's 画质 sheet: no screenshot shows it, so it takes 221's sheet (#110F1A, 分享's title 13 in and
   /// 20 down) with 210's rows.
@@ -9780,20 +9783,20 @@ abstract final class LivePlayerTheme {
 /// out before the three glyphs (译 18 × 20, the face 20, A 18.67), each centred in a 48 pt cell ending at the edge,
 /// #C0C0C0 (the face pink while the panel shows). 醒目留言's pill sits 4 pt above the panel, 32 pt tall from 12 to 104.
 abstract final class LiveSendTheme {
-  static Color get panelFill => tone(0xFF12101A, 0xFF12101A); // night?
+  static const panelFill = Color(0xFF12101A);
   static const panelRadius = 12.0;
 
   static const fieldTop = 8.0;
   static const fieldHeight = 28.0;
   static const fieldSide = 12.0;
-  static Color get fieldFill => tone(0xFF292831, 0xFF292831); // night?
+  static const fieldFill = Color(0xFF292831);
   static const fieldPadding = 32 / 3;
   static const fieldText = 13.0;
-  static Color get fieldInk => tone(0xFFFFFFFF, 0xFF17181A);
-  static Color get placeholder => tone(0xFF999999, 0xFF999999); // night?
+  static const fieldInk = Color(0xFFFFFFFF);
+  static const placeholder = Color(0xFF999999);
 
   /// The caret in 223: pink, 2 × 15.33 pt.
-  static Color get cursor => BiliColors.pink;
+  static const cursor = LiveRoomTheme.pink;
   static const caretWidth = 2.0;
   static const caretHeight = 46 / 3;
 
@@ -9802,10 +9805,10 @@ abstract final class LiveSendTheme {
 
   static const sendWidth = 58.0;
   static const sendGap = 12.0;
-  static Color get sendFill => BiliColors.pink;
-  static Color get sendFillEmpty => tone(0x66FF6699, 0x66D44E7D);
+  static const sendFill = LiveRoomTheme.pink;
+  static const sendFillEmpty = Color(0x66FF6699);
   static const sendText = 14.0;
-  static Color get sendInk => tone(0xFFFFFFFF, 0xFF17181A);
+  static const sendInk = Color(0xFFFFFFFF);
 
   /// The band under the field over the keyboard (226), and its 40 pt over the emote panel (227).
   static const bandHeight = 48.0;
@@ -9819,8 +9822,8 @@ abstract final class LiveSendTheme {
   static const recentCount = 20;
 
   static const glyphCell = 48.0;
-  static Color get glyph => tone(0xFFC0C0C0, 0xFFC0C0C0); // night?
-  static Color get glyphOn => BiliColors.pink;
+  static const glyph = Color(0xFFC0C0C0);
+  static const glyphOn = LiveRoomTheme.pink;
   static const translateWidth = 18.0;
   static const translateHeight = 20.0;
   static const faceSize = 20.0;
@@ -9838,7 +9841,7 @@ abstract final class LiveSendTheme {
   static const pillGap = 4.0;
   static const pillLeft = 12.0;
   static const pillLeftLandscape = 44.0;
-  static Color get pillFill => tone(0xFF18191C, 0xFFE7E9EB);
+  static const pillFill = Color(0xFF18191C);
   static const pillLine = Color(0x33FFFFFF);
   static const pillLineWidth = 2 / 3;
   // Inside the line, which the decoration adds to the padding.
@@ -9848,13 +9851,13 @@ abstract final class LiveSendTheme {
   static const pillMarkHeight = 50 / 3;
   static const pillMarkBody = 41 / 3;
   static const pillMarkRadius = 3.5;
-  static Color get pillMarkTop => tone(0xFFBE5FFE, 0xFFBE5FFE); // night?
-  static Color get pillMarkBottom => tone(0xFF8B10FE, 0xFF8B10FE); // night?
+  static const pillMarkTop = Color(0xFFBE5FFE);
+  static const pillMarkBottom = Color(0xFF8B10FE);
   static const pillMarkText = 9.5;
-  static Color get pillMarkInk => tone(0xFFFFFFFF, 0xFF17181A);
+  static const pillMarkInk = Color(0xFFFFFFFF);
   static const pillTextGap = 16 / 3;
   static const pillText = 12.0;
-  static Color get pillInk => tone(0xFFE3E5E7, 0xFF2F3134);
+  static const pillInk = Color(0xFFE3E5E7);
 
   /// 223: the same panel across the top of the keyboard, the field from 106 pt in to 6 before three glyph cells
   /// (centred 696.67, 732, 768), 6 more to 发送, which ends 106 from the right edge; the emotes from 74 in, fading 66
@@ -9880,7 +9883,7 @@ abstract final class LiveSendTheme {
   static const headerHeight = 25.0;
   static const headerLeft = 16.0;
   static const headerText = 12.0;
-  static Color get headerInk => tone(0xFFC9CCD0, 0xFF46494D);
+  static const headerInk = Color(0xFFC9CCD0);
   static const gridSide = 12.0;
   static const gridCellWidth = 52.0;
   static const gridCellHeight = 50.0;
@@ -9891,17 +9894,17 @@ abstract final class LiveSendTheme {
   static const deleteRight = 10.0;
   static const deleteBottom = 20.0;
   static const deleteRadius = 4.0;
-  static Color get deleteFill => tone(0xFF29272F, 0xFF29272F); // night?
+  static const deleteFill = Color(0xFF29272F);
   static const deleteGlyphWidth = 61 / 3;
   static const deleteGlyphHeight = 44 / 3;
   static const deleteGlyphStroke = 1.0;
-  static Color get deleteInk => tone(0xFFFFFFFF, 0xFF17181A);
-  static Color get barFill => tone(0xFF29272F, 0xFF29272F); // night?
+  static const deleteInk = Color(0xFFFFFFFF);
+  static const barFill = Color(0xFF29272F);
   static const barCellWidth = 50.0;
   static const barCellHeight = 44.0;
   static const barIcon = 24.0;
   static const barBottom = 21.0;
-  static Color get empty => tone(0xFF999999, 0xFF999999); // night?
+  static const empty = Color(0xFF999999);
   static const emptyText = 13.0;
 }
 
@@ -9927,13 +9930,15 @@ abstract final class LiveRankTheme {
 
   /// 房间观众 on white, its label and underline #FB7299, 大航海's #7F7F7F; 大航海 on its purple, label and underline
   /// cream, 房间观众's a lilac grey. The purple runs from #302458 at the top to #1B162A near the bottom (231, 233).
+  ///
+  /// In 深色模式 房间观众 follows the app's dark surfaces (no screenshot shows it); 大航海's purple is its own and stays.
   static Color get audiencePage => BiliColors.card;
   static const audienceChosen = BiliColors.verticalPink;
-  static Color get audienceOther => tone(0xFF7F7F7F, 0xFF7F7F7F); // night?
-  static Color get guardChosen => tone(0xFFF5E2BA, 0xFFF5E2BA); // night?
-  static Color get guardOther => tone(0xFF918AAB, 0xFF918AAB); // night?
-  static Color get guardTop => tone(0xFF302458, 0xFF302458); // night?
-  static Color get guardBottom => tone(0xFF1B162A, 0xFF1B162A); // night?
+  static Color get audienceOther => tone(0xFF7F7F7F, 0xFF8B9097);
+  static const guardChosen = Color(0xFFF5E2BA);
+  static const guardOther = Color(0xFF918AAB);
+  static const guardTop = Color(0xFF302458);
+  static const guardBottom = Color(0xFF1B162A);
   static const guardBottomStop = 0.87;
 
   /// Rows, 65 tall, both tabs: 36 pt faces; names 14 pt medium, their middle 11.75 above the row's; under them, the
@@ -9978,7 +9983,7 @@ abstract final class LiveRankTheme {
   /// middle 11.33 below the row's), the 12 pt grey 贡献值 15 from the right.
   static const audienceRankLeft = 43 / 3;
   static const audienceRankText = 12.0;
-  static Color get audienceRankInk => tone(0xFF999999, 0xFF999999); // night?
+  static Color get audienceRankInk => tone(0xFF999999, 0xFF757A81);
   static const audienceFaceLeft = 52.0;
   static const audienceNameLeft = 322 / 3;
   static Color get audienceNameInk => BiliColors.text;
@@ -9992,7 +9997,7 @@ abstract final class LiveRankTheme {
   /// and 快来投喂吧～ in 10 pt grey (middles 9.83 above and 9.17 below the row's), and the 56 × 24 pink 去投喂 with 12 pt
   /// white words, 14.33 from the right.
   static const ownRule = 1.0;
-  static Color get ownRuleInk => BiliColors.pageGrey;
+  static Color get ownRuleInk => tone(0xFFF1F2F3, 0xFF2F3134);
   static const ownHeight = 56.0;
   static const ownText = 10.0;
   static Color get ownInk => BiliColors.secondaryText;
@@ -10011,45 +10016,45 @@ abstract final class LiveRankTheme {
   /// the chosen one lighter and semibold), 上周TOP1's 50 pt card 17.33 under them, the 12 pt line 10.33 under that.
   static const panelInset = 12.0;
   static const panelRadius = 8.0;
-  static Color get panelRim => tone(0x3DF5E2BA, 0x3DF5E2BA); // night?
+  static const panelRim = Color(0x3DF5E2BA);
   static const panelRimWidth = 1.0;
-  static Color get panelWashTop => tone(0x1A8F7BFF, 0x1A8F7BFF); // night?
-  static Color get panelWashBottom => tone(0x058F7BFF, 0x058F7BFF); // night?
+  static const panelWashTop = Color(0x1A8F7BFF);
+  static const panelWashBottom = Color(0x058F7BFF);
   static const guardContentInset = 26.0;
   static const segmentsTop = 47 / 3;
   static const segmentHeight = 25.0;
   static const segmentGap = 6.0;
   static const segmentRadius = 8.0;
   static const segmentText = 12.0;
-  static Color get segmentChosenFill => tone(0xFF5B5487, 0xFF5B5487); // night?
-  static Color get segmentChosenInk => tone(0xFFDCCAFF, 0xFFDCCAFF); // night?
+  static const segmentChosenFill = Color(0xFF5B5487);
+  static const segmentChosenInk = Color(0xFFDCCAFF);
   static const segmentChosenWeight = FontWeight.w600;
-  static Color get segmentFill => tone(0xFF463D6D, 0xFF463D6D); // night?
-  static Color get segmentInk => tone(0xFF9B8DC5, 0xFF9B8DC5); // night?
+  static const segmentFill = Color(0xFF463D6D);
+  static const segmentInk = Color(0xFF9B8DC5);
   static const cardGap = 52 / 3;
   static const cardHeight = 50.0;
   static const cardRadius = 8.0;
-  static Color get cardTop => tone(0xFF42376C, 0xFF42376C); // night?
-  static Color get cardBottom => tone(0xFF362B5B, 0xFF362B5B); // night?
+  static const cardTop = Color(0xFF42376C);
+  static const cardBottom = Color(0xFF362B5B);
   static const cardFace = 24.0;
   static const cardFaceGap = 20.0;
   static const cardTitleText = 13.0;
   static const cardTitleWeight = FontWeight.w600;
-  static Color get cardTitleInk => tone(0xFFE5D9FF, 0xFFE5D9FF); // night?
+  static const cardTitleInk = Color(0xFFE5D9FF);
   static const cardNameText = 14.0;
-  static Color get cardNameInk => tone(0xFFC9CCD0, 0xFF46494D);
+  static const cardNameInk = Color(0xFFC9CCD0);
   static const guardInfoGap = 31 / 3;
-  static Color get guardInfoInk => tone(0xFFC9CCD0, 0xFF46494D);
-  static Color get guardHelpInk => BiliColors.secondaryText;
+  static const guardInfoInk = Color(0xFFC9CCD0);
+  static const guardHelpInk = Color(0xFF9499A0);
 
   /// 大航海's row: the numeral's column centred 32.5 in (14 pt grey past 3), the framed face's middle 81.83 in, name
   /// (white) and medal 122 in, the medal's middle 8.17 below the row's.
   static const guardRankLeft = 20.5;
   static const guardRankText = 14.0;
-  static Color get guardRankInk => BiliColors.secondaryText;
+  static const guardRankInk = Color(0xFF9499A0);
   static const guardFaceLeft = 63.83;
   static const guardNameLeft = 122.0;
-  static Color get guardNameInk => tone(0xFFFFFFFF, 0xFF17181A);
+  static const guardNameInk = Color(0xFFFFFFFF);
   static const guardChipsCentre = 49 / 6;
 
   /// The bar over the panel's foot, 80 tall whatever the safe area, #2A243E under a 1 pt #605D67 rim with 12 pt
@@ -10059,29 +10064,29 @@ abstract final class LiveRankTheme {
   static const barHeight = 80.0;
   static const barRow = 50.0;
   static const barRadius = 12.0;
-  static Color get barFill => tone(0xFF2A243E, 0xFF2A243E); // night?
-  static Color get barRim => tone(0xFF605D67, 0xFF605D67); // night?
+  static const barFill = Color(0xFF2A243E);
+  static const barRim = Color(0xFF605D67);
   static const barRimWidth = 1.0;
   static const badgeLeft = 17.0;
   static const badgeText = 15.0;
   static const badgeWeight = FontWeight.w800;
-  static Color get badgeTop => tone(0xFFFDF0D7, 0xFFFDF0D7); // night?
-  static Color get badgeBottom => tone(0xFFF1DCAA, 0xFFF1DCAA); // night?
-  static Color get badgeGlow => tone(0x804B4178, 0x804B4178); // night?
+  static const badgeTop = Color(0xFFFDF0D7);
+  static const badgeBottom = Color(0xFFF1DCAA);
+  static const badgeGlow = Color(0x804B4178);
   static const badgeGlowWidth = 48.0;
   static const badgeGlowHeight = 36.0;
   static const promptLeft = 221 / 3;
   static const promptLeftBare = 17.0;
   static const promptText = 12.0;
-  static Color get promptInk => tone(0xFFF5E2BA, 0xFFF5E2BA); // night?
+  static const promptInk = Color(0xFFF5E2BA);
   static const boardHeight = 30.0;
-  static Color get boardStart => tone(0xFFFEF8E9, 0xFFFEF8E9); // night?
-  static Color get boardEnd => tone(0xFFF5E2BB, 0xFFF5E2BB); // night?
+  static const boardStart = Color(0xFFFEF8E9);
+  static const boardEnd = Color(0xFFF5E2BB);
   static const boardAnchor = 22.0;
   static const boardAnchorLeft = 8.0;
   static const boardAnchorGap = 2.0;
   static const boardText = 14.0;
-  static Color get boardInk => tone(0xFF604041, 0xFF604041); // night?
+  static const boardInk = Color(0xFF604041);
   static const boardPadRight = 9.0;
 
   /// A failed list's words and 重试, the next page's spinner and the empty list, as 热门's.

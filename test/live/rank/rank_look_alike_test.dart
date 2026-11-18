@@ -42,11 +42,11 @@ void main() {
     topUser: viewer(99, name: '演示观众演示观众', guard: 1),
   );
 
-  Future<void> show(WidgetTester tester, {bool landscape = false}) async {
+  Future<void> show(WidgetTester tester, {bool landscape = false, bool dark = false}) async {
     final saved = BiliFonts.family;
     addTearDown(() => BiliFonts.family = saved);
     await tester.runAsync(loadSystemFontStandIns);
-    showAsPhone(tester, landscape: landscape);
+    showAsPhone(tester, landscape: landscape, dark: dark);
     BiliFonts.family = BiliFonts.system;
     final services = await rankServices(loggedIn: false);
     final fake = PagedLiveApi(rankPage: rank, guardPages: {LiveGuardTab.weekly: weekly});
@@ -100,6 +100,20 @@ void main() {
     expect((card.left, card.right), (26, 414));
     expect(tester.getRect(byKey('rank-guard-weekly-50')).center.dy, moreOrLessEquals(1537 / 3, epsilon: 0.5));
     await save(tester, '231-live-room-rank-guard');
+  });
+
+  testWidgets('深色模式: 房间观众 on the dark surface, 大航海 on its own purple', (tester) async {
+    await show(tester, dark: true);
+    Color? ink(String text) => tester.widget<Text>(find.text(text).first).style!.color;
+    final page = find.descendant(of: byKey('rank-sheet'), matching: find.byType(ColoredBox));
+    expect(tester.widget<ColoredBox>(page.first).color, const Color(0xFF17181A));
+    expect(ink('演示观众1_o'), const Color(0xFFE7E9EB));
+    expect(ink('在线榜'), const Color(0xFFD44E7D));
+    await save(tester, 'dark-live-room-rank-audience');
+    await tester.tap(byKey('rank-tab-guard'));
+    await settle(tester);
+    expect(ink('演示观众6_'), const Color(0xFFFFFFFF));
+    await save(tester, 'dark-live-room-rank-guard');
   });
 
   testWidgets('232 and 233: the panel at the right of full screen', (tester) async {

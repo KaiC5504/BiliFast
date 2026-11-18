@@ -155,10 +155,10 @@ class LivePhaseLayer extends StatelessWidget {
                     height: LivePlayerTheme.retryHeight,
                     alignment: Alignment.center,
                     decoration: BoxDecoration(
-                      border: Border.all(color: BiliColors.pink),
+                      border: Border.all(color: LiveRoomTheme.pink),
                       borderRadius: BorderRadius.circular(LivePlayerTheme.retryHeight / 2),
                     ),
-                    child: _text('重试', LivePlayerTheme.retryText, color: BiliColors.pink),
+                    child: _text('重试', LivePlayerTheme.retryText, color: LiveRoomTheme.pink),
                   ),
                 ),
             ],
