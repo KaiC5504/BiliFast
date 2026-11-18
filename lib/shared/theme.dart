@@ -6005,6 +6005,22 @@ abstract final class DynamicCardTheme {
   static const detailPictureGap = 6.0;
   static Color get pictureFill => BiliColors.pageGrey;
 
+  /// A long picture: taller than this many times its width (PiliPlus's line; the official one isn't known). Alone, in
+  /// a post or a repost, it fills the lone tall frame from its top (29: 240 wide from the gutter, 475:357.5).
+  static const longPicture = 2.6;
+
+  /// 长图 on a long picture's bottom right (29): 12 pt white on half black, 4 in at the sides, as tall as its line,
+  /// corners of 2; 2 from the frame's right. Its bottom is under the bar on 29: 5.67 is where it sits if the frame is
+  /// the lone tall one.
+  static const longLabelText = 12.0;
+  static const longLabelHeight = 50 / 3;
+  static const longLabelPadding = 4.0;
+  static const longLabelRadius = 2.0;
+  static const longLabelRight = 2.0;
+  static const longLabelBottom = 17 / 3;
+  static const longLabelInk = Color(0xFFFFFFFF);
+  static const longLabelFill = Color(0x80000000);
+
   /// The video box (128, 139): 16:9 from 12 to 13 short of the right (415 pt on the phone), corners of 4 pt. On its
   /// bottom left the duration in an 18 pt pill of half black 8 in and 6 up, then the plays and danmaku, 12 pt white
   /// centred on the pill; 动态视频 in a #FB7299 pill 8 from the top right; the APK's `ic_upper_tv_play` 42 pt wide,

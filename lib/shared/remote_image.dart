@@ -34,6 +34,9 @@ const _pictureMirrors = ['https://i0.hdslb.com/', 'https://i2.hdslb.com/'];
 String sizedImageUrl(String url, {required int width, required int height}) =>
     suffixedImageUrl(url, '@${width}w_${height}h_1c.webp');
 
+/// The whole picture scaled by the CDN to [width] px wide (`@…w.webp`), its height following its shape.
+String widthImageUrl(String url, {required int width}) => suffixedImageUrl(url, '@${width}w.webp');
+
 /// A video cover scaled and cropped by the CDN to [width]×[height] px as a quality 90 JPEG (`@…w_…h_1c_90q.jpg`), for
 /// a cover whose preset can't be read here ([CoverFormat]) or that asks [CoverPreset.exact]. As sharp as the original
 /// scaled, but made for this app alone: ~300 ms to a first byte where a preset takes ~150-175.
@@ -66,6 +69,7 @@ class RemoteImage extends StatelessWidget {
     this.cdnSuffix,
     this.cover = false,
     this.preset,
+    this.alignment = Alignment.center,
   });
 
   /// An avatar: Bilibili's default face while it loads, if it fails and when there is none.
@@ -77,7 +81,8 @@ class RemoteImage extends StatelessWidget {
       overlay = null,
       cdnSuffix = null,
       cover = false,
-      preset = null;
+      preset = null,
+      alignment = Alignment.center;
 
   final String? url;
   final BoxFit fit;
@@ -107,6 +112,10 @@ class RemoteImage extends StatelessWidget {
 
   /// False shows the picture the frame it arrives, as 推荐's covers do in the official app (14).
   final bool fadeIn;
+
+  /// Where the picture sits in its box. Off the centre (a long picture shown from its top) it is asked whole by the
+  /// box's width ([widthImageUrl]): the CDN's own crop keeps the centre. A [cover] or a [cdnSuffix] ignores it.
+  final Alignment alignment;
 
   /// Drawn over the picture once it is in, never over [placeholder] or [fallback]: a cover's shade.
   final Widget? overlay;
@@ -148,9 +157,18 @@ class RemoteImage extends StatelessWidget {
     String? cdnSuffix,
     bool cover = false,
     CoverPreset? preset,
+    Alignment alignment = Alignment.center,
   }) async {
     if (url == null || url.isEmpty) return false;
-    final provider = _provider(context, url, size, cdnSuffix: cdnSuffix, cover: cover, preset: preset);
+    final provider = _provider(
+      context,
+      url,
+      size,
+      cdnSuffix: cdnSuffix,
+      cover: cover,
+      preset: preset,
+      alignment: alignment,
+    );
     var ok = true;
     // Without an onError, precacheImage hands the failure to FlutterError, and CrashLog would log the signed address.
     await precacheImage(
@@ -172,6 +190,7 @@ class RemoteImage extends StatelessWidget {
     String? cdnSuffix,
     bool cover = false,
     CoverPreset? preset,
+    Alignment alignment = Alignment.center,
   }) {
     final suffix = cover ? null : cdnSuffix;
     if (suffix != null) {
@@ -198,6 +217,13 @@ class RemoteImage extends StatelessWidget {
       );
     }
     final width = _bucket(pixels.width);
+    if (alignment != Alignment.center) {
+      return StoredNetworkImage(
+        widthImageUrl(source, width: width),
+        headers: BiliClient.mediaHeaders,
+        still: !animates(source),
+      );
+    }
     final height = _bucket(pixels.height);
     return StoredNetworkImage(
       sizedImageUrl(source, width: width, height: height),
@@ -207,8 +233,17 @@ class RemoteImage extends StatelessWidget {
   }
 
   Widget _image(BuildContext context, String source, Size? logical) => _Picture(
-    image: _provider(context, source, logical, cdnSuffix: cdnSuffix, cover: cover, preset: preset),
+    image: _provider(
+      context,
+      source,
+      logical,
+      cdnSuffix: cdnSuffix,
+      cover: cover,
+      preset: preset,
+      alignment: alignment,
+    ),
     fit: fit,
+    alignment: cover || cdnSuffix != null ? Alignment.center : alignment,
     fallback: fallback,
     fadeIn: fadeIn,
     overlay: overlay,
@@ -421,6 +456,7 @@ class _Picture extends StatefulWidget {
   const _Picture({
     required this.image,
     required this.fit,
+    required this.alignment,
     required this.fallback,
     required this.fadeIn,
     required this.overlay,
@@ -428,6 +464,7 @@ class _Picture extends StatefulWidget {
 
   final StoredNetworkImage image;
   final BoxFit fit;
+  final Alignment alignment;
   final Widget? fallback;
   final bool fadeIn;
   final Widget? overlay;
@@ -448,6 +485,7 @@ class _PictureState extends State<_Picture> {
     return Image(
       image: image,
       fit: widget.fit,
+      alignment: widget.alignment,
       width: double.infinity,
       height: double.infinity,
       gaplessPlayback: true,

@@ -449,6 +449,34 @@ void main() {
     expect(suffixedImageUrl(sized, suffix), sized);
   });
 
+  testWidgets('a picture aligned off the centre is asked whole by its width and drawn there; the centre keeps the crop', (
+    tester,
+  ) async {
+    const long = 'https://i1.hdslb.com/bfs/new_dyn/long.jpg';
+    await tester.pumpWidget(
+      const MediaQuery(
+        data: MediaQueryData(devicePixelRatio: 3),
+        child: Directionality(
+          textDirection: TextDirection.ltr,
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              SizedBox(width: 240, height: 319, child: RemoteImage(long, alignment: Alignment.topCenter)),
+              SizedBox(width: 240, height: 319, child: RemoteImage(long)),
+            ],
+          ),
+        ),
+      ),
+    );
+    final images = tester.widgetList<Image>(find.byType(Image)).toList();
+    expect([for (final image in images) (image.image as StoredNetworkImage).url], [
+      widthImageUrl(long, width: 720),
+      sizedImageUrl(long, width: 720, height: 960),
+    ]);
+    expect(widthImageUrl(long, width: 720), '$long@720w.webp');
+    expect([for (final image in images) image.alignment], [Alignment.topCenter, Alignment.center]);
+  });
+
   test("i0's and i2's pictures are asked from i1, so one connection carries them all; other hosts stay", () {
     expect(PictureSession.host, 'i1.hdslb.com');
     for (final (given, asked) in [
