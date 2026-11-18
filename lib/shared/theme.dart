@@ -5823,9 +5823,9 @@ abstract final class DynamicCardTheme {
   static const faceTop = 12.0;
   static const badge = 12.0;
   static const badgeRing = 2 / 3;
-  static Color get badgePerson => tone(0xFFFFCC00, 0xFFCCA000);
-  static Color get badgeOrganisation => tone(0xFF40C5F1, 0xFF006996);
-  static Color get badgeBolt => tone(0xFFFFFFFF, 0xFF17181A);
+  static Color get badgePerson => tone(0xFFFFCC00, 0xFFFFCC00);
+  static Color get badgeOrganisation => tone(0xFF40C5F1, 0xFF40C5F1);
+  static const badgeBolt = Color(0xFFFFFFFF);
 
   /// The name (15 pt, pink for 大会员) and under it `pubTime · pubAction` (12 pt grey), 60 in, their Chinese ink
   /// centred 23.5 and 42.67 down. The dot is 2 pt, its ink 7 after the time's ink and 6.67 before the action's: 6.5
@@ -5875,7 +5875,7 @@ abstract final class DynamicCardTheme {
   static const decorationGlyphWeight = 1.15;
   static const decorationGlyphGap = 4 / 3;
   static const decorationOneAdvance = 13 / 3;
-  static Color get decorationNumberInk => tone(0xFF83BF54, 0xFF83BF54); // night?
+  static const decorationNumberInk = Color(0xFF83BF54);
 
   /// ⋮: the official icon font's `more-vertical-fill`, 3.33 × 16.67 pt, grey, centred 23.83 from the card's right and
   /// 38.17 down; its tap target 44 square.
@@ -5891,7 +5891,7 @@ abstract final class DynamicCardTheme {
   static const text = 17.0;
   static const textLine = 24.0;
   static const opusTextLine = 80.33 / 3;
-  static Color get textInk => BiliColors.text;
+  static Color get textInk => tone(0xFF18191C, 0xFFD0D3D7);
   static Color get linkInk => BiliColors.link;
   static const maxLines = 4;
 
@@ -5960,8 +5960,8 @@ abstract final class DynamicCardTheme {
   static const badgeText = 10.0;
   static const badgePad = 4.0;
   static const badgeRadius = 8 / 3;
-  static Color get badgeFill => tone(0xFFFB7299, 0xFFFB7299); // night?
-  static Color get badgeInk => tone(0xFFFFFFFF, 0xFF17181A);
+  static const badgeFill = BiliColors.verticalPink;
+  static const badgeInk = BiliColors.onPink;
   static const tvWidth = 42.0;
   static const tvRight = 11.83;
   static const tvBottom = 7.67;
@@ -6056,7 +6056,7 @@ abstract final class DynamicCardTheme {
   static const goodsButtonRadius = 5.0;
   static const goodsButtonText = 13.0;
   static Color get goodsButtonFill => BiliColors.pink;
-  static Color get goodsButtonInk => tone(0xFFFFFFFF, 0xFF17181A);
+  static const goodsButtonInk = BiliColors.onPink;
 
   /// The footer: 48 tall, three equal columns between the gutters, each its icon and count centred 0.67 pt right of
   /// the column's middle; the APK's icons drawn 16.67, 17.33 and 18 pt wide (135), #61666D, centred 23, 24 and 23
@@ -6080,7 +6080,7 @@ abstract final class DynamicCardTheme {
   /// #E3E5E7) from 20 in under each but the last; the icon font's icons in pink centred about 31 in, the words 14 pt
   /// from 58; a 5 pt #F1F2F3 gap, then 取消 (15 pt) in its own 50 tall row over the home indicator's inset.
   static const sheetDim = Color(0x80000000);
-  static Color get sheetFill => BiliColors.softGrey;
+  static Color get sheetFill => tone(0xFFF6F7F8, 0xFF1E2022);
   static const sheetRow = 50.0;
   static const sheetHairline = 1 / 3;
   static const sheetHairlineLeft = 20.0;
@@ -6130,13 +6130,17 @@ abstract final class DynamicFeedTheme {
   static const writeOpacity = 0.88;
   static const writeTarget = 44.0;
 
+  /// The pen without a 装扮; dark (243) draws it grey, not in the title's white.
+  static Color get writeInk =>
+      BiliTheme.dark ? const Color(0xFFA2A7AE) : titleInk.withValues(alpha: writeOpacity);
+
   /// The white top under the header, 186 pt to the first grey band. 全部 / 视频: two #F6F7F8 halves 26 pt tall, 8 pt
   /// under the header, 12 pt in and 8 apart, 4 pt corners; the chosen one's word pink.
   static const top = 186.0;
   static const switchTop = 8.0;
   static const switchHeight = 26.0;
   static const switchGap = 8.0;
-  static Color get switchFill => BiliColors.softGrey;
+  static Color get switchFill => tone(0xFFF6F7F8, 0xFF1E2022);
   static const switchRadius = 4.0;
   static const switchText = 12.0;
   static Color get switchOn => BiliColors.pink;
@@ -6242,7 +6246,7 @@ abstract final class DynamicFeedTheme {
   /// the sheet from 127 pt under it with 8 pt corners, the APK's `dy_ic_indicator_triangle` drawn 15.67 × 8 pt with
   /// its tip under the chosen face; the sheet's head 44 pt with `<name>的动态` 14 pt medium 12 pt in, a 13.33 pt ✕ in
   /// #626262 centred 23 pt in from the right, and a 1 px #E3E5E7 rule.
-  static Color get sheetFrost => tone(0xF2F2F2F2, 0xF2F2F2F2); // night?
+  static Color get sheetFrost => tone(0xF2F2F2F2, 0xF20A0B0C);
   static const sheetBlur = 20.0;
   static const sheetFacesTop = 16.33;
   static const sheetTop = 127.0;
@@ -6256,7 +6260,7 @@ abstract final class DynamicFeedTheme {
   static Color get sheetTitleInk => BiliColors.text;
   static const closeSize = 40 / 3;
   static const closeStroke = 1.4;
-  static Color get closeInk => tone(0xFF626262, 0xFF626262); // night?
+  static Color get closeInk => tone(0xFF626262, 0xFFA2A7AE);
   static const closeCentreRight = 23.0;
   static const closeTarget = 44.0;
   static const sheetRule = 1 / 3;
@@ -6315,9 +6319,9 @@ abstract final class DynamicPostTheme {
   static const faceGap = 10.0;
   static const badge = 38 / 3;
   static const badgeRing = 1.0;
-  static Color get badgeOrganisation => tone(0xFF40C5F1, 0xFF006996);
-  static Color get badgePersonal => tone(0xFFFFCC00, 0xFFCCA000);
-  static Color get badgeBolt => tone(0xFFFFFFFF, 0xFF17181A);
+  static Color get badgeOrganisation => tone(0xFF40C5F1, 0xFF40C5F1);
+  static Color get badgePersonal => tone(0xFFFFCC00, 0xFFFFCC00);
+  static const badgeBolt = Color(0xFFFFFFFF);
   static const nameText = 15.0;
   static const nameWeight = FontWeight.w600;
   static const nameLine = 20.0;
@@ -8324,6 +8328,9 @@ abstract final class MessageTabTheme {
   static const moreCentreRight = 24.0;
   static const buttonTarget = 40.0;
 
+  /// Without a 装扮 the broom and ⋮ take the title's ink; dark (244) draws them grey, not in the title's white.
+  static Color get buttonInk => tone(0xFF18191C, 0xFFA2A7AE);
+
   /// The three entries (196): 48 pt #F7F9F9 squares with 12 corners, their tops 20 under the header, centred 127.33
   /// apart about the screen's middle, each glyph in its colour centred in its square (the thumb 2/3 higher); the 13 pt
   /// labels' ink centred 13.83 under the squares, their line box a third of a point higher, as the sessions' lines.
@@ -8331,7 +8338,7 @@ abstract final class MessageTabTheme {
   static const entryTop = 20.0;
   static const entrySquare = 48.0;
   static const entryRadius = 12.0;
-  static Color get entryFill => tone(0xFFF6F7F8, 0xFF101011);
+  static Color get entryFill => tone(0xFFF6F7F8, 0xFF1C1F20);
   static const entryPitch = 382 / 3;
   static const entryLabelText = 13.0;
   static const entryLabelLine = 18.0;
@@ -8341,7 +8348,7 @@ abstract final class MessageTabTheme {
 
   /// 回复与@'s bubble and 收到喜欢's thumb are the APK's icon-font glyphs, cut at 3× to their ink widths; 新增粉丝's bust
   /// has no glyph there and is drawn, 21 × 24.67.
-  static Color get replyInk => tone(0xFF45D9A7, 0xFF45D9A7); // night?
+  static Color get replyInk => tone(0xFF45D9A7, 0xFF39A080);
   static Color get likeInk => tone(0xFFFF6699, 0xFFD44E7D);
   static const likeRise = 2 / 3;
   static const fansWidth = 21.0;
@@ -8378,22 +8385,23 @@ abstract final class MessageTabTheme {
   static Color get hairlineInk => BiliColors.divider;
 
   /// A face's badge (196): a 12 pt disc in a 1 pt white ring, the disc's edges on the face's right and bottom: the
-  /// verify bolt (yellow a person, #40C5F1 an organisation), else 大会员's pink 大.
+  /// verify bolt (yellow a person, #40C5F1 an organisation), else 大会员's pink 大. Dark (244) keeps the discs and
+  /// their white glyphs as they are; only the ring turns to the page.
   static const badge = 12.0;
   static const badgeRing = 1.0;
   static Color get badgeRim => tone(0xFFFFFFFF, 0xFF17181A);
-  static Color get badgePerson => IntroTheme.badgePerson;
-  static Color get badgeOrganisation => tone(0xFF40C5F1, 0xFF006996);
-  static Color get vipFill => BiliColors.pink;
+  static Color get badgePerson => tone(0xFFFFCC00, 0xFFFFCC00);
+  static Color get badgeOrganisation => tone(0xFF40C5F1, 0xFF40C5F1);
+  static Color get vipFill => tone(0xFFFF6699, 0xFFFF6699);
   static const vipText = 8.0;
   static const vipWeight = FontWeight.w700;
-  static Color get vipInk => tone(0xFFFFFFFF, 0xFF17181A);
+  static const vipInk = BiliColors.onPink;
 
   /// A notice box's face (196): the pink disc with its white glyph. 服务通知's three squares and diamond (18 pt across)
   /// and 社区中心's bubbles (21.5 × 20.5) are drawn, traced on 196; 系统通知 and 创作助手, in no screenshot, are the
   /// APK's own faces as they are (`ic_im_system_notice`, `ic_im_up_assistant`, white on blue discs).
-  static Color get boxFill => BiliColors.pink;
-  static Color get boxGlyph => tone(0xFFFFFFFF, 0xFF17181A);
+  static Color get boxFill => tone(0xFFFF6699, 0xFFFF6699);
+  static const boxGlyph = BiliColors.onPink;
 
   /// The page's states (no screenshot): 关注's words and buttons, the empty picture of 我的好友 over them; the TV and
   /// the messages 96 under the entries.
@@ -8415,7 +8423,7 @@ abstract final class MessageTabTheme {
   static const countText = 10.0;
   static const countWeight = FontWeight.w400;
   static Color get countFill => tone(0xFFE23D3D, 0xFFD9615F);
-  static Color get countInk => tone(0xFFFFFFFF, 0xFF17181A);
+  static const countInk = Color(0xFFFFFFFF);
   static Color get countRim => tone(0xFFFFFFFF, 0xFF17181A);
   static const countRight = 44 / 3;
   static const countDressedTop = 2.5 / 3;
@@ -8454,7 +8462,7 @@ abstract final class MessageTabTheme {
   /// in at 19 down with square corners, eight 52 rows split by 0.5 #E3E5E7 rules from the words' left; the glyphs
   /// (#18191C, the APK's icon font where it has them, else drawn) centred 26 into the card, the 18 pt words and the
   /// rules from 60.33, the words' ink 0.92 under the row's middle; 24 under the card over the home indicator.
-  static Color get sheetFill => BiliColors.softGrey;
+  static Color get sheetFill => tone(0xFFF6F7F8, 0xFF202123);
   static const sheetRadius = 12.0;
   static const sheetDim = Color(0x52000000);
   static const sheetIn = Duration(milliseconds: 280);
@@ -8462,10 +8470,10 @@ abstract final class MessageTabTheme {
   static const grabberTop = 8.0;
   static const grabberWidth = 30.0;
   static const grabberHeight = 3.0;
-  static Color get grabberInk => tone(0xFFC5C6C6, 0xFFC5C6C6); // night?
+  static Color get grabberInk => tone(0xFFC5C6C6, 0xFF4D4D4F);
   static const cardTop = 19.0;
   static const cardInset = 16.0;
-  static Color get card => BiliColors.card;
+  static Color get card => tone(0xFFFFFFFF, 0xFF242628);
   static const cardBottom = 24.0;
   static const sheetRow = 52.0;
   static const sheetRule = 0.5;
@@ -8506,7 +8514,7 @@ abstract final class MessageFeedTheme {
   static const plainBar = 44.0;
   static const plainRuleTop = 130 / 3;
   static const plainRule = 1 / 3;
-  static Color get plainRuleInk => tone(0xFFE7E7E7, 0xFFE7E7E7); // night?
+  static Color get plainRuleInk => tone(0xFFE7E7E7, 0xFF2F3134);
   static const plainTitleText = 18.0;
   static const plainTitleLine = 25.0;
   static const plainTitleWeight = FontWeight.w500;
@@ -8641,16 +8649,16 @@ abstract final class MessageFeedTheme {
   /// the card; their glyphs centred 26 in (a drawn bell 15.33 × 16.67, the APK's `biligame_vector_trash_delete_line`
   /// 16.33 square) and the words 14 pt from 44 in. 12 under the card, then the home indicator's room.
   static const sheetDim = BiliColors.sheetDim;
-  static Color get sheetFill => BiliColors.softGrey;
+  static Color get sheetFill => tone(0xFFF6F7F8, 0xFF202123);
   static const sheetRadius = 8.0;
   static const grabberTop = 8.0;
   static const grabberWidth = 30.0;
   static const grabberHeight = 3.0;
-  static Color get grabberInk => BiliColors.sheetGrabber;
+  static Color get grabberInk => tone(0xFFC9CCD0, 0xFF4D4D4F);
   static const cardTop = 19.0;
   static const cardInset = 16.0;
   static const cardRadius = 8.0;
-  static Color get cardFill => BiliColors.card;
+  static Color get cardFill => tone(0xFFFFFFFF, 0xFF242628);
   static const cardBottom = 12.0;
   static const sheetRow = 52.0;
   static const sheetRule = 1 / 3;
@@ -8774,7 +8782,7 @@ abstract final class MessageChatTheme {
   /// under the rule.
   static const autoReplyGap = 7.5;
   static const autoReplyRule = 0.5;
-  static Color get autoReplyRuleInk => tone(0xFFE7E8E8, 0xFFE7E8E8); // night?
+  static Color get autoReplyRuleInk => tone(0xFFE7E8E8, 0xFF2F3134);
   static const autoReplyText = 11.0;
   static const autoReplyLine = 15.0;
   static const autoReplyBottom = 20 / 3;
@@ -8858,7 +8866,7 @@ abstract final class MessageChatTheme {
   static const handleTop = 26 / 3;
   static const handleWidth = 30.0;
   static const handleHeight = 3.0;
-  static Color get handleInk => tone(0xFFC1C2C2, 0xFFC1C2C2); // night?
+  static Color get handleInk => tone(0xFFC1C2C2, 0xFF4D4D4F);
   static const gridSide = 12.0;
   static const gridTop = 71 / 3;
   static const columns = 8;
@@ -8898,7 +8906,7 @@ abstract final class MessageChatTheme {
   static const newHeight = 14.0;
   static const newRadius = 2.0;
   static Color get newFill => BiliColors.pink;
-  static Color get newInk => BiliColors.card;
+  static const newInk = BiliColors.onPink;
   static const newText = 10.0;
 }
 
@@ -8912,7 +8920,7 @@ abstract final class MessageSettingsTheme {
   static const barRow = 44.0;
   static Color get bar => BiliColors.card;
   static Color get barInk => BiliColors.text;
-  static Color get barLightInk => tone(0xFFFFFFFF, 0xFF17181A);
+  static const barLightInk = Color(0xFFFFFFFF);
   static const titleText = 17.0;
   static const titleWeight = FontWeight.w600;
   static const titleLine = 24.0;
@@ -8973,7 +8981,7 @@ abstract final class MessageSettingsTheme {
   static const switchRight = 16.0;
   static Color get switchOn => BiliColors.pink;
   static Color get switchOff => SettingsListTheme.switchOff;
-  static Color get switchKnobFill => BiliColors.card;
+  static Color get switchKnobFill => tone(0xFFFFFFFF, 0xFFD7D9DB);
   static const switchMotion = SettingsTheme.switchMotion;
 
   /// A picker's chosen row (215, 216, 195): its words pink and semibold, the ✓ 12.67 × 8.33 of ink with a 1 pt

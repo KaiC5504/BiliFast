@@ -9,6 +9,7 @@ import 'package:bilifast/dynamic/follow_tab/follow_badge.dart';
 import 'package:bilifast/home/main_shell.dart';
 import 'package:bilifast/home/recent_store.dart';
 import 'package:bilifast/me/fake_me_api.dart';
+import 'package:bilifast/message/message_api.dart';
 import 'package:bilifast/search/fake_search_api.dart';
 import 'package:bilifast/shared/theme.dart';
 import 'package:bilifast/skin/skin.dart';
@@ -130,21 +131,24 @@ final class ShellRig {
 }
 
 /// The bottom bar's shell at 440×956 (over a 34 pt home indicator and a 62 pt status bar), or as KaiC's iPhone at 3×
-/// under the system font when [phone]. [loginGate] stands in for the rig's [FakeLoginGate].
+/// under the system font when [phone], in 深色模式 when [dark] too. [loginGate] stands in for the rig's
+/// [FakeLoginGate].
 Future<ShellRig> showShell(
   WidgetTester tester, {
   FakeDynamicApi? api,
   bool loggedIn = true,
   bool phone = false,
+  bool dark = false,
   Map<String, WidgetBuilder> routes = const {},
   Skin? skin,
   LoginGate? loginGate,
+  MessageApi? messageApi,
 }) async {
   if (phone) {
     final saved = BiliFonts.family;
     addTearDown(() => BiliFonts.family = saved);
     await tester.runAsync(loadSystemFontStandIns);
-    showAsPhone(tester);
+    showAsPhone(tester, dark: dark);
   } else {
     tester.view
       ..physicalSize = const Size(440, 956)
@@ -175,6 +179,7 @@ Future<ShellRig> showShell(
     searchApi: FakeSearchApi(defaultWord: '星海新版本即将上线'),
     meApi: FakeMeApi.demo(),
     dynamicApi: dynamicApi,
+    messageApi: messageApi,
     loginGate: loginGate ?? gate,
   );
   if (skin != null) await SkinPictures.load(tester, skin);

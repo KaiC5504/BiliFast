@@ -61,7 +61,9 @@ class FollowHeader extends StatelessWidget {
                   'assets/images/dynamic/follow_write.png',
                   width: DynamicFeedTheme.write,
                   height: DynamicFeedTheme.write,
-                  color: ink.withValues(alpha: ink.a * DynamicFeedTheme.writeOpacity),
+                  color: skin?.color == null
+                      ? DynamicFeedTheme.writeInk
+                      : ink.withValues(alpha: ink.a * DynamicFeedTheme.writeOpacity),
                   excludeFromSemantics: true,
                 ),
               ),

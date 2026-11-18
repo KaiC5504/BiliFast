@@ -219,7 +219,7 @@ class _FaceSheetLayerState extends State<FaceSheetLayer> with SingleTickerProvid
     final open = widget.controller.isOpen;
     final chosen = math.max(0, _ups.indexWhere((face) => face.mid == up.mid));
     return AnnotatedRegion<SystemUiOverlayStyle>(
-      value: SystemUiOverlayStyle.dark,
+      value: BiliTheme.dark ? SystemUiOverlayStyle.light : SystemUiOverlayStyle.dark,
       child: AnimatedBuilder(
         animation: _curve,
         builder: (context, sheet) {

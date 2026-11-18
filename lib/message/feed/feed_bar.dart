@@ -208,7 +208,7 @@ class FeedPlainBar extends StatelessWidget {
       weight: MessageFeedTheme.plainTitleWeight,
     );
     return AnnotatedRegion<SystemUiOverlayStyle>(
-      value: SystemUiOverlayStyle.dark,
+      value: BiliTheme.dark ? SystemUiOverlayStyle.light : SystemUiOverlayStyle.dark,
       child: ColoredBox(
         color: MessageFeedTheme.page,
         child: SizedBox(
