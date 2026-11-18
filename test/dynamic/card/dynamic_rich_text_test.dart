@@ -1,8 +1,10 @@
 import 'package:bili_core/api.dart' hide RichText;
 import 'package:bilifast/dynamic/card/dynamic_card.dart';
+import 'package:bilifast/dynamic/card/dynamic_open.dart';
 import 'package:bilifast/dynamic/card/dynamic_repost.dart';
 import 'package:bilifast/dynamic/card/dynamic_rich_text.dart';
 import 'package:bilifast/dynamic/card/dynamic_video_box.dart';
+import 'package:bilifast/shared/remote_image.dart';
 import 'package:bilifast/shared/theme.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
@@ -78,6 +80,55 @@ void main() {
       expect(_caret(tester, 7).dx - _caret(tester, 6).dx, closeTo(slash, 0.01), reason: 'no lead after /');
     });
 
+    testWidgets('after a link or badge the lead is a zero-width space of its own, so the link stays one element', (
+      tester,
+    ) async {
+      await _pumpText(tester, const [
+        DynamicLinkNode('网页链接', url: 'https://example.com/a'),
+        DynamicMentionNode('@甲', mid: 1),
+        DynamicBadgeNode('投票', kind: 'vote'),
+        DynamicMentionNode('@乙', mid: 2),
+      ]);
+      expect(_plain(tester), '网页链接​@甲 投票​@乙');
+      final tappable = <String>[];
+      tester.widget<RichText>(_paragraph).text.visitChildren((span) {
+        if (span is TextSpan && span.recognizer != null) tappable.add(span.text!);
+        return true;
+      });
+      expect(tappable, ['网页链接', '@甲', '投票', '@乙']);
+      final advance = _caret(tester, 1).dx - _caret(tester, 0).dx;
+      expect(_caret(tester, 4).dx - _caret(tester, 3).dx, closeTo(advance, 0.01), reason: '接 keeps its width');
+      expect(_caret(tester, 5).dx - _caret(tester, 4).dx, closeTo(DynamicCardTheme.mentionLead, 0.01));
+    });
+
+    testWidgets('a cut right after the lead drops it, so ... follows the link', (tester) async {
+      Future<void> pump(double width) => pumpCardHost(
+        tester,
+        Align(
+          alignment: Alignment.topLeft,
+          child: SizedBox(
+            width: width,
+            child: DynamicRichText(
+              nodes: const [
+                DynamicLinkNode('网页链接', url: 'https://example.com/a'),
+                DynamicMentionNode('@甲', mid: 1),
+              ],
+              style: _style,
+              maxLines: 1,
+              folded: true,
+              onMore: () {},
+            ),
+          ),
+        ),
+      );
+      await pump(400);
+      expect(_plain(tester), '网页链接​@甲... 全文');
+      final suffix = _caret(tester, 13).dx - _caret(tester, 7).dx;
+      // Room for 网页链接, the lead and ... 全文, not the @ after them.
+      await pump(_caret(tester, 5).dx + suffix + 1);
+      expect(_plain(tester), '网页链接... 全文');
+    });
+
     testWidgets('still open the space, the added space not part of the name', (tester) async {
       final host = await pumpCardHost(
         tester,
@@ -143,6 +194,97 @@ void main() {
         }
         expect(find.byKey(const ValueKey('toast')), findsNothing);
       }
+    });
+  });
+
+  group("the lottery's gift", () {
+    testWidgets("scales with the text it sits in: 135's at 17 pt, 29's 16 pt repost text 14.67 × 15", (tester) async {
+      for (final size in [DynamicCardTheme.text, DynamicCardTheme.followRepostText]) {
+        await pumpCardHost(
+          tester,
+          Align(
+            alignment: Alignment.topLeft,
+            child: SizedBox(
+              width: 400,
+              child: DynamicRichText(
+                nodes: const [DynamicBadgeNode('互动抽奖', kind: 'lottery')],
+                style: TextStyle(fontSize: size, height: 1.5),
+              ),
+            ),
+          ),
+        );
+        final scale = size / DynamicCardTheme.text;
+        final gift = tester.getRect(find.byType(DynamicIcon));
+        expect(gift.width, closeTo(DynamicCardTheme.giftWidth * scale, 0.01), reason: '$size pt');
+        expect(gift.height, closeTo(DynamicCardTheme.giftHeight * scale, 0.01), reason: '$size pt');
+        expect(gift.left - tester.getTopLeft(_paragraph).dx, closeTo(DynamicCardTheme.giftBefore * scale, 0.01));
+        expect(
+          _caret(tester, 1).dx,
+          closeTo((DynamicCardTheme.giftBefore + DynamicCardTheme.giftWidth + DynamicCardTheme.giftAfter) * scale, 0.01),
+          reason: '互动抽奖 after the gift and its gap, $size pt',
+        );
+      }
+      expect(DynamicCardTheme.giftWidth * 16 / 17, closeTo(44 / 3, 0.1), reason: "29's gift");
+      expect(DynamicCardTheme.giftHeight * 16 / 17, closeTo(15, 0.1));
+    });
+  });
+
+  group('emotes', () {
+    // 24 characters fill the first line at 17 pt (408 of 416); the emote ends the second.
+    final nodes = [
+      DynamicTextNode('一' * 24),
+      const DynamicTextNode('二二'),
+      const DynamicEmojiNode('[笑]', url: 'https://i0.hdslb.com/bfs/emote/look.png'),
+      const DynamicTextNode('\n三三'),
+    ];
+
+    /// The tops of the first, second and third lines' text, where the selection boxes of 一, 二 and 三 start.
+    List<double> lineTops(WidgetTester tester, String id) {
+      final paragraph = tester.renderObject<RenderParagraph>(
+        find.descendant(of: find.byKey(ValueKey('dynamic-text-$id')), matching: find.byType(RichText)).first,
+      );
+      return [
+        for (final at in [0, 24, 28])
+          paragraph.getBoxesForSelection(TextSelection(baseOffset: at, extentOffset: at + 1)).single.top,
+      ];
+    }
+
+    testWidgets("in 图文's text on 关注 a line holding one grows to 29 under the line before (243), no other", (
+      tester,
+    ) async {
+      await pumpCardHost(
+        tester,
+        DynamicCard(item: post('1', kind: DynamicKind.forward, nodes: nodes)),
+        systemFont: true,
+      );
+      final tops = lineTops(tester, '1');
+      expect(tops[1] - tops[0], closeTo(29, 0.01), reason: 'the emote line, as 243');
+      expect(tops[2] - tops[1], closeTo(27, 0.01), reason: "the next keeps the pitch (26.78, Flutter's 27)");
+      final paragraph = tester.getRect(find.byKey(const ValueKey('dynamic-text-1')));
+      expect(paragraph.height, closeTo(27 + 29 + 27, 0.01));
+      // 243: the emote drawn up from PingFang's descent under the baseline, half the leading over the line's bottom.
+      final text = find.byKey(const ValueKey('dynamic-text-1'));
+      final second = tester
+          .renderObject<RenderParagraph>(find.descendant(of: text, matching: find.byType(RichText)).first)
+          .getBoxesForSelection(const TextSelection(baseOffset: 24, extentOffset: 25))
+          .single;
+      final emote = tester.getRect(find.descendant(of: text, matching: find.byType(RemoteImage)));
+      expect(emote.size, const Size.square(DynamicCardTheme.emote));
+      // 二's tight box runs from PingFang's ascent over the baseline to its descent under it.
+      expect(second.bottom - second.top, closeTo(DynamicCardTheme.pingFangLine * DynamicCardTheme.text, 0.01));
+      expect(emote.bottom - paragraph.top, closeTo(second.bottom, 0.05));
+    });
+
+    testWidgets("at the plain pitch nothing grows (136's space)", (tester) async {
+      await pumpCardHost(
+        tester,
+        DynamicCard(item: post('1', kind: DynamicKind.forward, nodes: nodes), space: true),
+        systemFont: true,
+      );
+      final tops = lineTops(tester, '1');
+      expect(tops[1] - tops[0], closeTo(DynamicCardTheme.textLine, 0.01));
+      expect(tops[2] - tops[1], closeTo(DynamicCardTheme.textLine, 0.01));
+      expect(tester.widget<DynamicRichText>(find.byKey(const ValueKey('dynamic-text-1'))).emoteLinesGrow, isFalse);
     });
   });
 
@@ -216,6 +358,53 @@ void main() {
       expect(rich.style.fontSize, DynamicCardTheme.followRepostText);
       expect(rich.style.height! * rich.style.fontSize!, closeTo(DynamicCardTheme.followRepostTextLine, 0.01));
       expect(rich.wideTopicGaps, isTrue);
+      expect(rich.emoteLinesGrow, isTrue);
+    });
+
+    /// The colours of a folded text's ... and 全文 under [key].
+    (Color?, Color?) suffixInks(WidgetTester tester, String key) {
+      final rich = tester.widget<RichText>(
+        find.descendant(of: find.byKey(ValueKey(key)), matching: find.byType(RichText)).first,
+      );
+      Color? dots, more;
+      rich.text.visitChildren((span) {
+        if (span is TextSpan && span.text == DynamicRichText.ellipsis) dots = span.style?.color;
+        if (span is TextSpan && span.text == '全文') more = span.style?.color;
+        return true;
+      });
+      return (dots, more);
+    }
+
+    testWidgets("on 关注 a folded original's ... 全文 is in the night greys and blue by day (29)", (tester) async {
+      final folded = post(
+        'o1',
+        kind: DynamicKind.draw,
+        author: const DynamicAuthor(mid: 9, name: '原作者', face: '', following: true),
+        nodes: const [DynamicTextNode('亲爱的旅行者：')],
+        folded: true,
+      );
+      await pumpCardHost(
+        tester,
+        DynamicCard(
+          item: post('1', kind: DynamicKind.forward, nodes: const [DynamicTextNode('转发')], original: folded),
+        ),
+      );
+      expect(suffixInks(tester, 'dynamic-repost-text-o1'), (const Color(0xFFA2A7AE), const Color(0xFF58B1D4)));
+
+      await pumpCardHost(
+        tester,
+        DynamicCard(
+          item: post('2', kind: DynamicKind.forward, nodes: const [DynamicTextNode('转发')], original: folded),
+          space: true,
+        ),
+      );
+      expect(suffixInks(tester, 'dynamic-repost-text-o1'), (null, DynamicCardTheme.linkInk), reason: 'a space keeps 136\'s');
+
+      await pumpCardHost(
+        tester,
+        DynamicCard(item: post('3', kind: DynamicKind.draw, nodes: const [DynamicTextNode('原文')], folded: true)),
+      );
+      expect(suffixInks(tester, 'dynamic-text-3'), (null, DynamicCardTheme.linkInk), reason: "a post's own text, 135");
     });
 
     testWidgets("on 关注 with no text its body sits 9.33 under the @name's line (243)", (tester) async {
@@ -265,6 +454,7 @@ void main() {
       expect(rich.style.fontSize, DynamicCardTheme.text);
       expect(rich.style.height! * rich.style.fontSize!, closeTo(DynamicCardTheme.textLine, 0.01));
       expect(rich.wideTopicGaps, isFalse);
+      expect(rich.emoteLinesGrow, isFalse);
     });
 
     testWidgets('on the post page it stays 132\'s', (tester) async {
@@ -273,6 +463,8 @@ void main() {
       expect(rectOf(tester, 'dynamic-repost-name').top - block.top, closeTo(DynamicCardTheme.repostDetailTop, 0.01));
       expect(textOf(tester).style.fontSize, DynamicCardTheme.text);
       expect(textOf(tester).wideTopicGaps, isFalse);
+      expect(textOf(tester).emoteLinesGrow, isFalse);
+      expect(textOf(tester).moreInk, isNull);
     });
   });
 }

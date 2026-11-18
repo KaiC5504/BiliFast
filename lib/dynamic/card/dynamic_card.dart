@@ -164,6 +164,7 @@ class _DynamicCardState extends State<DynamicCard> {
                             ? () => setState(() => _expanded = true)
                             : () => unawaited(openDynamicItem(context, item)),
                         wideTopicGaps: opus,
+                        emoteLinesGrow: opus,
                       ),
                     ),
                   if (body != null) ...[

@@ -1,9 +1,11 @@
 import 'dart:io';
 
-import 'package:bili_core/api.dart';
+import 'package:bili_core/api.dart' hide RichText;
 import 'package:bilifast/dynamic/card/dynamic_card.dart';
 import 'package:bilifast/dynamic/card/dynamic_open.dart';
 import 'package:bilifast/dynamic/card/dynamic_repost.dart';
+import 'package:bilifast/shared/theme.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -258,6 +260,60 @@ void main() {
       await tester.pump();
       await saveShot(tester, find.byKey(ValueKey('shot-$key')), '$shots/dynamic-$key-ours.png');
     }
+  });
+
+  testWidgets('243: a repost whose second line ends in an emote, in 深色模式', (tester) async {
+    const author = DynamicAuthor(
+      mid: 21,
+      name: '演示是我了_DemoGaming',
+      face: '',
+      pubTime: '1小时前',
+      vipPink: true,
+      verify: DynamicVerify.personal,
+    );
+    BiliTheme.dark = true;
+    await pumpCardHost(
+      tester,
+      RepaintBoundary(
+        key: const ValueKey('shot-243'),
+        child: DynamicCard(
+          item: post(
+            'a243',
+            kind: DynamicKind.forward,
+            author: author,
+            nodes: const [
+              DynamicTextNode('演示文字每周写一次还是简单的测试啊，选一个样例貌似也还不是很必要，可惜我这段文字为什么没进名单'),
+              DynamicEmojiNode('[笑]', url: 'https://i0.hdslb.com/bfs/emote/look-alike.png'),
+            ],
+            original: post(
+              'o243',
+              kind: DynamicKind.video,
+              author: author,
+              nodes: const [],
+              major: const DynamicVideo(
+                aid: 4,
+                bvid: 'BV1look00243',
+                title: '演示视频标题文字',
+                cover: '',
+                durationText: '12:34',
+                duration: 754,
+                plays: '1.2万',
+                danmaku: '56',
+              ),
+            ),
+          ),
+        ),
+      ),
+      systemFont: true,
+    );
+    showAsPhone(tester, dark: true);
+    await tester.pump();
+    final text = find.byKey(const ValueKey('dynamic-text-a243'));
+    final paragraph = tester.renderObject<RenderParagraph>(find.descendant(of: text, matching: find.byType(RichText)).first);
+    double top(int at) => paragraph.getBoxesForSelection(TextSelection(baseOffset: at, extentOffset: at + 1)).single.top;
+    expect(top(24) - top(0), closeTo(29, 0.01), reason: "the emote's line, 29 under the first as on 243");
+    final shots = Platform.environment['BILIFAST_SHOTS'];
+    if (shots != null) await saveShot(tester, find.byKey(const ValueKey('shot-243')), '$shots/dynamic-243-dark-ours.png');
   });
 
   testWidgets("⋮'s sheet (137) under the system font", (tester) async {
