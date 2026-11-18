@@ -168,11 +168,9 @@ void main() {
       nodes: const [
         DynamicTextNode('恭喜'),
         DynamicMentionNode('@演示名', mid: 18),
-        DynamicTextNode(' '),
         DynamicMentionNode('@测试者', mid: 19),
-        DynamicTextNode(' '),
         DynamicMentionNode('@WYZQMXYY', mid: 20),
-        DynamicTextNode(' 等10位同学中奖，已私信通知，详情请点击抽奖查看。'),
+        DynamicTextNode('等10位同学中奖，已私信通知，详情请点击抽奖查看。'),
       ],
       original: post(
         'o29',
