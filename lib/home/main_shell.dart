@@ -179,7 +179,7 @@ class _MainShellState extends State<MainShell> {
                   _Place(
                     shown: mine,
                     child: AnnotatedRegion<SystemUiOverlayStyle>(
-                      value: SystemUiOverlayStyle.dark,
+                      value: BiliTheme.dark ? SystemUiOverlayStyle.light : SystemUiOverlayStyle.dark,
                       child: MePage(active: mine, developerPage: widget.developerPage, skin: widget.skin),
                     ),
                   ),

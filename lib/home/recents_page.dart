@@ -114,7 +114,7 @@ class _RecentRow extends StatelessWidget {
                   ),
                   child: Icon(
                     Icons.play_arrow_rounded,
-                    color: BiliColors.card,
+                    color: BiliColors.onPink,
                     size: BiliMetrics.recentsTileIcon,
                   ),
                 ),

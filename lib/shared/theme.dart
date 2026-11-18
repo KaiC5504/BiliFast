@@ -3594,11 +3594,11 @@ abstract final class TabIconTheme {
   /// and a white + 13 pt across with 2.5 pt round-capped strokes.
   static const postSquare = 38.0;
   static const postRadius = 14.0;
-  static Color get postTop => tone(0xFFFE739A, 0xFFFE739A); // night?
-  static Color get postBottom => tone(0xFFFF4AA4, 0xFFFF4AA4); // night?
+  static Color get postTop => tone(0xFFFE739A, 0xFFF06C91);
+  static Color get postBottom => tone(0xFFFF4AA4, 0xFFF2469C);
   static const postPlus = 13.0;
   static const postPlusLine = 2.5;
-  static Color get postPlusInk => tone(0xFFFFFFFF, 0xFF17181A);
+  static Color get postPlusInk => tone(0xFFFFFFFF, 0xFFEFF2F2);
 }
 
 /// 搜索's page (52-55): the field row, the empty page's 热搜, 搜索历史 and 搜索发现, and the suggestions.
@@ -4672,7 +4672,7 @@ abstract final class FeedDislikeTheme {
   static const checkCentre = -21.5;
   static const messageCentre = 6.5;
   static const messageText = 13.0;
-  static Color get messageInk => tone(0xFFFFFFFF, 0xFF17181A);
+  static const messageInk = Color(0xFFFFFFFF);
   static const undoFromBottom = 20.0;
   static const undoText = 12.0;
   static const undoInk = Color(0x99FFFFFF);
@@ -5743,7 +5743,7 @@ abstract final class FeedBigCardTheme {
   static const likeAssetInk = 52 / 114;
   static const likeRight = 59.21;
   static const likeRise = 1.6;
-  static Color get like => tone(0xFF61666D, 0xFFA2A7AE);
+  static Color get like => tone(0xFF61666D, 0xFF9A9EA5);
   static Color get liked => BiliColors.pink;
   static const countText = 10.0;
   static const countOverlap = 3.25;
@@ -6762,7 +6762,7 @@ abstract final class PadHomeTheme {
   static const firstRow = 18.0;
 
   /// Bilibili's own pink, as the iPad's selected tab, bar place and 推荐 draw it.
-  static Color get pink => tone(0xFFFB7299, 0xFFFB7299); // night?
+  static Color get pink => tone(0xFFFB7299, 0xFFD44E7D);
 
   /// The top: one row from the status bar to the hairline, everything centred [rowCentre] under the status bar.
   static const rowHeight = 45.5;
@@ -6774,10 +6774,11 @@ abstract final class PadHomeTheme {
   /// The search entry: a grey stadium from 75 pt, as wide as its word up to [fieldTabGap] short of the tab row.
   static const fieldLeft = 75.0;
   static const fieldHeight = 30.0;
-  static Color get fieldFill => BiliColors.pageGrey;
+  /// At night the palette's surface grey (Ga1_s), not the page's: the field sits on the card-coloured row.
+  static Color get fieldFill => tone(0xFFF1F2F3, 0xFF232527);
   static const fieldGlyph = 13.0;
   static const fieldGlyphLead = 16.5;
-  static Color get fieldGlyphInk => tone(0xFF999999, 0xFF999999); // night?
+  static Color get fieldGlyphInk => tone(0xFF999999, 0xFF757A81);
   static const fieldTextStart = 35.5;
   static const fieldTextEnd = 17.0;
   static const fieldText = 13.0;
@@ -6788,12 +6789,12 @@ abstract final class PadHomeTheme {
   static const tabs = ['直播', '推荐', '热门', '追番', '影视'];
   static const tabText = 16.0;
   static const tabPitch = 65.0;
-  static Color get tabInk => tone(0xFF999999, 0xFF999999); // night?
+  static Color get tabInk => tone(0xFF999999, 0xFF757A81);
   static const tabRise = 1.25;
 
   /// Scan, 历史记录 and 消息, their centres this far from the right edge.
   static const icon = 20.0;
-  static Color get iconInk => tone(0xFF757575, 0xFF757575); // night?
+  static Color get iconInk => tone(0xFF757575, 0xFF8B9097);
   static const scanRight = 142.0;
   static const historyRight = 90.0;
   static const messagesRight = 38.0;
@@ -6805,8 +6806,8 @@ abstract final class PadHomeTheme {
   static const barIconCentre = 18.25;
   static const barLabelTop = 31.5;
   static const barLabelText = 11.0;
-  static Color get barIconInk => tone(0xFF747474, 0xFF747474); // night?
-  static Color get barLabelInk => tone(0xFF929292, 0xFF929292); // night?
+  static Color get barIconInk => tone(0xFF747474, 0xFF8B9097);
+  static Color get barLabelInk => tone(0xFF929292, 0xFF757A81);
 
   /// A 装扮's bar picture is made for a phone: the iPad draws it at the phone's 440 pt width grown by the bars'
   /// heights, centred, so it rises as far as on the phone (a guess: no screenshot of a dressed iPad bar).
@@ -6830,7 +6831,7 @@ abstract final class PadHomeTheme {
   static const moreCentre = 27.0;
   static const moreDot = 3.0;
   static const morePitch = 5.0;
-  static Color get moreInk => tone(0xFF757575, 0xFF757575); // night?
+  static Color get moreInk => tone(0xFF757575, 0xFF8B9097);
   static const moreTarget = 34.0;
   static const tagHeight = 16.0;
   static const tagText = 11.0;
@@ -8298,10 +8299,12 @@ abstract final class HotListTheme {
   static const laterTop = 154.0;
 
   /// The brand circles drawn in place of art the APK lacks, sampled on 217.
-  static Color get facebookFill => tone(0xFF0079F8, 0xFF0079F8); // night?
+  /// The brands' own colours stay at night; only X's black circle turns white, its mark black.
+  static const facebookFill = Color(0xFF0079F8);
   static Color get xFill => tone(0xFF000000, 0xFFFFFFFF);
-  static Color get whatsAppFill => tone(0xFF32DA51, 0xFF32DA51); // night?
-  static Color get brandMark => tone(0xFFFFFFFF, 0xFF17181A);
+  static Color get xMark => tone(0xFFFFFFFF, 0xFF000000);
+  static const whatsAppFill = Color(0xFF32DA51);
+  static const brandMark = Color(0xFFFFFFFF);
 }
 
 /// The bottom bar's 消息 (196, 211, 212) and the tab's badge (211). Filled by 消息's builder.
@@ -9011,7 +9014,7 @@ abstract final class LiveTabTheme {
   static const faceTop = 26 / 3;
   static const face = 30.0;
   static const faceRing = 1.0;
-  static Color get faceRingInk => tone(0xFFFFFFFF, 0xFF17181A);
+  static const faceRingInk = Color(0xFFFFFFFF);
   static const nameGap = 25 / 3;
   static const nameText = 12.0;
 
@@ -9054,9 +9057,9 @@ abstract final class LiveTabTheme {
   static const rankChipHeight = 18.0;
   static const rankChipRadius = 4.0;
   static const rankChipPad = 8.0;
-  static Color get rankChipFill => tone(0xFFE2E7F0, 0xFFE2E7F0); // night?
-  static Color get rankChipRim => tone(0xFFA7BBD2, 0xFFA7BBD2); // night?
-  static Color get rankChipInk => tone(0xFF5B7086, 0xFF5B7086); // night?
+  static Color get rankChipFill => tone(0xFFE2E7F0, 0xFF36393F);
+  static Color get rankChipRim => tone(0xFFA7BBD2, 0xFF8C99AA);
+  static Color get rankChipInk => tone(0xFF5B7086, 0xFFC8CED6);
   static const rankChipText = 12.0;
   static const rankLeaf = 4.0;
   static const rankValueGap = 9.0;
@@ -9072,16 +9075,16 @@ abstract final class LiveTabTheme {
   static const sectionTitleText = 14.0;
   static const sectionTitleWeight = FontWeight.w600;
   static const sectionCountText = 12.0;
-  static Color get sectionCount => tone(0xFFFB7299, 0xFFFB7299); // night?
+  static Color get sectionCount => tone(0xFFFB7299, 0xFFD44E7D);
   static const sectionCountGap = 5.0;
   static const sectionBarsGap = 7.0;
-  static Color get sectionBars => tone(0xFF999999, 0xFF999999); // night?
+  static Color get sectionBars => tone(0xFF999999, 0xFF757A81);
   static const sectionAllText = 12.0;
   static const chevronWidth = 14 / 3;
   static const chevronHeight = 9.0;
   static const chevronStroke = 1.2;
   static const chevronGap = 6.0;
-  static Color get chevronInk => tone(0xFF999999, 0xFF999999); // night?
+  static Color get chevronInk => tone(0xFF999999, 0xFF757A81);
 
   /// Its room: a box 39 down, 12 in, 88 tall under a 1/3 #E3E5E7 rim: the 156 wide cover at its left, a 36 face 18.33
   /// after the cover, then 12.33 on the 14 pt name over the 12 pt grey title.
@@ -9147,7 +9150,7 @@ abstract final class LiveTabTheme {
   static const moreRight = 10.0;
   static const moreDot = 8 / 3;
   static const morePitch = 10 / 3;
-  static Color get moreInk => tone(0xFFC4C4C4, 0xFFC4C4C4); // night?
+  static Color get moreInk => tone(0xFFC4C4C4, 0xFF46494D);
   static const moreTarget = 32.0;
 
   /// The shade under the cover's counts.
@@ -9179,7 +9182,7 @@ abstract final class LiveTabTheme {
   /// 206: the following bar's look, the 16 pt title and the 14 pt 全…注 20.67 from the right, ‹ (8.33 × 15.33, 1.5
   /// strokes) centred 22.33 in; then the cards straight under the bar, 5.33 in, 207.67 wide, the cover 129 over a
   /// 58.67 band: a 36 face 8.67 in and centred, the 14 pt name and the 12 pt grey title 52 in.
-  static Color get followingPage => tone(0xFFF4F4F4, 0xFFF4F4F4); // night?
+  static Color get followingPage => tone(0xFFF4F4F4, 0xFF0A0B0C);
   static const followingTitleText = 16.0;
   static const followingActionText = 14.0;
   static const followingActionRight = 62 / 3;
