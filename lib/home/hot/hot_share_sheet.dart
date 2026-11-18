@@ -387,14 +387,15 @@ class ShareBrandPainter extends CustomPainter {
           )
           ..drawPath(_polygon(const [(13.33, 21.83), (31.33, 21.83), (30.73, 28.17), (13.33, 28.17)]), mark);
       case ShareBrand.x:
+        final xMark = Paint()..color = HotListTheme.xMark;
         canvas
           ..drawPath(circle, Paint()..color = HotListTheme.xFill)
-          ..drawPath(_polygon(const [(9.83, 10.73), (17.5, 10.73), (34.33, 33.27), (26.67, 33.27)]), mark)
+          ..drawPath(_polygon(const [(9.83, 10.73), (17.5, 10.73), (34.33, 33.27), (26.67, 33.27)]), xMark)
           ..drawPath(
             _polygon(const [(14.17, 13), (16.5, 13), (30, 30.83), (27.5, 30.83)]),
             Paint()..color = HotListTheme.xFill,
           )
-          ..drawPath(_polygon(const [(28.83, 10.73), (32.93, 10.73), (14.17, 33.27), (10.07, 33.27)]), mark);
+          ..drawPath(_polygon(const [(28.83, 10.73), (32.93, 10.73), (14.17, 33.27), (10.07, 33.27)]), xMark);
       case ShareBrand.whatsApp:
         const centre = Offset(21.75, 21.7);
         const radius = 11.78;

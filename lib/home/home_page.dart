@@ -442,7 +442,9 @@ class _HomePageState extends State<HomePage> {
       scrollOffset: _feedOffset,
     );
     return AnnotatedRegion<SystemUiOverlayStyle>(
-      value: head != null && head.lightStatusHome ? SystemUiOverlayStyle.light : SystemUiOverlayStyle.dark,
+      value: (head != null ? head.lightStatusHome : BiliTheme.dark)
+          ? SystemUiOverlayStyle.light
+          : SystemUiOverlayStyle.dark,
       child: Scaffold(
         backgroundColor: pad ? PadHomeTheme.page : BiliColors.pageGrey,
         resizeToAvoidBottomInset: false,
