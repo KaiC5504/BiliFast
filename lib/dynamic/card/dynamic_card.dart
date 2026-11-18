@@ -31,7 +31,8 @@ class DynamicCard extends StatefulWidget {
   final DynamicItem item;
   final FeedInlineHost? inline;
 
-  /// In a space's 动态 tab (136): its lighter band under the card, and a 图文 post's text at the plain pitch.
+  /// In a space's 动态 tab (136): its lighter band under the card, a 图文 post's or a repost's text at the plain pitch,
+  /// and the repost's block as 136's.
   final bool space;
 
   @override
@@ -52,10 +53,13 @@ class _DynamicCardState extends State<DynamicCard> {
     if (oldWidget.item.id != widget.item.id) _expanded = false;
   }
 
-  /// A 图文 post's text is set at the 关注 feed's wider pitch (127, 135).
+  /// A 图文 post's text, and a repost's own, is set at the 关注 feed's wider pitch (127, 135, 29).
   bool get _opus =>
       !widget.space &&
-      (_item.kind == DynamicKind.draw || _item.kind == DynamicKind.word || _item.kind == DynamicKind.article);
+      switch (_item.kind) {
+        DynamicKind.draw || DynamicKind.word || DynamicKind.article || DynamicKind.forward => true,
+        _ => false,
+      };
 
   void _open() {
     if (_item.major case final DynamicVideo video) {
@@ -159,6 +163,7 @@ class _DynamicCardState extends State<DynamicCard> {
                         onMore: video
                             ? () => setState(() => _expanded = true)
                             : () => unawaited(openDynamicItem(context, item)),
+                        wideTopicGaps: opus,
                       ),
                     ),
                   if (body != null) ...[
@@ -191,6 +196,7 @@ class _DynamicCardState extends State<DynamicCard> {
         key: ValueKey('dynamic-repost-${original.id}'),
         original: original,
         inline: widget.inline,
+        space: widget.space,
       );
     }
     final Widget? inner = switch (item.major) {

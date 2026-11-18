@@ -5993,6 +5993,23 @@ abstract final class DynamicCardTheme {
   static const videoLinkBefore = 5 / 3;
   static const videoLinkAfter = 4.0;
 
+  /// The web answer runs @names into the words around them (恭喜@甲@乙等); 29 sets each one 2 pt after a word before
+  /// it and a space before a word after it.
+  static const mentionLead = 2.0;
+
+  /// In a 图文 post's text on 关注 the space beside a topic is 3.33 pt wider (135 and 29: 28 and 24 px where one
+  /// space gives 18 and 15; the post page, 131, and a video post, 128, keep the plain space).
+  static const topicGap = 10 / 3;
+
+  /// A repost's block on 关注 (29, 243) where a space's is 136's: the @name's line 9.67 down (its ink 40 px under the
+  /// block's top, 56 on 136), the text 10.67 under that line or with none the body 9.33 (243), the text 16 pt at
+  /// 图文's pitch for that size (a Han character 47.6 px on, lines 76 px apart; Flutter sets whole points, so 25).
+  static const followRepostTop = 29 / 3;
+  static const followRepostTextGap = 32 / 3;
+  static const followRepostBodyGap = 28 / 3;
+  static const followRepostText = 16.0;
+  static const followRepostTextLine = 76 / 3;
+
   /// The pictures: corners of 4 pt; two to four two a row and more three a row, in 119.17 pt cells 1.67 apart (127),
   /// square, or about 3:4 (158.33 tall) for pictures taller than square; one alone at its shape across the width
   /// (135), a tall one two cells wide and at most 3:4. The post page's grid (140) has square third-width cells 6 apart,

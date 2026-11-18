@@ -180,7 +180,7 @@ void main() {
       final frame = tester.getRect(_frame);
       expect(frame.left - block.left, DynamicCardTheme.gutter);
       _expectLoneFrame(frame.size);
-      final lastLineMiddle = text.bottom - DynamicCardTheme.textLine / 2;
+      final lastLineMiddle = text.bottom - DynamicCardTheme.followRepostTextLine / 2;
       expect(frame.top - lastLineMiddle, closeTo(68 / 3, 0.01));
       expect(block.bottom - frame.bottom, closeTo(DynamicCardTheme.repostBottom, 0.01));
       expect(_image(tester, _frame).alignment, Alignment.topCenter);

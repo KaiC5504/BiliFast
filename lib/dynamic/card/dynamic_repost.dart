@@ -19,11 +19,21 @@ import 'dynamic_video_box.dart';
 /// video's box, one picture in a post's lone frame (29), or more in a row scrolling sideways). A tap opens the
 /// original. [detail] lays it out as the post page does (132).
 class DynamicRepostBlock extends StatefulWidget {
-  const DynamicRepostBlock({super.key, required this.original, this.inline, this.detail = false, this.onOpen});
+  const DynamicRepostBlock({
+    super.key,
+    required this.original,
+    this.inline,
+    this.detail = false,
+    this.space = false,
+    this.onOpen,
+  });
 
   final DynamicItem original;
   final FeedInlineHost? inline;
   final bool detail;
+
+  /// In a space's 动态 tab (136). On 关注 (29, 243) the @name sits higher and the text is a size smaller.
+  final bool space;
 
   /// Opens the viewer at one of the original's pictures; [showDynamicPictures] over everything when null.
   final void Function(int index)? onOpen;
@@ -105,21 +115,27 @@ class _DynamicRepostBlockState extends State<DynamicRepostBlock> {
     if (DynamicRepostBlock.blank(original)) return const SizedBox.shrink();
     final deleted = DynamicRepostBlock.deleted(original);
     final detail = widget.detail;
+    final onFollowTab = !detail && !widget.space;
     final inset = detail ? DynamicCardTheme.repostDetailInset : DynamicCardTheme.gutter;
     final follow = _follow;
+    final textLine = onFollowTab ? DynamicCardTheme.followRepostTextLine : DynamicCardTheme.textLine;
     final textStyle = dynamicStyle(
-      DynamicCardTheme.text,
+      onFollowTab ? DynamicCardTheme.followRepostText : DynamicCardTheme.text,
       DynamicCardTheme.repostTextInk,
-      line: DynamicCardTheme.textLine,
+      line: textLine,
     );
     final nodes = DynamicRepostBlock._words(original);
     final body = deleted ? null : _body(inset);
     final double bodyGap = nodes.isEmpty
-        ? (detail ? DynamicCardTheme.repostDetailBodyGap : DynamicCardTheme.repostTextGap)
+        ? (detail
+              ? DynamicCardTheme.repostDetailBodyGap
+              : onFollowTab
+              ? DynamicCardTheme.followRepostBodyGap
+              : DynamicCardTheme.repostTextGap)
         : body is DynamicPictureStrip
         ? DynamicCardTheme.repostStripTop
         : original.major is DynamicPictures
-        ? DynamicCardTheme.repostPictureTop - DynamicCardTheme.textLine / 2
+        ? DynamicCardTheme.repostPictureTop - textLine / 2
         : DynamicCardTheme.bodyGap;
     return GestureDetector(
       key: const ValueKey('dynamic-repost-block'),
@@ -129,7 +145,11 @@ class _DynamicRepostBlockState extends State<DynamicRepostBlock> {
         color: DynamicCardTheme.repostFill,
         child: Padding(
           padding: EdgeInsets.only(
-            top: detail ? DynamicCardTheme.repostDetailTop : DynamicCardTheme.repostTop,
+            top: detail
+                ? DynamicCardTheme.repostDetailTop
+                : onFollowTab
+                ? DynamicCardTheme.followRepostTop
+                : DynamicCardTheme.repostTop,
             bottom: detail ? DynamicCardTheme.repostDetailBottom : DynamicCardTheme.repostBottom,
           ),
           child: Column(
@@ -208,7 +228,8 @@ class _DynamicRepostBlockState extends State<DynamicRepostBlock> {
                   ),
                 ),
               if (nodes.isNotEmpty) ...[
-                if (!deleted) const SizedBox(height: DynamicCardTheme.repostTextGap),
+                if (!deleted)
+                  SizedBox(height: onFollowTab ? DynamicCardTheme.followRepostTextGap : DynamicCardTheme.repostTextGap),
                 Padding(
                   padding: EdgeInsets.symmetric(horizontal: inset),
                   child: DynamicRichText(
@@ -218,6 +239,12 @@ class _DynamicRepostBlockState extends State<DynamicRepostBlock> {
                     maxLines: detail ? null : DynamicCardTheme.maxLines,
                     folded: original.foldedLines && !detail,
                     onMore: deleted ? null : _open,
+                    wideTopicGaps:
+                        onFollowTab &&
+                        switch (original.kind) {
+                          DynamicKind.draw || DynamicKind.word || DynamicKind.article => true,
+                          _ => false,
+                        },
                   ),
                 ),
               ],
