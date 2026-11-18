@@ -576,7 +576,7 @@ class _OfficialLine extends StatelessWidget {
                       SpaceGlyph.bolt,
                       width: SpaceTheme.officialBoltWidth,
                       height: SpaceTheme.officialBoltHeight,
-                      color: IntroTheme.badgeBolt,
+                      color: SpaceTheme.officialBolt,
                     ),
                   ),
                   const SizedBox(width: SpaceTheme.officialTextGap),

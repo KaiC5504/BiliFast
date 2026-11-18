@@ -225,7 +225,7 @@ class _NewFolderPageState extends State<NewFolderPage> {
         child: page!,
       ),
       child: AnnotatedRegion<SystemUiOverlayStyle>(
-        value: SystemUiOverlayStyle.dark,
+        value: BiliTheme.dark ? SystemUiOverlayStyle.light : SystemUiOverlayStyle.dark,
         child: Material(
           type: MaterialType.transparency,
           child: DefaultTextStyle(

@@ -145,7 +145,7 @@ class _WatchHistoryPageState extends State<WatchHistoryPage> {
         child: page!,
       ),
       child: AnnotatedRegion<SystemUiOverlayStyle>(
-        value: SystemUiOverlayStyle.dark,
+        value: BiliTheme.dark ? SystemUiOverlayStyle.light : SystemUiOverlayStyle.dark,
         // Pushed on a plain page route with no Material above it, the words would otherwise inherit the app's
         // fallback style, a synthetic w900.
         child: DefaultTextStyle(

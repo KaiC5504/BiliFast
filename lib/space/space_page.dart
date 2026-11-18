@@ -192,10 +192,10 @@ class _SpacePageState extends State<SpacePage> {
   @override
   Widget build(BuildContext context) {
     final profile = _profile;
-    // Light over a picture banner, as 72; dark over the default banner (63) and the white bar.
+    // Light over a picture banner, as 72; dark over the default banner (63) and the white bar, which are dark at night.
     final darkStatus = profile == null || _collapsed || (profile.banner?.isEmpty ?? true);
     return AnnotatedRegion<SystemUiOverlayStyle>(
-      value: darkStatus ? SystemUiOverlayStyle.dark : SystemUiOverlayStyle.light,
+      value: darkStatus && !BiliTheme.dark ? SystemUiOverlayStyle.dark : SystemUiOverlayStyle.light,
       child: PopScope<Object?>(
         canPop: !_sheet.value,
         onPopInvokedWithResult: (didPop, _) {

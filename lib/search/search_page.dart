@@ -268,7 +268,7 @@ class _SearchPageState extends State<SearchPage> with SingleTickerProviderStateM
         if (!didPop) _closeOverlay();
       },
       child: AnnotatedRegion<SystemUiOverlayStyle>(
-        value: SystemUiOverlayStyle.dark,
+        value: BiliTheme.dark ? SystemUiOverlayStyle.light : SystemUiOverlayStyle.dark,
         child: Scaffold(
           backgroundColor: SearchTheme.page,
           resizeToAvoidBottomInset: false,
@@ -279,16 +279,19 @@ class _SearchPageState extends State<SearchPage> with SingleTickerProviderStateM
                 builder: (context, _) => Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    SafeArea(
-                      bottom: false,
-                      child: _SearchBar(
-                        field: _field,
-                        focus: _focus,
-                        placeholder: model.placeholder,
-                        enabled: !_opening,
-                        onChanged: _textChanged,
-                        onSubmit: _submit,
-                        onClear: _clear,
+                    ColoredBox(
+                      color: model.stage == SearchStage.results ? SearchResultTheme.headerFill : SearchTheme.page,
+                      child: SafeArea(
+                        bottom: false,
+                        child: _SearchBar(
+                          field: _field,
+                          focus: _focus,
+                          placeholder: model.placeholder,
+                          enabled: !_opening,
+                          onChanged: _textChanged,
+                          onSubmit: _submit,
+                          onClear: _clear,
+                        ),
                       ),
                     ),
                     Expanded(

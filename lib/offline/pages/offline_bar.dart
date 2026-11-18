@@ -13,7 +13,7 @@ typedef _T = OfflineListTheme;
 final class OfflineBarLook {
   const OfflineBarLook({required this.fill, required this.ink, required this.lightStatus});
 
-  static OfflineBarLook get stock => OfflineBarLook(fill: _T.bar, ink: _T.barInk, lightStatus: false);
+  static OfflineBarLook get stock => OfflineBarLook(fill: _T.bar, ink: _T.barInk, lightStatus: BiliTheme.dark);
 
   factory OfflineBarLook.of(Skin? skin) {
     final page = skin?.equip.colors.colorSecondPage;
