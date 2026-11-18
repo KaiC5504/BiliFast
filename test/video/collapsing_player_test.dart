@@ -124,8 +124,8 @@ void main() {
       expect(collapse.height, full - 40, reason: 'shrinking from where it was scrolled back to');
     });
 
-    testWidgets('switching tabs follows the shown tab from its own pause point, the height passing between the two '
-        'with the swipe', (tester) async {
+    testWidgets('switching tabs keeps the height the shown tab gave it: the tab out of sight scrolls on with it from '
+        'its own pause point', (tester) async {
       await host(tester);
       await showComments(tester);
       scroll(PageTab.comments).jumpTo(500);
@@ -135,15 +135,46 @@ void main() {
 
       scroll(PageTab.intro).jumpTo(100);
       expect(collapse.height, full - 100);
+      expect(tabs.offsetOf(PageTab.comments), 600, reason: '100 past its own pause point at 500');
       await showComments(tester);
-      expect(collapse.height, full, reason: 'scrolled while playing, not since the pause');
-      scroll(PageTab.comments).jumpTo(560);
-      expect(collapse.height, full - 60);
+      expect(collapse.height, full - 100);
+      scroll(PageTab.comments).jumpTo(660);
+      expect(collapse.height, full - 160);
+      expect(tabs.offsetOf(PageTab.intro), 160);
 
       tabs.pager.jumpTo(220);
       await tester.pump();
       expect(tabs.position, 0.5);
-      expect(collapse.height, closeTo(full - 80, 1e-9));
+      expect(collapse.height, closeTo(full - 160, 1e-9), reason: 'nothing to bounce through the swipe');
+    });
+
+    testWidgets('paused, 评论 scrolled to the bar keeps it the bar back on 简介 at its top; 简介 scrolled back up grows '
+        'it, and 评论 further down is left where it is', (tester) async {
+      await host(tester);
+      collapse.paused = true;
+      await showComments(tester);
+      scroll(PageTab.comments).jumpTo(2000);
+      expect(collapse.height, bar);
+
+      tabs.select(PageTab.intro, animate: false);
+      await tester.pump();
+      expect(collapse.height, bar);
+      expect(tabs.offsetOf(PageTab.intro), closeTo(reserve, 1e-9), reason: 'its content just under the bar');
+
+      scroll(PageTab.intro).jumpTo(reserve - 50);
+      expect(collapse.height, closeTo(bar + 50, 1e-9));
+      expect(tabs.offsetOf(PageTab.comments), 2000);
+      await showComments(tester);
+      expect(collapse.height, bar);
+    });
+
+    testWidgets('a tab never laid out starts at the height the shown one gave the box', (tester) async {
+      await host(tester);
+      collapse.paused = true;
+      scroll(PageTab.intro).jumpTo(150);
+      expect(tabs.offsetOf(PageTab.comments), 150);
+      await showComments(tester);
+      expect(collapse.height, full - 150);
     });
 
     testWidgets('once it plays it grows back to full over 300 ms, never behind a scroll back to the top', (
@@ -656,11 +687,11 @@ void main() {
         'it) and keeps 评论\'s', (tester) async {
       collapse.width = 440;
       await host(tester);
-      scroll(PageTab.intro).jumpTo(reserve / 2);
-      collapse.paused = true;
       await showComments(tester);
       scroll(PageTab.comments).jumpTo(600);
       await showIntro(tester);
+      scroll(PageTab.intro).jumpTo(reserve / 2);
+      collapse.paused = true;
       const wider = 880.0;
       const widerReserve = wider / BiliMetrics.videoAspect - bar;
       collapse.turn(wider, sideways: true);

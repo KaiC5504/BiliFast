@@ -337,7 +337,46 @@ class CollapsingPlayer extends ChangeNotifier {
       final offset = tabs.offsetOf(tab);
       if (offset < (_from[tab] ?? 0)) _from[tab] = math.max(0, offset);
     }
+    _keepInStep();
     _update();
+  }
+
+  /// The tab out of sight scrolls on with the shown one as far as it must to be at the box's height, so switching
+  /// tabs never grows the box back: the official page keeps it small whichever tab shrank it. A tab further down
+  /// is left where it is.
+  void _keepInStep() {
+    if (_only != null || _steppingIn || (!_paused && _grow.isAnimating)) return;
+    final position = tabs.position;
+    if ((position - position.roundToDouble()).abs() > 1e-6) return;
+    final shown = PageTab.values[position.round().clamp(0, PageTab.values.length - 1)];
+    final height = _following(shown).$1;
+    for (final tab in PageTab.values) {
+      if (tab == shown) continue;
+      final needed = _offsetAt(tab, height);
+      if (tabs.offsetOf(tab) >= needed - 1e-6) continue;
+      final positions = tabs.scrollOf(tab).positions;
+      if (positions.isEmpty) {
+        tabs.carry(tab, needed);
+        continue;
+      }
+      final scroll = positions.last;
+      if (!scroll.hasContentDimensions) continue;
+      _steppingIn = true;
+      try {
+        scroll.jumpTo(math.min(needed, scroll.maxScrollExtent));
+      } finally {
+        _steppingIn = false;
+      }
+    }
+  }
+
+  bool _steppingIn = false;
+
+  /// The offset at which [tab] would hold the box at [height].
+  double _offsetAt(PageTab tab, double height) {
+    if (!_paused) return _full - height;
+    final from = _from[tab] ?? 0;
+    return from + playingHeight(full: _full, floor: _floor, offset: from) - height;
   }
 
   (double, double) _compute() {

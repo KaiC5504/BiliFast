@@ -562,8 +562,8 @@ void main() {
       await back(tester);
     });
 
-    testWidgets('paused upright on 评论 as the bar: sideways follows 简介, and back upright 评论 is the bar again',
-        (tester) async {
+    testWidgets('paused upright on 评论 as the bar: sideways follows 简介, which scrolled on with it, and back upright '
+        '评论 is the bar again', (tester) async {
       await host(tester, landscape: false);
       await opened(tester);
       await tester.tap(find.byKey(const ValueKey('tab-comments')));
@@ -575,8 +575,8 @@ void main() {
       expect(collapseBar(tester).height, PadPageTheme.barHeight);
       await turn(tester, wide);
       await frames(tester, 2);
-      expect(columnScroll(tester).pixels, 0);
-      expect(find.byKey(const ValueKey('collapse-bar')), findsNothing, reason: '简介 is at its top');
+      expect(columnScroll(tester).pixels, greaterThan(0));
+      expect(collapseBar(tester).height, PadPageTheme.barHeight, reason: '简介 kept in step with 评论');
       await turn(tester, tall);
       await frames(tester, 4);
       expect(tabScroll(tester, CommentsTab).pixels, 600);
