@@ -8,9 +8,10 @@ import 'package:flutter/widgets.dart';
 import '../../comments/picture_viewer.dart';
 import '../../shared/remote_image.dart';
 import '../../shared/theme.dart';
+import 'dynamic_open.dart' show dynamicStyle;
 
-/// A post's pictures: one alone at its shape, two to four two a row, more three a row (127, 140). [detail] is the post
-/// page's grid (140). A tap opens the picture viewer at that picture.
+/// A post's pictures: one alone at its shape, two to four two a row, more three a row (127, 140); a long one alone
+/// from its top under 长图 (29). [detail] is the post page's grid (140). A tap opens the picture viewer at that picture.
 class DynamicPictureGrid extends StatelessWidget {
   const DynamicPictureGrid({super.key, required this.pictures, this.detail = false, this.onOpen});
 
@@ -19,6 +20,10 @@ class DynamicPictureGrid extends StatelessWidget {
 
   /// Opens the viewer at a picture; [showDynamicPictures] over everything when null.
   final void Function(int index)? onOpen;
+
+  /// Taller than [DynamicCardTheme.longPicture] times its width.
+  static bool isLong(DynamicPicture picture) =>
+      picture.width > 0 && picture.height > 0 && picture.height / picture.width > DynamicCardTheme.longPicture;
 
   /// The cells' frames for [pictures] in [width]; the first picture's shape decides a lone one's frame and the height
   /// of cells two a row.
@@ -55,6 +60,7 @@ class DynamicPictureGrid extends StatelessWidget {
       builder: (context, constraints) {
         final frames = layout(pictures, constraints.maxWidth, detail: detail);
         final height = frames.fold(0.0, (bottom, frame) => math.max(bottom, frame.bottom));
+        final long = pictures.length == 1 && isLong(pictures.single);
         return SizedBox(
           height: height,
           width: constraints.maxWidth,
@@ -75,11 +81,13 @@ class DynamicPictureGrid extends StatelessWidget {
                       onTap: () => _open(context, index),
                       child: ClipRRect(
                         borderRadius: BorderRadius.circular(DynamicCardTheme.pictureRadius),
-                        child: RemoteImage(
-                          pictures[index].url,
-                          size: frame.size,
-                          placeholder: ColoredBox(color: DynamicCardTheme.pictureFill),
-                        ),
+                        child: long
+                            ? _LongPicture(url: pictures[index].url, size: frame.size)
+                            : RemoteImage(
+                                pictures[index].url,
+                                size: frame.size,
+                                placeholder: ColoredBox(color: DynamicCardTheme.pictureFill),
+                              ),
                       ),
                     ),
                   ),
@@ -101,7 +109,52 @@ class DynamicPictureGrid extends StatelessWidget {
   }
 }
 
-/// A repost's pictures (136): one row [DynamicCardTheme.repostStrip] tall scrolling sideways, each picture at its own
+/// A long picture alone (29): its top in the frame, 长图 on its bottom right.
+class _LongPicture extends StatelessWidget {
+  const _LongPicture({required this.url, required this.size});
+
+  final String url;
+  final Size size;
+
+  @override
+  Widget build(BuildContext context) => Stack(
+    fit: StackFit.expand,
+    children: [
+      RemoteImage(
+        url,
+        size: size,
+        alignment: Alignment.topCenter,
+        placeholder: ColoredBox(color: DynamicCardTheme.pictureFill),
+      ),
+      Positioned(
+        right: DynamicCardTheme.longLabelRight,
+        bottom: DynamicCardTheme.longLabelBottom,
+        height: DynamicCardTheme.longLabelHeight,
+        child: Container(
+          key: const ValueKey('dynamic-picture-long'),
+          padding: const EdgeInsets.symmetric(horizontal: DynamicCardTheme.longLabelPadding),
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: DynamicCardTheme.longLabelFill,
+            borderRadius: BorderRadius.circular(DynamicCardTheme.longLabelRadius),
+          ),
+          child: Text(
+            '长图',
+            maxLines: 1,
+            softWrap: false,
+            style: dynamicStyle(
+              DynamicCardTheme.longLabelText,
+              DynamicCardTheme.longLabelInk,
+              line: DynamicCardTheme.longLabelHeight,
+            ),
+          ),
+        ),
+      ),
+    ],
+  );
+}
+
+/// A repost's two or more pictures (136): one row [DynamicCardTheme.repostStrip] tall scrolling sideways, each picture at its own
 /// shape, from [inset] in and running off the right edge. A tap opens the viewer at that picture.
 class DynamicPictureStrip extends StatelessWidget {
   const DynamicPictureStrip({super.key, required this.pictures, this.inset = DynamicCardTheme.gutter, this.onOpen});
