@@ -394,7 +394,7 @@ class PadDanmakuCapsule extends StatelessWidget {
       width: on ? PadBodyTheme.capsuleWidth : PadBodyTheme.capsuleToggleOff,
       height: PadBodyTheme.capsuleHeight,
       clipBehavior: Clip.antiAlias,
-      decoration: ShapeDecoration(color: BiliColors.softGrey, shape: const StadiumBorder()),
+      decoration: ShapeDecoration(color: PageTheme.chipFill, shape: const StadiumBorder()),
       foregroundDecoration: ShapeDecoration(
         shape: StadiumBorder(
           side: BorderSide(color: BiliColors.divider, width: PadBodyTheme.capsuleBorder),
@@ -453,7 +453,7 @@ class PadDanmakuCapsule extends StatelessWidget {
             duration: duration,
             curve: _curve,
             width: on ? PadBodyTheme.capsuleToggle : PadBodyTheme.capsuleToggleOff,
-            color: on ? BiliColors.card : BiliColors.softGrey,
+            color: on ? BiliColors.card : PageTheme.chipFill,
             child: Semantics(
               key: const ValueKey('danmaku-toggle'),
               button: true,
@@ -688,7 +688,7 @@ class _HonorTag extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: PadBodyTheme.honorPadding),
         alignment: Alignment.center,
         decoration: BoxDecoration(
-          color: BiliColors.softGrey,
+          color: PageTheme.chipFill,
           borderRadius: BorderRadius.circular(PadBodyTheme.honorHeight / 2),
         ),
         child: Text('活动', style: _style(PadBodyTheme.honorText, BiliColors.pink, line: PadBodyTheme.honorHeight)),
@@ -865,7 +865,7 @@ class _Details extends StatelessWidget {
                   height: PadBodyTheme.tagHeight,
                   padding: const EdgeInsets.symmetric(horizontal: PadBodyTheme.tagPadding),
                   decoration: BoxDecoration(
-                    color: BiliColors.pageGrey,
+                    color: PadBodyTheme.tagFill,
                     borderRadius: BorderRadius.circular(PadBodyTheme.tagHeight / 2),
                   ),
                   child: Center(

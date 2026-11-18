@@ -864,6 +864,10 @@ abstract final class PageTheme {
   static const hairline = 0.5;
   static Color get tabText => tone(0xFF61666D, 0xFFA2A7AE);
 
+  /// The 点我发弹幕 capsule, the tags, 合集 and the chips under it: Ga0_s at night (1E2021 on 240), lighter than the
+  /// replies box's Ga0 ([BiliColors.softGrey]).
+  static Color get chipFill => tone(0xFFF6F7F8, 0xFF1E2022);
+
   /// 简介 and 评论 in 61666D or pink, 评论's count smaller on their baseline (03, 10, 18). The official app's
   /// glyphs are 35 px tall to the system font's 37 at 13.5 (font-check 02).
   static const tabLabelText = 12.75;
@@ -926,12 +930,13 @@ abstract final class IntroTheme {
   static const nameLine = 16.0;
   static const fansLine = 13.0;
 
-  /// 03's bolt disc sits flush with the avatar's lower right inside a ring of the page's white.
+  /// 03's bolt disc sits flush with the avatar's lower right inside a ring of the page's white. The marks keep their
+  /// day colours at night, as 241's 大 does.
   static const badge = 10.0;
   static const badgeRing = 1.0;
-  static Color get badgePerson => tone(0xFFFFCC00, 0xFFCCA000);
-  static Color get badgeOrganisation => tone(0xFF3EA2F4, 0xFF3EA2F4); // night?
-  static Color get badgeBolt => tone(0xFFFFFFFF, 0xFF17181A);
+  static const badgePerson = Color(0xFFFFCC00);
+  static const badgeOrganisation = Color(0xFF3EA2F4);
+  static const badgeBolt = Color(0xFFFFFFFF);
 
   static const followWidth = 72.0;
   static const followHeight = 24.0;
@@ -991,7 +996,8 @@ abstract final class IntroTheme {
   static const forbiddenIcon = 12.0;
   static const forbiddenGap = 9.0;
   static const forbiddenTextGap = 4.5;
-  static Color get forbidden => tone(0xFFF85A54, 0xFFD1403E);
+  /// 240 keeps 未经作者授权禁止转载's ⃠ at its day red.
+  static const forbidden = Color(0xFFF85A54);
   static const descGap = 2.7;
   static const descText = 12.0;
   static const descLine = 17.0;
@@ -1001,6 +1007,9 @@ abstract final class IntroTheme {
   static const tagPadding = 13.0;
   static const tagSpacing = 8.0;
   static Color get tagInk => tone(0xFF61666D, 0xFFA2A7AE);
+
+  /// The description's @ and links: 240's @ is Lb6's night blue, not [BiliColors.link]'s.
+  static Color get descLink => tone(0xFF00699D, 0xFF2C9CC8);
 
   /// 18 sets the action icons 30 below the plain tags, more than the action row's own top gap leaves; the tags keep
   /// the rest under them.
@@ -1095,8 +1104,9 @@ abstract final class IntroListTheme {
   static const marqueeRest = Duration(milliseconds: 1500);
   static const marqueeGap = 24.0;
 
-  static Color get chipTextColor => tone(0xFF61666D, 0xFFA2A7AE);
-  static Color get chipGlyphColor => tone(0xFF656668, 0xFF656668); // night?
+  /// At night the chips' text is the palette's text_title (828282 on 240) and the glyph a lighter grey.
+  static Color get chipTextColor => tone(0xFF61666D, 0xFF828282);
+  static Color get chipGlyphColor => tone(0xFF656668, 0xFFAAA9AE);
 
   /// A related row (03, 18): 92 apart, a 128 × 72 cover 10.33 below the hairline, the text 8 right of it.
   static const relatedRowHeight = 92.0;
@@ -1177,7 +1187,7 @@ abstract final class ActionTheme {
 
   /// The coin dialog (15): white over the page dimmed to 40%, the hint and the ✕ at 60% and 50%.
   static const coinDim = Color(0x99000000);
-  static Color get coinText => tone(0xFFFFFFFF, 0xFF17181A);
+  static const coinText = Color(0xFFFFFFFF);
   static const coinHint = Color(0x99FFFFFF);
   static const coinClose = Color(0x80FFFFFF);
   static const coinUnaffordable = Color(0x66000000);
@@ -1247,7 +1257,14 @@ abstract final class FavouriteTheme {
   static const tickStroke = 1.8;
   static Color get ringLight => tone(0xFFC9CCD0, 0xFF46494D);
   static const ringDark = Color(0x66FFFFFF);
-  static Color get tick => tone(0xFFFFFFFF, 0xFF17181A);
+  static const tick = Color(0xFFFFFFFF);
+
+  /// The light sheet and the alerts; at night the palette's Ga11, as 255's alert and 257's composer.
+  static Color get sheetFill => tone(0xFFFFFFFF, 0xFF242628);
+  static Color get field => tone(0xFFF6F7F8, 0xFF1E2022);
+
+  /// Under a pressed row: black darkens nothing at night, so white lifts it.
+  static Color get pressed => tone(0x14000000, 0x14FFFFFF);
   static const doneHeight = 40.0;
   static const doneText = 15.0;
   static const doneTop = 12.0;
@@ -1720,9 +1737,10 @@ abstract final class CommentRowTheme {
   static const vipMarkRight = 5 / 3;
   static const vipMarkBottom = 2.0;
   static const vipMarkText = 7.0;
-  static Color get vipMarkFill => BiliColors.pink;
-  static Color get vipMarkInk => tone(0xFFFFFFFF, 0xFF17181A);
-  static Color get vipMarkRim => tone(0xFFFFFFFF, 0xFF17181A);
+  /// 241 keeps the 大 at its day pink and white; only the ring follows the page.
+  static const vipMarkFill = Color(0xFFFF6699);
+  static const vipMarkInk = Color(0xFFFFFFFF);
+  static Color get vipMarkRim => BiliColors.card;
 
   /// The name and the LV badge centre 28.8-30 down on 10 and 13, lower in the first row under a header than in the
   /// rows after it; 29.5 is within 0.7 of each.
@@ -1732,7 +1750,8 @@ abstract final class CommentRowTheme {
   static const nameLine = 16.0;
   static const nameText = 13.0;
   static Color get name => BiliColors.secondaryText;
-  static Color get vipName => tone(0xFFFB7299, 0xFFFB7299); // night?
+  /// 241 keeps it at night.
+  static const vipName = Color(0xFFFB7299);
   static const badgeGap = 5.0;
   static const upGap = 4.0;
 
@@ -1749,9 +1768,9 @@ abstract final class CommentRowTheme {
     Color(0xFFDF6729),
     Color(0xFFE3524E),
   ];
-  static Color get levelInk => tone(0xFFFFFFFF, 0xFF17181A);
+  static const levelInk = Color(0xFFFFFFFF);
   static Color get upFill => BiliColors.pink;
-  static Color get upInk => tone(0xFFFFFFFF, 0xFF17181A);
+  static const upInk = Color(0xFFFFFFFF);
   static const upText = 8.0;
   static const upPadding = 3.0;
   static const upRadius = 2.0;
@@ -1843,8 +1862,9 @@ abstract final class CommentRowTheme {
   static const upChipSpacing = 0.4;
   static const upChipPadding = 13 / 3;
   static const upChipRadius = 2.0;
-  static Color get upChipFill => tone(0xFFF4F4F4, 0xFFF4F4F4); // night?
-  static Color get upChipInk => tone(0xFF757575, 0xFF757575); // night?
+  /// No night screenshot: the page's chip fill and the nearest palette grey's night (Ga6).
+  static Color get upChipFill => tone(0xFFF4F4F4, 0xFF1E2022);
+  static Color get upChipInk => tone(0xFF757575, 0xFF8B9097);
 
   static TextStyle get upChipStyle => TextStyle(
     fontFamily: BiliFonts.family,
@@ -1914,8 +1934,8 @@ abstract final class CommentRowTheme {
   static const fanGlyphGap = 1.0;
   static const fanLineGap = 2.05;
 
-  /// A card whose colour the server left out.
-  static Color get fanNumber => tone(0xFF998245, 0xFF998245); // night?
+  /// A card whose colour the server left out; the server's own colours are drawn as given at night too (241).
+  static const fanNumber = Color(0xFF998245);
 
   /// The name stops this far before the card's art.
   static const fanCardClearance = 4.0;
@@ -2003,7 +2023,8 @@ abstract final class CommentListTheme {
   static const barTop = 17 / 3;
   static const barBottom = 5.0;
   static const fieldHeight = 34.0;
-  static Color get fieldFill => BiliColors.pageGrey;
+  /// Ga1_s at night (232526 on 241), not the page gap's Ga1.
+  static Color get fieldFill => tone(0xFFF1F2F3, 0xFF232527);
   static const fieldPadding = 13.0;
   static const fieldText = 15.0;
   static Color get fieldInk => BiliColors.secondaryText;
@@ -2057,8 +2078,8 @@ abstract final class CommentTextTheme {
   /// ending in 😑 sits 2 pt lower than under plain text.
   static const emoteLineGrowth = 2.0;
 
-  static Color get viewerBackground => tone(0xFF000000, 0xFFFFFFFF);
-  static Color get viewerText => tone(0xFFFFFFFF, 0xFF17181A);
+  static const viewerBackground = Color(0xFF000000);
+  static const viewerText = Color(0xFFFFFFFF);
   static const viewerCountText = 15.0;
 
   /// The "2/5" count, below the safe area.
@@ -2122,28 +2143,34 @@ abstract final class SeekPreviewTheme {
 abstract final class ComposerTheme {
   static const gutter = BiliMetrics.gutter;
 
-  /// 14's page shows through at 80%: its white reads #CCCCCC.
-  static const dim = BiliColors.scrim;
-  static Color get sheet => BiliColors.card;
+  /// 14's page shows through at 80%: its white reads #CCCCCC. 257's dark page is dimmed further, 171819 to 0D0D0D.
+  static Color get dim => tone(0x33000000, 0x6F000000);
+
+  /// Ga11 at night (242628 on 257), lighter than the page.
+  static Color get sheet => tone(0xFFFFFFFF, 0xFF242628);
 
   /// The keyboard toggle and 发布 are a deeper pink than [BiliColors.pink]; 发布 with nothing to post is it at about
-  /// 30% on white.
-  static Color get accent => tone(0xFFED7098, 0xFFED7098); // night?
-  static Color get accentFaded => tone(0xFFF8D3DF, 0xFFF8D3DF); // night?
-  static Color get publishText => tone(0xFFFFFFFF, 0xFF17181A);
+  /// 30% on white. 257's faded 发布 is Pi5's night at 30% over the sheet, its label the palette's supplementary grey.
+  static Color get accent => tone(0xFFED7098, 0xFFD44E7D);
+  static Color get accentFaded => tone(0xFFF8D3DF, 0xFF593242);
+  static const publishText = Color(0xFFFFFFFF);
+  static Color get publishTextFaded => tone(0xFFFFFFFF, 0xFF686868);
   static Color get text => BiliColors.text;
   static Color get placeholder => tone(0xFFC9CCD0, 0xFF46494D);
 
   /// @, ⊕, ⤢ and the emote face.
   static Color get tool => tone(0xFF9499A0, 0xFF757A81);
   static Color get syncText => tone(0xFF61666D, 0xFFA2A7AE);
-  static Color get syncRing => placeholder;
-  static Color get panel => BiliColors.pageGrey;
-  static Color get tabBar => BiliColors.card;
-  static Color get tabSelected => BiliColors.pageGrey;
+  /// 257's ○ stays C9CCD0 at night, unlike the placeholder.
+  static const syncRing = Color(0xFFC9CCD0);
+
+  /// No night screenshot of the panel: darker than the sheet as by day (Ga13), the tab bar the sheet's.
+  static Color get panel => tone(0xFFF1F2F3, 0xFF1A1B1D);
+  static Color get tabBar => sheet;
+  static Color get tabSelected => panel;
   static Color get sectionTitle => syncText;
   static Color get kaomoji => BiliColors.text;
-  static Color get kaomojiTab => tone(0xFFA7A7A7, 0xFFA7A7A7); // night?
+  static Color get kaomojiTab => tone(0xFFA7A7A7, 0xFF5E6267);
 
   /// The sheet rises as the page dims, and falls when it closes itself; ⤢ grows the field.
   static const rise = Duration(milliseconds: 250);
@@ -2248,6 +2275,8 @@ abstract final class CommentOverlayTheme {
   static const alertMessageText = 14.0;
   static const alertMessageGap = 6.0;
   static const alertMessagePadBottom = 20.0;
+  static Color get alertFill => FavouriteTheme.sheetFill;
+  static Color get alertPressed => FavouriteTheme.pressed;
   static Color get alertTitle => BiliColors.text;
   static Color get alertMessage => BiliColors.secondaryText;
   static Color get alertCancel => BiliColors.secondaryText;
@@ -2306,7 +2335,7 @@ abstract final class MentionTheme {
 
   /// The search pill under the header, filled as 14's emote panel.
   static const fieldHeight = 36.0;
-  static Color get fieldFill => BiliColors.pageGrey;
+  static Color get fieldFill => CommentListTheme.fieldFill;
   static const fieldText = 15.0;
   static const fieldIcon = 18.0;
   static const fieldIconGap = 6.0;
@@ -2348,7 +2377,7 @@ abstract final class MentionTheme {
   static const removeGlyph = 11.0;
   static const removeInset = 4.0;
   static const removeFill = Color(0x8C000000);
-  static Color get removeGlyphColor => tone(0xFFFFFFFF, 0xFF17181A);
+  static const removeGlyphColor = Color(0xFFFFFFFF);
 }
 
 /// The avatar's page (49), measured from the safe area's top: the bar, the four shortcuts, then the white card of
@@ -6935,7 +6964,7 @@ abstract final class PadPageTheme {
   static const headerFieldHeight = 30.0;
   static const headerFieldText = 13.0;
   static const headerFieldPadding = 15.5;
-  static Color get headerFieldFill => BiliColors.softGrey;
+  static Color get headerFieldFill => PageTheme.chipFill;
   static Color get headerFieldInk => BiliColors.secondaryText;
   static const headerFace = 20.0;
   static const headerFaceRight = 7.0;
@@ -6960,7 +6989,7 @@ abstract final class PadPageTheme {
   static const commentFieldHeight = 32.0;
   static const commentFieldLeft = 20.0;
   static const commentFieldRight = 47.75;
-  static Color get commentFieldFill => BiliColors.softGrey;
+  static Color get commentFieldFill => PageTheme.chipFill;
   static const commentPromptLeft = 20.0;
   static const commentPromptText = 12.0;
   static Color get commentInk => BiliColors.secondaryText;
@@ -7062,6 +7091,7 @@ abstract final class PadBodyTheme {
   static const tagPadding = 13.5;
   static const tagSpacing = 12.0;
   static Color get tagInk => IntroTheme.name;
+  static Color get tagFill => tone(0xFFF1F2F3, 0xFF1E2022);
 
   /// The actions (03): 70 pt cells from the gutter, a 30 pt icon centred 35.5 under the meta line's centre, its count
   /// centred 26.75 below the icon's in the icons' grey, and the head ending 21.25 under the counts, where 热门评论's

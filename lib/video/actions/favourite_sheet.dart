@@ -66,8 +66,8 @@ class _Palette {
     secondary: BiliColors.secondaryText,
     divider: BiliColors.divider,
     ring: FavouriteTheme.ringLight,
-    field: BiliColors.softGrey,
-    pressed: BiliColors.pressedFill,
+    field: FavouriteTheme.field,
+    pressed: FavouriteTheme.pressed,
   );
 
   static const dark = _Palette(
@@ -231,7 +231,7 @@ class _FavouriteSheetState extends State<FavouriteSheet> with SingleTickerProvid
             child: _frame(
               child: DecoratedBox(
                 decoration: BoxDecoration(
-                  color: BiliColors.card,
+                  color: FavouriteTheme.sheetFill,
                   borderRadius: const BorderRadius.vertical(top: Radius.circular(BiliMetrics.sheetRadius)),
                 ),
                 child: Column(
@@ -704,7 +704,7 @@ class _FavouriteSheetState extends State<FavouriteSheet> with SingleTickerProvid
     excludeSemantics: true,
     child: _Pressable(
       onTap: _done,
-      highlight: BiliColors.pressedFill,
+      highlight: FavouriteTheme.pressed,
       radius: FavouriteTheme.doneHeight / 2,
       scale: true,
       child: Container(

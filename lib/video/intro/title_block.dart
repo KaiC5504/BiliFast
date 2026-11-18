@@ -224,7 +224,7 @@ class _HonorTag extends StatelessWidget {
     height: IntroTheme.titleRow,
     padding: const EdgeInsets.symmetric(horizontal: IntroTheme.honorPadding),
     alignment: Alignment.center,
-    decoration: BoxDecoration(color: BiliColors.softGrey, borderRadius: BorderRadius.circular(IntroTheme.titleRow / 2)),
+    decoration: BoxDecoration(color: PageTheme.chipFill, borderRadius: BorderRadius.circular(IntroTheme.titleRow / 2)),
     child: Text('活动', style: _style(IntroTheme.honorText, BiliColors.pink, line: IntroTheme.titleRow)),
   );
 }
@@ -498,7 +498,7 @@ class _PlainTag extends StatelessWidget {
       height: IntroTheme.tagHeight,
       padding: const EdgeInsets.symmetric(horizontal: IntroTheme.tagPadding),
       decoration: BoxDecoration(
-        color: BiliColors.softGrey,
+        color: PageTheme.chipFill,
         borderRadius: BorderRadius.circular(IntroTheme.tagHeight / 2),
       ),
       child: Center(

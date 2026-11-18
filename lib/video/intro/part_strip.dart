@@ -202,10 +202,10 @@ class _PartChipState extends State<_PartChip> {
             padding: const EdgeInsets.symmetric(horizontal: IntroListTheme.partChipPad),
             alignment: Alignment.centerLeft,
             decoration: BoxDecoration(
-              color: BiliColors.softGrey,
+              color: PageTheme.chipFill,
               borderRadius: BorderRadius.circular(BiliMetrics.cardRadius),
               border: Border.all(
-                color: playing ? BiliColors.pink : BiliColors.softGrey,
+                color: playing ? BiliColors.pink : PageTheme.chipFill,
                 width: IntroListTheme.partChipBorder,
               ),
             ),

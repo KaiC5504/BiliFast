@@ -102,7 +102,7 @@ class _Chip extends StatelessWidget {
       height: IntroListTheme.chipHeight,
       padding: const EdgeInsets.only(left: IntroListTheme.chipLead, right: IntroListTheme.chipTrailing),
       decoration: BoxDecoration(
-        color: BiliColors.softGrey,
+        color: PageTheme.chipFill,
         borderRadius: BorderRadius.circular(IntroListTheme.chipHeight / 2),
       ),
       child: Row(
