@@ -74,6 +74,11 @@ class MessageModel extends ChangeNotifier {
   /// 消息 has asked for the list in this run, so a login asks its first page again.
   bool _sessionsWanted = false;
 
+  /// 置顶 and 删除 accepted since the last page answered, the latest per session, numbered by [_editCount]. A page
+  /// asked before one would put its row back as it was, so the answer gets it again.
+  final _edits = <_SessionKey, ({int number, bool removed, int topTs})>{};
+  int _editCount = 0;
+
   Future<void>? _readingAll;
 
   /// The counts as last asked.
@@ -213,25 +218,32 @@ class MessageModel extends ChangeNotifier {
       _notify();
     }
     late final Future<void> call;
-    call = _fetchSessions(_generation, next: next, first: first).whenComplete(() {
+    call = _fetchSessions(_generation, next: next, first: first, editsBefore: _editCount).whenComplete(() {
       if (identical(_sessionCall, call)) _sessionCall = null;
     });
     _sessionCallIsFirst = first;
     return _sessionCall = call;
   }
 
-  Future<void> _fetchSessions(int generation, {required int? next, required bool first}) async {
+  Future<void> _fetchSessions(
+    int generation, {
+    required int? next,
+    required bool first,
+    required int editsBefore,
+  }) async {
     try {
       final page = await api.sessions(next: next);
       if (!_current(generation)) return;
+      final answered = _withEdits(page.sessions, after: editsBefore);
+      _edits.clear();
       var added = page.sessions.length;
       if (first) {
         _sessions
           ..clear()
-          ..addAll(page.sessions);
+          ..addAll(answered);
       } else {
         final fresh = [
-          for (final session in page.sessions)
+          for (final session in answered)
             if (_indexOf(session) < 0) session,
         ];
         _sessions.addAll(fresh);
@@ -244,6 +256,7 @@ class MessageModel extends ChangeNotifier {
       _error = null;
     } catch (error) {
       if (!_current(generation)) return;
+      _edits.clear();
       _logger.warn(LogCategory.ui, 'message sessions failed', {
         'page': first ? 'first' : 'next',
         'error': searchLogReason(error),
@@ -255,9 +268,21 @@ class MessageModel extends ChangeNotifier {
     _notify();
   }
 
-  int _indexOf(ChatSession session) => _sessions.indexWhere(
-    (each) => each.talkerId == session.talkerId && each.sessionType == session.sessionType && each.box == session.box,
-  );
+  static _SessionKey _key(ChatSession session) => (session.talkerId, session.sessionType, session.box);
+
+  int _indexOf(ChatSession session) {
+    final key = _key(session);
+    return _sessions.indexWhere((each) => _key(each) == key);
+  }
+
+  /// [page] with the edits numbered past [after] made again.
+  List<ChatSession> _withEdits(List<ChatSession> page, {required int after}) => [
+    for (final session in page)
+      if (_edits[_key(session)] case final edit? when edit.number > after) ...[
+        if (!edit.removed) session.copyWith(topTs: edit.topTs),
+      ] else
+        session,
+  ];
 
   /// Pinned sessions first, the latest pinned on top (262), then the rest newest first. Where get_sessions puts a
   /// pinned one is unconfirmed, so the list doesn't count on it.
@@ -288,18 +313,29 @@ class MessageModel extends ChangeNotifier {
     }
     if (!_current(generation)) return;
     _logger.info(LogCategory.api, 'message top', {'on': on, 'result': 'ok'});
+    final topTs = on ? _now().microsecondsSinceEpoch : 0;
+    _edits[_key(session)] = (number: ++_editCount, removed: false, topTs: topTs);
     final index = _indexOf(session);
     if (index < 0) return;
-    _sessions[index] = _sessions[index].copyWith(topTs: on ? _now().microsecondsSinceEpoch : 0);
+    _sessions[index] = _sessions[index].copyWith(topTs: topTs);
     _sort();
     _notify();
   }
 
   /// 删除 on [session]'s swipe (260): once Bilibili accepts it, the row leaves the list and its unread no longer
   /// counts. Throws when it is refused, the row left as it was.
+  ///
+  /// remove_session leaves a row's unread in the 私信 count, where nothing could clear it with the row gone, so a row
+  /// with unread is acked first as opening it would be. A failed ack is logged and the row goes all the same.
   Future<void> removeSession(ChatSession session) async {
     if (_disposed || !_loggedIn) return;
     final generation = _generation;
+    final listedAt = _indexOf(session);
+    final listed = listedAt < 0 ? session : _sessions[listedAt];
+    if (listed.unread > 0) {
+      await _ackBeforeRemoving(listed, generation);
+      if (!_current(generation)) return;
+    }
     try {
       await api.removeSession(session);
     } catch (error) {
@@ -308,6 +344,7 @@ class MessageModel extends ChangeNotifier {
     }
     if (!_current(generation)) return;
     _logger.info(LogCategory.api, 'message remove', {'result': 'ok'});
+    _edits[_key(session)] = (number: ++_editCount, removed: true, topTs: 0);
     final index = _indexOf(session);
     if (index < 0) return;
     final unread = _sessions.removeAt(index).unread;
@@ -316,6 +353,23 @@ class MessageModel extends ChangeNotifier {
     } else {
       _notify();
     }
+  }
+
+  /// 删除's ack: once Bilibili has it, the row shows no unread and its count leaves 私信's, so a refused 删除 after it
+  /// still shows what Bilibili holds.
+  Future<void> _ackBeforeRemoving(ChatSession listed, int generation) async {
+    try {
+      await api.read(listed, seqno: listed.maxSeqno);
+    } catch (error) {
+      if (_current(generation)) _logger.warn(LogCategory.api, 'message read failed', {'error': searchLogReason(error)});
+      return;
+    }
+    if (!_current(generation)) return;
+    final index = _indexOf(listed);
+    if (index < 0) return;
+    final row = _sessions[index];
+    _sessions[index] = row.copyWith(unread: 0, ackSeqno: math.max(row.ackSeqno, listed.maxSeqno));
+    _read(_unread.copyWith(chat: math.max(0, _unread.chat - row.unread)), const {_Count.chat}, listChanged: true);
   }
 
   /// [feed]'s list was opened: its count goes to 0 (回复与@ clears [NoticeFeed.reply] and [NoticeFeed.at]).
@@ -456,6 +510,7 @@ class MessageModel extends ChangeNotifier {
     _lastUnread = null;
     _readHere.clear();
     _sessions.clear();
+    _edits.clear();
     _sessionCall = null;
     _loading = false;
     _next = null;
@@ -483,6 +538,9 @@ class MessageModel extends ChangeNotifier {
 }
 
 enum _Count { reply, at, like, system, chat }
+
+/// A session as the list tells them apart: talker, session type and notice box.
+typedef _SessionKey = (int, int, NoticeBox?);
 
 /// A return to the app.
 class _Foreground with WidgetsBindingObserver {

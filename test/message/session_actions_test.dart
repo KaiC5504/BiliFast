@@ -75,6 +75,21 @@ class _HeldNextApi extends FakeMessageApi {
   }
 }
 
+/// Answers the session list as it stood when asked, held until the [gate] set then completes.
+class _GatedListApi extends FakeMessageApi {
+  _GatedListApi({super.sessionList});
+
+  Completer<void>? gate;
+
+  @override
+  Future<ChatSessionPage> sessions({int? next}) async {
+    final held = gate;
+    final page = await super.sessions(next: next);
+    if (held != null) await held.future;
+    return page;
+  }
+}
+
 Finder _key(String key) => find.byKey(ValueKey(key));
 
 /// The session ids top to bottom, as the model lists them.
@@ -188,6 +203,73 @@ void main() {
       expect(thrown, isA<BiliAPIError>());
       expect(_order(model), [9000, 9001, 2, 3, 4]);
       expect(logged(), contains('api 21026'));
+    });
+
+    testWidgets('删除 on a row with unread acks it up to its newest message first, so 私信\'s count stays down when '
+        '消息 asks again; a row with none sends no ack', (tester) async {
+      final api = FakeMessageApi(sessionList: _sessions(), counts: const MessageUnread(chat: 2));
+      final model = (await tester.runAsync(() => loaded(api)))!;
+
+      await tester.runAsync(() => model.removeSession(model.sessions[2]));
+      expect(api.reads, [(talkerId: 1, seqno: 10)]);
+      expect(api.calls.where((call) => call.startsWith(RegExp('read |removeSession'))), ['read 1 10', 'removeSession 1']);
+      expect(_order(model), [9000, 9001, 2, 3, 4]);
+      expect(model.unread.chat, 0);
+      await tester.runAsync(() => model.refreshUnread(force: true));
+      expect(model.unread.chat, 0);
+
+      await tester.runAsync(() => model.removeSession(model.sessions[2]));
+      expect(api.removed, [1, 2]);
+      expect(api.reads, hasLength(1));
+    });
+
+    testWidgets('a failed ack is logged and 删除 goes on; an ack through before a refused 删除 leaves the row read',
+        (tester) async {
+      final api = FakeMessageApi(sessionList: _sessions(), counts: const MessageUnread(chat: 2))
+        ..failures['read'] = const BiliAPIError(code: -500, message: '演示失败');
+      final model = (await tester.runAsync(() => loaded(api)))!;
+      await tester.runAsync(() => model.removeSession(model.sessions[2]));
+      expect(api.removed, [1]);
+      expect(_order(model), [9000, 9001, 2, 3, 4]);
+      expect(model.unread.chat, 0);
+      expect(logged(), contains('message read failed'));
+
+      final refused = FakeMessageApi(sessionList: _sessions(), counts: const MessageUnread(chat: 2))
+        ..failures['removeSession'] = const BiliAPIError(code: 21026, message: '演示失败');
+      final kept = (await tester.runAsync(() => loaded(refused)))!;
+      await tester.runAsync(() async {
+        await expectLater(kept.removeSession(kept.sessions[2]), throwsA(isA<BiliAPIError>()));
+      });
+      expect(refused.reads, [(talkerId: 1, seqno: 10)]);
+      expect(_order(kept), [9000, 9001, 1, 2, 3, 4]);
+      expect(kept.sessions[2].unread, 0);
+      expect(kept.unread.chat, 0);
+    });
+
+    testWidgets('a first page asked before 置顶 and 删除 but answered after them keeps both; a page asked after a 删除 '
+        'shows the session if Bilibili lists it again', (tester) async {
+      final api = _GatedListApi(sessionList: _sessions());
+      final model = (await tester.runAsync(() => loaded(api)))!;
+      final gate = api.gate = Completer<void>();
+      late Future<bool> refresh;
+      await tester.runAsync(() async {
+        refresh = model.refresh();
+        api.gate = null;
+        await model.setTop(model.sessions[4], on: true);
+        await model.removeSession(model.sessions.last);
+      });
+      expect(_order(model), [3, 9000, 9001, 1, 2]);
+      await tester.runAsync(() async {
+        gate.complete();
+        await refresh;
+      });
+      expect(_order(model), [3, 9000, 9001, 1, 2]);
+      expect(model.sessions.first.top, isTrue);
+
+      await tester.runAsync(() => model.removeSession(model.sessions.last));
+      api.sessionList.add(_person(2, DateTime(2026, 11, 18, 7)));
+      await tester.runAsync(model.refresh);
+      expect(_order(model), [3, 2, 9000, 9001, 1]);
     });
 
     testWidgets('the fake keeps what was done: a refresh after 置顶 and 删除 answers them', (tester) async {
@@ -434,6 +516,48 @@ void main() {
       await settle(tester, 60);
       expect(_key('message-session-3'), findsOneWidget);
       expect(open(tester, '3'), isFalse);
+    });
+
+    testWidgets('确认 closes the row; while its 删除 is out the row\'s actions only close it and send nothing; a second '
+        '置顶 while the first is out sends nothing', (tester) async {
+      final (model, api) = await show(tester);
+      Iterable<String> sent(String call) => api.calls.where((each) => each.startsWith(call));
+      final remove = api.holds['removeSession'] = Completer<void>();
+      await swipe(tester, '3');
+      await tester.tap(_key('message-session-delete-3'));
+      await settle(tester);
+      await tester.tap(_key('message-delete-确认'));
+      await settle(tester);
+      expect(open(tester, '3'), isFalse);
+
+      await swipe(tester, '3');
+      await tester.tap(_key('message-session-delete-3'));
+      await settle(tester);
+      expect(_key('message-delete'), findsNothing);
+      expect(open(tester, '3'), isFalse);
+      await swipe(tester, '3');
+      await tester.tap(_key('message-session-top-3'));
+      await settle(tester);
+      expect(open(tester, '3'), isFalse);
+      expect(sent('setTop'), isEmpty);
+
+      remove.complete();
+      await settle(tester);
+      expect(sent('removeSession'), ['removeSession 3']);
+      expect(_key('message-session-3'), findsNothing);
+
+      final top = api.holds['setTop'] = Completer<void>();
+      await swipe(tester, '2');
+      await tester.tap(_key('message-session-top-2'));
+      await settle(tester);
+      await swipe(tester, '2');
+      await tester.tap(_key('message-session-top-2'));
+      await settle(tester);
+      expect(sent('setTop'), ['setTop 2 true']);
+      top.complete();
+      await settle(tester);
+      expect(api.tops, [(talkerId: 2, on: true)]);
+      expect(model.sessions.first.talkerId, 2);
     });
 
     testWidgets('VoiceOver: a chat row offers 置顶 and 删除 as actions, which work without a swipe', (tester) async {

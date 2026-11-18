@@ -75,6 +75,9 @@ class _MessagePageState extends State<MessagePage> with SkinRefreshRoom, Widgets
   /// The chat row whose 置顶 and 删除 are out (259).
   final _swipes = SessionSwipes();
 
+  /// Rows with a 置顶 or 删除 out, from its tap to Bilibili's answer: their actions only close the row meanwhile.
+  final _busy = <String>{};
+
   late final _paging = FollowPaging(
     canAsk: () {
       final model = _model!;
@@ -321,26 +324,34 @@ class _MessagePageState extends State<MessagePage> with SkinRefreshRoom, Widgets
   /// 置顶 or 取消置顶 (259): the row closes at once, and goes to the top or back in time order once Bilibili agrees.
   Future<void> _setTop(ChatSession session) async {
     _swipes.closeAll();
+    final id = _rowId(session);
+    if (!_busy.add(id)) return;
     try {
       await _model!.setTop(session, on: !session.top);
     } on Exception catch (error) {
       _actionFailed(error);
+    } finally {
+      _busy.remove(id);
     }
   }
 
-  /// 删除 (259): the row stays open under 260's alert; 确认 takes it off the list once Bilibili agrees.
+  /// 删除 (259): the row stays open under 260's alert and closes on either button; 确认 takes it off the list once
+  /// Bilibili agrees.
   Future<void> _delete(ChatSession session) async {
-    final confirmed = await confirmDeleteChat(context);
-    if (!mounted) return;
-    if (!confirmed) {
+    final id = _rowId(session);
+    if (!_busy.add(id)) {
       _swipes.closeAll();
       return;
     }
     try {
-      await _model!.removeSession(session);
-    } on Exception catch (error) {
+      final confirmed = await confirmDeleteChat(context);
+      if (!mounted) return;
       _swipes.closeAll();
+      if (confirmed) await _model!.removeSession(session);
+    } on Exception catch (error) {
       _actionFailed(error);
+    } finally {
+      _busy.remove(id);
     }
   }
 

@@ -222,6 +222,7 @@ class FakeMessageApi implements MessageApi {
         sessionList[index] = sessionList[index].copyWith(topTs: on ? DateTime.now().microsecondsSinceEpoch : 0);
       });
 
+  /// Its unread stays in [counts], as Bilibili's remove_session leaves it: only an ack ([read]) clears it.
   @override
   Future<void> removeSession(ChatSession session) => _answer('removeSession', 'removeSession ${session.talkerId}', () {
     removed.add(session.talkerId);
