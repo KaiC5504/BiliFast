@@ -237,7 +237,7 @@ Future<void> main(List<String> args) async {
   unawaited(sideload.start());
   NotifyTaps(host: services.notify, navigator: services.navigator).start();
   appearance
-    ..forced = args.contains('--dark')
+    ..forced = args.contains('--dark') || const bool.fromEnvironment('DARK')
     ..attach();
   runApp(BiliFastApp(services: services, initialLink: _argument(args, '--play=')));
 }

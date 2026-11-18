@@ -99,7 +99,7 @@ xcrun simctl bootstatus "$udid" -b > /dev/null
 xcrun simctl status_bar "$udid" override --time 9:41 --batteryLevel 100 --batteryState charged \
   --cellularBars 4 --wifiBars 3 > /dev/null 2>&1 || true
 if ! nice -n 10 flutter build ios --simulator --debug --dart-define=FAKE_ACCOUNT=true --dart-define=MUTE=true \
-    --dart-define=DEV_INSTALL=true > "$LOGS/build.log" 2>&1; then
+    --dart-define=DEV_INSTALL=true --dart-define=DARK={dark} > "$LOGS/build.log" 2>&1; then
   grep -iE "error" "$LOGS/build.log" | head -20 || true
   echo "build failed: $LOGS/build.log on the Mac"
   exit 1
@@ -149,6 +149,7 @@ def main() -> None:
     sim.add_argument("--pad", action="store_true", help="the iPad simulator instead of the iPhone's")
     sim.add_argument("--wait", type=int, default=8, help="seconds between launch and the screenshot")
     sim.add_argument("--name", default="launch", help="the screenshot's file name, without .png")
+    sim.add_argument("--dark", action="store_true", help="深色模式 for the run, as the PC's --dark")
     commands.add_parser("stop")
     args = parser.parse_args()
 
@@ -160,7 +161,9 @@ def main() -> None:
         on_mac(PREPARE + PHONE)
         return
     name, device_type = SIMULATORS["pad" if args.pad else "phone"]
-    on_mac(PREPARE + SIM.format(name=name, type=device_type, bundle=BUNDLE_ID, wait=args.wait, shot=args.name))
+    on_mac(PREPARE + SIM.format(
+        name=name, type=device_type, bundle=BUNDLE_ID, wait=args.wait, shot=args.name, dark=str(args.dark).lower()
+    ))
     SHOTS.mkdir(parents=True, exist_ok=True)
     target = SHOTS / f"{args.name}.png"
     subprocess.run(["scp", "-q", "-o", "BatchMode=yes", f"mac:.mac-dev/bilifast/shots/{args.name}.png", str(target)],

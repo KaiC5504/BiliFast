@@ -6,6 +6,7 @@ import 'package:bili_core/devlog.dart';
 import 'package:bilifast/account/keychain_store.dart';
 import 'package:bilifast/app/app_environment.dart';
 import 'package:bilifast/app/app_scope.dart';
+import 'package:bilifast/app/appearance.dart' show redrawAll;
 import 'package:bilifast/home/avatar_page.dart';
 import 'package:bilifast/home/feed_model.dart';
 import 'package:bilifast/home/home_header.dart';
@@ -21,6 +22,7 @@ import 'package:bilifast/shared/theme.dart';
 import 'package:bilifast/skin/skin.dart';
 import 'package:flutter/gestures.dart' show kTouchSlop;
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart' show RenderDecoratedBox;
 import 'package:flutter_test/flutter_test.dart';
 
 import '../app/fake_keychain.dart';
@@ -376,6 +378,24 @@ void main() {
     expect(header(tester), open);
     expect(magnifier(), findsNothing);
     expect(tester.binding.transientCallbackCount, 0);
+  });
+
+  testWidgets('dressed at night, the search field takes the dark card, as it does undressed', (tester) async {
+    await show(tester, phone: true, skin: _pictures.skin());
+    BiliTheme.dark = true;
+    redrawAll(tester.element(find.byType(MainShell)));
+    await tester.pump();
+    final shots = Platform.environment['BILIFAST_SHOTS'];
+    if (shots != null) await saveShot(tester, find.byKey(_screen), '$shots/dressed-dark.png');
+    final field = tester.widget<Container>(find.byKey(const ValueKey('home-search-field')));
+    expect((field.decoration! as ShapeDecoration).color, const Color(0xFF17181A));
+    final fills = tester
+        .renderObjectList<RenderDecoratedBox>(
+          find.descendant(of: find.byKey(const ValueKey('home-search-field')), matching: find.byType(DecoratedBox)),
+        )
+        .where((box) => box.position == DecorationPosition.background)
+        .map((box) => (box.decoration as ShapeDecoration).color);
+    expect(fills.first, const Color(0xFF17181A));
   });
 
   testWidgets("a 装扮's header folds too: its pictures move up with it, cut at the screen's top, the magnifier in the "
