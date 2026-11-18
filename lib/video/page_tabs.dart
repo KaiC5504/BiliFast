@@ -442,7 +442,7 @@ class DanmakuCapsule extends StatelessWidget {
       width: on ? PageTheme.danmakuFieldWidth + PageTheme.danmakuToggleOn : PageTheme.danmakuToggleOff,
       height: height,
       clipBehavior: Clip.antiAlias,
-      decoration: ShapeDecoration(color: BiliColors.softGrey, shape: const StadiumBorder()),
+      decoration: ShapeDecoration(color: PageTheme.chipFill, shape: const StadiumBorder()),
       foregroundDecoration: ShapeDecoration(
         shape: StadiumBorder(
           side: BorderSide(color: BiliColors.divider, width: border),
@@ -455,7 +455,7 @@ class DanmakuCapsule extends StatelessWidget {
             duration: duration,
             curve: _curve,
             width: toggleWidth,
-            color: on ? BiliColors.card : BiliColors.softGrey,
+            color: on ? BiliColors.card : PageTheme.chipFill,
             child: _toggle(),
           ),
         ],

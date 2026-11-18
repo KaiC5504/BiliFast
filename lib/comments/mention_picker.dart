@@ -331,7 +331,7 @@ class _CandidateRowState extends State<_CandidateRow> {
       onTap: widget.onTap,
       child: Container(
         height: MentionTheme.rowHeight,
-        color: _pressed ? BiliColors.pressedFill : null,
+        color: _pressed ? FavouriteTheme.pressed : null,
         padding: const EdgeInsets.symmetric(horizontal: MentionTheme.gutter),
         child: Row(
           children: [

@@ -110,6 +110,9 @@ class _DescriptionTextState extends State<DescriptionText> {
   final _recognizers = <TapGestureRecognizer>[];
   late List<InlineSpan> _spans;
 
+  /// The spans carry the link colour, so a change of 深色模式 builds them again.
+  bool _spansDark = BiliTheme.dark;
+
   @override
   void initState() {
     super.initState();
@@ -144,6 +147,7 @@ class _DescriptionTextState extends State<DescriptionText> {
   /// Taps read the callbacks from [widget] when they happen, so only new runs need new spans.
   List<InlineSpan> _build() {
     _disposeRecognizers();
+    _spansDark = BiliTheme.dark;
     final spans = <InlineSpan>[];
     var lineStart = true;
     for (final run in widget.runs) {
@@ -159,7 +163,7 @@ class _DescriptionTextState extends State<DescriptionText> {
   }
 
   InlineSpan _span(RichRun run) {
-    final linked = TextStyle(color: BiliColors.link);
+    final linked = TextStyle(color: IntroTheme.descLink);
     return switch (run) {
       TextRun(:final text) => TextSpan(text: text),
       EmoteRun(:final token) => TextSpan(text: token),
@@ -193,8 +197,11 @@ class _DescriptionTextState extends State<DescriptionText> {
   }
 
   @override
-  Widget build(BuildContext context) => Text.rich(
-    TextSpan(style: widget.style, children: _spans),
-    strutStyle: BiliFonts.strutOf(context, widget.style),
-  );
+  Widget build(BuildContext context) {
+    if (_spansDark != BiliTheme.dark) _spans = _build();
+    return Text.rich(
+      TextSpan(style: widget.style, children: _spans),
+      strutStyle: BiliFonts.strutOf(context, widget.style),
+    );
+  }
 }

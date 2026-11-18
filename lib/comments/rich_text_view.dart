@@ -104,6 +104,9 @@ class _CommentTextState extends State<CommentText> {
   late List<InlineSpan> _spans;
   bool _hasEmote = false;
 
+  /// The spans carry the link colours, so a change of 深色模式 builds them again.
+  bool _spansDark = BiliTheme.dark;
+
   @override
   void initState() {
     super.initState();
@@ -156,6 +159,7 @@ class _CommentTextState extends State<CommentText> {
 
   List<InlineSpan> _build() {
     _disposeRecognizers();
+    _spansDark = BiliTheme.dark;
     _hasEmote = widget.runs.any(_drawn);
     final linked = TextStyle(color: CommentTextTheme.link);
     final fontSize = widget.style.fontSize ?? kDefaultFontSize;
@@ -267,6 +271,7 @@ class _CommentTextState extends State<CommentText> {
 
   @override
   Widget build(BuildContext context) {
+    if (_spansDark != BiliTheme.dark) _spans = _build();
     final text = Text.rich(
       TextSpan(children: [?widget.leading, ..._spans]),
       style: widget.style,

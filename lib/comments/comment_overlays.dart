@@ -476,7 +476,7 @@ class _DeleteAlert extends StatelessWidget {
     width: CommentOverlayTheme.alertWidth,
     clipBehavior: Clip.antiAlias,
     decoration: BoxDecoration(
-      color: BiliColors.card,
+      color: CommentOverlayTheme.alertFill,
       borderRadius: BorderRadius.circular(CommentOverlayTheme.alertRadius),
     ),
     child: Column(
@@ -576,7 +576,7 @@ class _AlertButtonState extends State<_AlertButton> {
       onTapCancel: () => _press(false),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 120),
-        color: _down ? BiliColors.pressedFill : BiliColors.card,
+        color: _down ? CommentOverlayTheme.alertPressed : CommentOverlayTheme.alertFill,
         alignment: Alignment.center,
         child: Text(
           widget.label,

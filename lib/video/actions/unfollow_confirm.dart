@@ -75,7 +75,7 @@ class _Alert extends StatelessWidget {
     key: const ValueKey('unfollow-alert'),
     width: FavouriteTheme.alertWidth,
     clipBehavior: Clip.antiAlias,
-    decoration: BoxDecoration(color: BiliColors.card, borderRadius: BorderRadius.circular(FavouriteTheme.alertRadius)),
+    decoration: BoxDecoration(color: FavouriteTheme.sheetFill, borderRadius: BorderRadius.circular(FavouriteTheme.alertRadius)),
     child: Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -153,7 +153,7 @@ class _AlertButtonState extends State<_AlertButton> {
       onTapCancel: () => _press(false),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 120),
-        color: _down ? BiliColors.pressedFill : BiliColors.card,
+        color: _down ? FavouriteTheme.pressed : FavouriteTheme.sheetFill,
         alignment: Alignment.center,
         child: Text(
           widget.label,

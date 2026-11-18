@@ -47,7 +47,7 @@ class CollectionRow extends StatelessWidget {
             onTap: onOpen,
             child: Container(
               height: IntroListTheme.collectionHeight,
-              color: BiliColors.softGrey,
+              color: PageTheme.chipFill,
               padding: const EdgeInsets.only(
                 left: IntroListTheme.collectionLead,
                 right: IntroListTheme.collectionTrailing,
