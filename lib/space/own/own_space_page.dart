@@ -282,9 +282,13 @@ class _OwnSpacePageState extends State<OwnSpacePage> with RouteAware {
     final profile = _profile;
     final banner = profile?.own?.banner ?? profile?.banner;
     final collapsed = profile == null || _collapsed;
-    // Over a picture banner what it measured (light until then); over the default banner dark, and on the bar
+    // Over a picture banner what it measured (light until then); over the default banner by the mode, and on the bar
     // whatever its colour wants.
-    final lightStatus = collapsed ? look.lightStatus : banner != null && banner.isNotEmpty && (_bannerLight ?? true);
+    final lightStatus = collapsed
+        ? look.lightStatus
+        : banner != null && banner.isNotEmpty
+        ? (_bannerLight ?? true)
+        : BiliTheme.dark;
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: lightStatus ? SystemUiOverlayStyle.light : SystemUiOverlayStyle.dark,
       // Pushed on a plain route with no Material above it, text would otherwise take the app's fallback style.

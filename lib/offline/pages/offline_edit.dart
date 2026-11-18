@@ -169,7 +169,7 @@ class OfflineDeleteConfirm extends StatelessWidget {
                   width: _T.confirmWidth,
                   clipBehavior: Clip.antiAlias,
                   decoration: BoxDecoration(
-                    color: BiliColors.card,
+                    color: _T.confirmFill,
                     borderRadius: BorderRadius.circular(_T.confirmRadius),
                   ),
                   child: Column(
@@ -260,7 +260,7 @@ class _ConfirmButtonState extends State<_ConfirmButton> {
       onTapUp: (_) => _press(false),
       onTapCancel: () => _press(false),
       child: ColoredBox(
-        color: _down ? _T.confirmPressed : BiliColors.card,
+        color: _down ? _T.confirmPressed : _T.confirmFill,
         child: Padding(
           padding: widget.inset,
           child: Center(child: offlineLine(widget.label, offlineStyle(_T.confirmButtonText, widget.color))),

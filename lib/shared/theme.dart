@@ -3258,7 +3258,7 @@ abstract final class HistoryTheme {
   static const backHalfHeight = 7.35;
   static const backStroke = 1.4;
   static const backDrop = -0.33;
-  static Color get back => tone(0xFF484C53, 0xFFB9BDC2);
+  static Color get back => tone(0xFF484C53, 0xFFE7E9EB);
   static const titleText = 20.0;
   static const titleWeight = FontWeight.w600;
 
@@ -3348,7 +3348,7 @@ abstract final class HistoryTheme {
   /// The pink line along the cover's bottom; a few seconds in still shows this much of it.
   static const progressHeight = 2.0;
   static const progressMin = 23 / 3;
-  static Color get progress => tone(0xFFEA6E96, 0xFFEA6E96); // night?
+  static Color get progress => tone(0xFFEA6E96, 0xFFD44E7D);
 
   /// The page's own states: logged out, empty, failed.
   static const stateText = 15.0;
@@ -3370,11 +3370,11 @@ abstract final class HistoryTheme {
   static const sheetDim = Color(0xB3000000);
   static const sheetIn = Duration(milliseconds: 280);
   static const sheetOut = Duration(milliseconds: 220);
-  static Color get sheetFill => BiliColors.card;
+  static Color get sheetFill => tone(0xFFFFFFFF, 0xFF1E2022);
   static const sheetHeaderHeight = 44.0;
   static const sheetHeaderText = 14.0;
   static const sheetHeaderInset = 12.7;
-  static Color get sheetHeaderInk => tone(0xFF505050, 0xFF505050); // night?
+  static Color get sheetHeaderInk => tone(0xFF505050, 0xFFB9BDC2);
   static const sheetItemCentre = 33.0;
   static const sheetCircle = 44.0;
   static Color get sheetCircleFill => BiliColors.pink;
@@ -3384,7 +3384,7 @@ abstract final class HistoryTheme {
   static const sheetShareStroke = 1.6;
   static const sheetLabelText = 12.0;
   static const sheetLabelGap = 6.0;
-  static Color get sheetLabelInk => tone(0xFF999999, 0xFF999999); // night?
+  static Color get sheetLabelInk => tone(0xFF999999, 0xFF757A81);
   static const sheetItemWidth = 66.0;
   static const sheetShareBottom = 127.0;
   static const sheetDivider = 1.0;
@@ -3399,10 +3399,10 @@ abstract final class HistoryTheme {
   static const sheetDeleteLabelGap = 14.2;
   static Color get sheetDeleteInk => tone(0xFF61666D, 0xFFA2A7AE);
   static const sheetBand = 16 / 3;
-  static Color get sheetBandFill => tone(0xFFF4F4F4, 0xFFF4F4F4); // night?
+  static Color get sheetBandFill => tone(0xFFF4F4F4, 0xFF0A0B0C);
   static const sheetCancelHeight = 55.0;
   static const sheetCancelText = 16.0;
-  static Color get sheetCancelInk => tone(0xFF505050, 0xFF505050); // night?
+  static Color get sheetCancelInk => tone(0xFF505050, 0xFFB9BDC2);
 }
 
 /// The login page and its bar.
@@ -3440,8 +3440,8 @@ abstract final class LoginTheme {
   /// page with a quiet zone of about 4 modules, the message [qrGap] under it.
   static const qrSize = 200.0;
   static const qrQuietZone = 16.0;
-  static Color get qrModule => BiliColors.text;
-  static Color get qrBackground => BiliColors.card;
+  static const qrModule = Color(0xFF18191C);
+  static const qrBackground = Color(0xFFFFFFFF);
   static const qrGap = BiliMetrics.sectionGap;
 
   /// Once scanned, the code steps back while 确认 is waited for on the phone.
@@ -3735,7 +3735,7 @@ abstract final class SearchTheme {
   static const chipRunSpacing = 8.0;
   static const chipRadius = 4.0;
   static const chipTextMax = 117.0;
-  static Color get chipFill => BiliColors.softGrey;
+  static Color get chipFill => tone(0xFFF6F7F8, 0xFF1E2022);
   static const foldedRows = 2;
   static const historyMotion = Duration(milliseconds: 250);
 
@@ -3745,7 +3745,7 @@ abstract final class SearchTheme {
   static const cellRunSpacing = 8.0;
   static const cellPadding = 8.0;
   static const cellRadius = 4.0;
-  static Color get cellFill => BiliColors.softGrey;
+  static Color get cellFill => tone(0xFFF6F7F8, 0xFF1E2022);
   static const discoveryWords = 12;
 
   /// A 搜索发现 word's grey "·昨天更新" (52's first cell).
@@ -3769,20 +3769,24 @@ abstract final class SearchTheme {
   /// The suggestions (55): rows 44 tall, each ending in a 1 px #D9DBDE hairline from the gutter to the right edge.
   static const suggestionHeight = 44.0;
   static const suggestionHairline = 1 / 3;
-  static Color get suggestionHairlineColor => tone(0xFFD9DBDE, 0xFFD9DBDE); // night?
+  static Color get suggestionHairlineColor => tone(0xFFD9DBDE, 0xFF383A3E);
 }
 
 /// 搜索's results (56, 57, 59-61): the tab row, the video and uploader rows, the ⋮ sheet.
 abstract final class SearchResultTheme {
   static Color get page => BiliColors.card;
 
+  /// Over results the field row and the tab row: white by day; at night 254's darker grey, which ends the header
+  /// in place of [hairlineInk].
+  static Color get headerFill => tone(0xFFFFFFFF, 0xFF101011);
+
   /// The tab row: 40 under the field row (which ends 106 down, where 55's suggestions start), then a hairline across
   /// the page, lighter than the rows' own. Labels sit in 54 wide slots from the left edge, the shown one 16 and pink,
   /// the others 15 and grey, all on one baseline.
   static const tabRowHeight = 40.0;
   static const hairline = 1 / 3;
-  static Color get hairlineInk => tone(0xFFE3E5E7, 0xFF2F3134);
-  static Color get rowHairlineInk => tone(0xFFD9DBDE, 0xFFD9DBDE); // night?
+  static Color get hairlineInk => tone(0xFFE3E5E7, 0xFF101011);
+  static Color get rowHairlineInk => tone(0xFFD9DBDE, 0xFF383A3E);
   static const tabSlot = 54.0;
   static const tabText = 15.0;
   static const tabSelectedText = 16.0;
@@ -3823,7 +3827,7 @@ abstract final class SearchResultTheme {
   static const coverWidth = 172.0;
   static const coverHeight = 97.0;
   static const coverRadius = 13 / 3;
-  static Color get coverPlaceholder => BiliColors.pageGrey;
+  static Color get coverPlaceholder => tone(0xFFF1F2F3, 0xFF1E2022);
   static const textGap = 8.0;
 
   /// Two title lines 19.33 apart, their first ink 3.3 under the cover's top; they wrap before 422.
@@ -3888,7 +3892,7 @@ abstract final class SearchResultTheme {
   static const badgeRing = 4 / 3;
   static Color get badgePerson => IntroTheme.badgePerson;
   static Color get badgeOrganisation => IntroTheme.badgeOrganisation;
-  static Color get badgeBolt => IntroTheme.badgeBolt;
+  static const badgeBolt = Color(0xFFFFFFFF);
 
   /// "+ 关注": the pink pill 12 from the right, level with the avatar; followed, 简介's grey 已关注.
   static const followWidth = 70.0;
@@ -3933,17 +3937,17 @@ abstract final class SearchResultTheme {
   static const sheetDim = Color(0x52000000);
   static const sheetIn = Duration(milliseconds: 280);
   static const sheetOut = Duration(milliseconds: 220);
-  static Color get sheetFill => BiliColors.softGrey;
+  static Color get sheetFill => tone(0xFFF6F7F8, 0xFF202123);
   static const sheetRadius = 12.0;
   static const sheetInset = 16.0;
   static const grabberTop = 8.0;
   static const grabberWidth = 30.0;
   static const grabberHeight = 3.0;
-  static Color get grabberInk => tone(0xFFC5C6C6, 0xFFC5C6C6); // night?
+  static Color get grabberInk => tone(0xFFC5C6C6, 0xFF4D4D4F);
   static const sheetCardTop = 19.0;
   static const sheetCardHeight = 137 / 3;
   static const sheetCardRadius = 6.0;
-  static Color get sheetCardFill => BiliColors.card;
+  static Color get sheetCardFill => tone(0xFFFFFFFF, 0xFF242628);
   static const sheetIcon = 18.0;
   static const sheetIconLeft = 13.0;
   static const sheetIconGap = 9.0;
@@ -3997,9 +4001,9 @@ abstract final class SearchFilterTheme {
   static const chipHanGap = 1.0;
 
   /// The chosen chip keeps the same grey; only its label turns the deeper pink of the comment composer's accent.
-  static Color get chip => BiliColors.softGrey;
+  static Color get chip => tone(0xFFF6F7F8, 0xFF1E2022);
   static Color get chipLabel => tone(0xFF61666D, 0xFFA2A7AE);
-  static Color get chipChosenLabel => tone(0xFFED7098, 0xFFED7098); // night?
+  static Color get chipChosenLabel => tone(0xFFED7098, 0xFFD44E7D);
 }
 
 /// 搜索's glyphs (52-60): their strokes.
@@ -4124,7 +4128,7 @@ abstract final class UploaderSheetTheme {
   static const chevronWidth = 20 / 3;
   static const chevronHeight = 12.0;
   static const chevronStroke = 1.0;
-  static Color get chevronInk => tone(0xFF939393, 0xFF939393); // night?
+  static Color get chevronInk => tone(0xFF939393, 0xFF757A81);
   static const chevronGap = 14.0;
 
   /// The tap target around the face and around 进入空间 ›.
@@ -4165,7 +4169,7 @@ abstract final class UploaderSheetTheme {
   /// The page's own video: its title pink after the playing mark, three rounded bars (10, 5.33 and 10 tall, 3.45
   /// apart) 2 in from the title's start and 6 before its text, a little under the line's middle.
   static Color get playingInk => BiliColors.pink;
-  static Color get barsInk => tone(0xFFEB7093, 0xFFEB7093); // night?
+  static Color get barsInk => tone(0xFFEB7093, 0xFFD44E7D);
   static const barsLead = 2.0;
   static const barsTrail = 6.0;
   static const barsDrop = 0.25;
@@ -4192,7 +4196,7 @@ abstract final class UploaderSheetTheme {
   /// The end of the grid: 已经到底啦~ (76) or the next page's spinner, in a 40 band.
   static const footerHeight = 40.0;
   static const endText = 14.0;
-  static Color get endInk => tone(0xFF727272, 0xFF727272); // night?
+  static Color get endInk => tone(0xFF727272, 0xFF8B9097);
   static const spinnerRadius = 10.0;
 
   /// The first load's TV, its failure and 重试.
@@ -4212,7 +4216,7 @@ abstract final class SpaceTheme {
 
   /// The banner runs under the status bar to 187.67; a space without one draws this light fill in its place.
   static const bannerHeight = 563 / 3;
-  static Color get bannerDefault => tone(0xFFF3F2F7, 0xFFF3F2F7); // night?
+  static Color get bannerDefault => tone(0xFFF3F2F7, 0xFF1A1B1D);
 
   /// 〈, 私信, search and ⋮: 30 pt discs of black at 30% centred 7 under the safe area's top, 〈 25 from the left and
   /// the others 109, 67 and 25 from the right. Their glyphs are white over the banner and grey on the white bar.
@@ -4220,7 +4224,7 @@ abstract final class SpaceTheme {
   static const button = 30.0;
   static const buttonTarget = 44.0;
   static const buttonFill = Color(0x4D000000);
-  static Color get buttonInk => tone(0xFFFFFFFF, 0xFF17181A);
+  static const buttonInk = Color(0xFFFFFFFF);
   static Color get barInk => tone(0xFF61666D, 0xFFA2A7AE);
   static const backCentre = 25.0;
   static const chatCentreRight = 109.0;
@@ -4255,7 +4259,7 @@ abstract final class SpaceTheme {
   static const pillPadRight = 12.0;
   static Color get pillFill => tone(0xFFFFECF1, 0xFF2F1A22);
   static Color get pillInk => BiliColors.pink;
-  static Color get pillFollowedFill => tone(0xFFF1F2F3, 0xFF0A0B0C);
+  static Color get pillFollowedFill => tone(0xFFF1F2F3, 0xFF2F3134);
   static Color get pillFollowedInk => BiliColors.secondaryText;
   static const pillText = 14.0;
   static const pillPlus = 35 / 3;
@@ -4302,7 +4306,7 @@ abstract final class SpaceTheme {
   static const followRadius = 4.0;
   static const followText = 14.0;
   static Color get followFill => BiliColors.pink;
-  static Color get followInk => tone(0xFFFFFFFF, 0xFF17181A);
+  static const followInk = Color(0xFFFFFFFF);
   static const followPlus = 34 / 3;
   static const followPlusStroke = 1.0;
   static const followPlusGap = 13 / 3;
@@ -4366,10 +4370,11 @@ abstract final class SpaceTheme {
   static const officialBlock = 30.0;
   static const officialCentre = 18.5;
   static const officialHeight = 22.0;
-  static Color get officialFill => BiliColors.pageGrey;
+  static Color get officialFill => tone(0xFFF1F2F3, 0xFF1E2022);
   static const officialDisc = 16.0;
   static const officialBoltWidth = officialDisc * 0.44;
   static const officialBoltHeight = officialDisc * 0.62;
+  static const officialBolt = Color(0xFFFFFFFF);
   static const officialDiscInset = 5.0;
   static const officialTextGap = 6.0;
   static const officialPadRight = 8.0;
@@ -4408,7 +4413,7 @@ abstract final class SpaceTheme {
   static const entryHeight = 40.0;
   static const entrySpacing = 8.0;
   static const entryRadius = 4.5;
-  static Color get entryFill => BiliColors.softGrey;
+  static Color get entryFill => tone(0xFFF6F7F8, 0xFF1E2022);
   static const entryPad = 10.0;
   static const entryPadRight = 25 / 3;
   static const entryIcon = 12.0;
@@ -4421,7 +4426,7 @@ abstract final class SpaceTheme {
   static Color get entryInk => BiliColors.text;
   static const entryNoteText = 11.0;
   static Color get entryNoteInk => tone(0xFF61666D, 0xFFA2A7AE);
-  static Color get entryIconInk => tone(0xFFFFC200, 0xFFFFC200); // night?
+  static Color get entryIconInk => tone(0xFFFFC200, 0xFFCC9B00);
   static const bottomGap = 16.0;
 
   /// The tab row: 39.5 between 0.5 pt hairlines. Its labels sit in equal cells across the width and 4 beyond each
@@ -4442,17 +4447,17 @@ abstract final class SpaceTheme {
   /// 已关注's sheet (71): rows 50 tall, the second and third with a 0.5 pt rule along their top from 20 in, a 5 pt
   /// gap, then 取消 in a 56 tall row with 14 under it, over the page dimmed by half.
   static const sheetDim = Color(0x80000000);
-  static Color get sheetFill => tone(0xFFFFFFFF, 0xFF17181A);
+  static Color get sheetFill => tone(0xFFFFFFFF, 0xFF1E2022);
   static const sheetShadow = Color(0x1F000000);
   static const sheetShadowBlur = 12.0;
   static const sheetRow = 50.0;
   static const sheetRule = 0.5;
-  static Color get sheetRuleInk => tone(0xFFAEB3B9, 0xFF5E6267);
+  static Color get sheetRuleInk => tone(0xFFAEB3B9, 0xFF2F3134);
   static const sheetInset = 20.0;
   static const sheetText = 14.0;
   static Color get sheetInk => BiliColors.text;
   static const sheetGap = 5.0;
-  static Color get sheetGapFill => BiliColors.divider;
+  static Color get sheetGapFill => tone(0xFFE3E5E7, 0xFF0A0B0C);
   static const sheetCancel = 56.0;
   static const sheetCancelText = 16.0;
   static const sheetBottom = 14.0;
@@ -4510,7 +4515,7 @@ abstract final class SpaceVideosTheme {
   static const sortGlyphWidth = 12.0;
   static const sortGlyphBar = 4 / 3;
   static const sortGlyphPitch = 4.0;
-  static Color get sortGlyphInk => tone(0xFF999999, 0xFF999999); // night?
+  static Color get sortGlyphInk => tone(0xFF999999, 0xFF757A81);
   static const sortGlyphGap = 11 / 3;
   static const sortText = 12.0;
   static Color get sortInk => BiliColors.secondaryText;
@@ -4526,7 +4531,7 @@ abstract final class SpaceVideosTheme {
   static const coverWidth = 128.0;
   static const coverHeight = 72.0;
   static const coverRadius = 4.0;
-  static Color get coverPlaceholder => BiliColors.pageGrey;
+  static Color get coverPlaceholder => tone(0xFFF1F2F3, 0xFF1E2022);
   static const textGap = 10.0;
 
   /// Two 14 pt title lines 18 apart, the first's ink 0.67 under the cover's top; they wrap before 428.
@@ -4586,7 +4591,7 @@ abstract final class SpaceVideosTheme {
   static const footerLine = 20.0;
   static const spinnerRadius = 10.0;
   static const endText = 14.0;
-  static Color get endInk => tone(0xFF727272, 0xFF727272); // night?
+  static Color get endInk => tone(0xFF727272, 0xFF8B9097);
   static const stateTop = 40.0;
   static const stateText = 14.0;
   static Color get stateInk => BiliColors.secondaryText;
@@ -4607,7 +4612,7 @@ abstract final class SpaceVideosTheme {
   static const menuIn = Duration(milliseconds: 200);
   static const menuOut = Duration(milliseconds: 150);
   static const menuStartScale = 0.85;
-  static Color get menuFill => BiliColors.card;
+  static Color get menuFill => tone(0xFFFFFFFF, 0xFF242628);
   static const menuWidth = 200.0;
   static const menuRowHeight = 52.0;
   static const menuRadius = 12.0;
@@ -4821,7 +4826,7 @@ abstract final class FavouritesTheme {
   static const tileHeight = 72.0;
   static const tileGap = 4.0;
   static const tileRadius = 6.0;
-  static Color get tileEmpty => BiliColors.pageGrey;
+  static Color get tileEmpty => tone(0xFFF1F2F3, 0xFF1E2022);
   static const tileTitleText = 12.0;
   static const tileTitleLine = 17.0;
   static const tileTitleInset = 16 / 3;
@@ -4900,7 +4905,7 @@ abstract final class FavouritesTheme {
   static const coverWidth = HistoryTheme.coverWidth;
   static const coverHeight = HistoryTheme.coverHeight;
   static const coverRadius = HistoryTheme.coverRadius;
-  static Color get coverEmpty => BiliColors.pageGrey;
+  static Color get coverEmpty => tone(0xFFF1F2F3, 0xFF1E2022);
   static const textGap = HistoryTheme.textGap;
   static const hairline = HistoryTheme.hairline;
   static Color get divider => HistoryTheme.divider;
@@ -4937,7 +4942,7 @@ abstract final class FavouritesTheme {
   static const pillInk = HistoryTheme.pillInk;
   static const progressHeight = HistoryTheme.progressHeight;
   static const progressRadius = 1.0;
-  static Color get progress => tone(0xFFFA6496, 0xFFFA6496); // night?
+  static Color get progress => tone(0xFFFA6496, 0xFFD44E7D);
 
   /// Under the last row (84): 仅展示本App中可查看的稿件 in 12 pt #C9CCD0, its middle 40.5 below the row.
   static const endText = 12.0;
@@ -5016,11 +5021,11 @@ abstract final class FavouritesTheme {
   static const playGap = 11 / 3;
   static const playText = 12.0;
   static const playLine = 17.0;
-  static Color get playFill => BiliColors.softGrey;
+  static Color get playFill => tone(0xFFF6F7F8, 0xFF1E2022);
   static Color get playInk => tone(0xFF61666D, 0xFFA2A7AE);
   static Color get playFillOff => tone(0xFFF9FBFC, 0xFF212325);
-  static Color get playInkOff => tone(0xFFAFB2B6, 0xFFAFB2B6); // night?
-  static Color get playGlyphOff => tone(0xFFD5D6D8, 0xFFD5D6D8); // night?
+  static Color get playInkOff => tone(0xFFAFB2B6, 0xFF5E6267);
+  static Color get playGlyphOff => tone(0xFFD5D6D8, 0xFF46494D);
 
   /// 创建 (100): the bar's 创建 20 pt bold and centred, 完成 20 pt ending 20 from the edge, grey (#484C53) until there
   /// is a name; white groups on #F1F2F3, 10 apart and 10 under the bar: 封面 64 tall, 名称 44, 简介 144, 公开 44.
@@ -5053,7 +5058,7 @@ abstract final class FavouritesTheme {
   static const formLine = 20.0;
   static Color get formInk => BiliColors.text;
   static Color get newHintInk => tone(0xFFAEB3B9, 0xFF5E6267);
-  static Color get newRequiredInk => tone(0xFFD0021B, 0xFFD0021B); // night?
+  static Color get newRequiredInk => tone(0xFFD0021B, 0xFFE18281);
   static const newLabelLeft = 12.0;
   static const newFieldLeft = 88.0;
   static const newFieldRight = 12.0;
@@ -5064,7 +5069,7 @@ abstract final class FavouritesTheme {
   static const newIntroMax = 200;
 
   /// 封面's ›, 80's chevron in #999999; a picked cover's 64 × 36 thumbnail 8 before it.
-  static Color get newChevronInk => tone(0xFF999999, 0xFF999999); // night?
+  static Color get newChevronInk => tone(0xFF999999, 0xFF757A81);
   static const newThumbWidth = 64.0;
   static const newThumbHeight = 36.0;
   static const newThumbRadius = 4.0;
@@ -5072,7 +5077,7 @@ abstract final class FavouritesTheme {
   static const newThumbBusy = Color(0x66FFFFFF);
 
   /// 公开's switch, the system's 51 × 31 in #FB7299, 10 from the edge (its 59 × 39 box 6).
-  static Color get newSwitchOn => tone(0xFFFB7299, 0xFFFB7299); // night?
+  static Color get newSwitchOn => tone(0xFFFB7299, 0xFFD44E7D);
   static const newSwitchRight = 6.0;
 
   /// 封面's sheet (101), the system's: the page dimmed 20%; 8 in, 从相册选择 and 拍照 57 tall on #EFEFEF with a
@@ -5083,14 +5088,14 @@ abstract final class FavouritesTheme {
   static const coverSheetRow = 57.0;
   static const coverSheetGap = 8.0;
   static const coverSheetRadius = 14.0;
-  static Color get coverSheetFill => tone(0xFFEFEFEF, 0xFFEFEFEF); // night?
-  static Color get coverSheetCancelFill => BiliColors.card;
+  static Color get coverSheetFill => tone(0xFFEFEFEF, 0xFF252527);
+  static Color get coverSheetCancelFill => tone(0xFFFFFFFF, 0xFF2C2C2E);
   static const coverSheetHairline = 1 / 3;
-  static Color get coverSheetHairlineInk => tone(0xFFB1B1B2, 0xFFB1B1B2); // night?
+  static Color get coverSheetHairlineInk => tone(0xFFB1B1B2, 0xFF3D3D40);
   static const coverSheetText = 23.0;
   static const coverSheetLine = 28.0;
   static const coverSheetTextDrop = 2 / 3;
-  static Color get coverSheetInk => tone(0xFFD16585, 0xFFD16585); // night?
+  static Color get coverSheetInk => tone(0xFFD16585, 0xFFD44E7D);
   static const coverSheetCancelWeight = FontWeight.w600;
 }
 
@@ -5101,8 +5106,8 @@ abstract final class WatchLaterTheme {
   static Color get grey => tone(0xFF61666D, 0xFFA2A7AE);
 
   /// Greyed while nothing can be done (85, and the strip in edit mode, 95).
-  static Color get greyOff => tone(0xFFC0C2C5, 0xFFC0C2C5); // night?
-  static Color get pinkOff => tone(0xFFFFC2D6, 0xFFFFC2D6); // night?
+  static Color get greyOff => tone(0xFFC0C2C5, 0xFF46494D);
+  static Color get pinkOff => tone(0xFFFFC2D6, 0xFF76304B);
 
   /// The title bar (85, 86): ‹ #61666D, its tip 25.96 in and its ends 8.35 above and below; 稍后再看 17 pt bold and
   /// centred; 管理 (取消管理 in edit mode, 95) 14 pt, its words ending 16.67 from the edge.
@@ -5140,7 +5145,7 @@ abstract final class WatchLaterTheme {
   static const chipRadius = 3.0;
   static const chipText = 13.0;
   static Color get chipChosenFill => tone(0xFFFFECF1, 0xFF2F1A22);
-  static Color get chipChosenFillOff => tone(0xFFFFF7F9, 0xFFFFF7F9); // night?
+  static Color get chipChosenFillOff => tone(0xFFFFF7F9, 0xFF26161C);
 
   /// ≡↑ 最近添加: three bars and a half-headed arrow, 12.67 × 9.67 from 268.33, 4 before 13 pt words; then 23.33 to
   /// ▶ 播放全部, an 11.33 × 12 rounded triangle 6.3 before its words, which end 12.67 from the edge. The stand-in's
@@ -5166,7 +5171,7 @@ abstract final class WatchLaterTheme {
   static const coverWidth = 139.0;
   static const coverHeight = 78.0;
   static const coverRadius = 6.0;
-  static Color get coverPlaceholder => BiliColors.pageGrey;
+  static Color get coverPlaceholder => tone(0xFFF1F2F3, 0xFF1E2022);
   static const textGap = 10.0;
   static const editShift = 34.0;
   static const editMotion = Duration(milliseconds: 220);
@@ -5235,8 +5240,8 @@ abstract final class WatchLaterTheme {
   static const emptyTextCentre = 1220.5 / 3;
   static const emptyText = 14.0;
   static Color get emptyInk => BiliColors.secondaryText;
-  static Color get artBody => tone(0xFFEBEDEF, 0xFFEBEDEF); // night?
-  static Color get artShade => tone(0xFFDADCDF, 0xFFDADCDF); // night?
+  static Color get artBody => tone(0xFFEBEDEF, 0xFF232527);
+  static Color get artShade => tone(0xFFDADCDF, 0xFF2F3134);
 
   /// Logged out and failed: the words and pink buttons 历史记录 uses.
   static const stateText = HistoryTheme.stateText;
@@ -5253,17 +5258,17 @@ abstract final class WatchLaterTheme {
   static const sheetDim = Color(0x52000000);
   static const sheetIn = Duration(milliseconds: 280);
   static const sheetOut = Duration(milliseconds: 220);
-  static Color get sheetFill => BiliColors.softGrey;
+  static Color get sheetFill => tone(0xFFF6F7F8, 0xFF202123);
   static const sheetRadius = 12.0;
   static const grabberTop = 8.0;
   static const grabberWidth = 30.0;
   static const grabberHeight = 3.0;
-  static Color get grabberInk => tone(0xFFC5C6C6, 0xFFC5C6C6); // night?
+  static Color get grabberInk => tone(0xFFC5C6C6, 0xFF4D4D4F);
   static const groupTop = 19.0;
   static const groupInset = 16.0;
   static const groupRadius = 12.0;
   static const groupBottom = 24.0;
-  static Color get groupFill => BiliColors.card;
+  static Color get groupFill => tone(0xFFFFFFFF, 0xFF242628);
   static const actionRowHeight = 481 / 9;
   static const actionGlyphCentre = 42.0;
   static const actionGlyphSize = 20.0;
@@ -5272,7 +5277,7 @@ abstract final class WatchLaterTheme {
   static const actionText = 18.0;
   static const actionWeight = FontWeight.w500;
   static const actionHairline = 0.5;
-  static Color get actionHairlineInk => BiliColors.pageGrey;
+  static Color get actionHairlineInk => tone(0xFFF1F2F3, 0xFF2F3134);
   static const actionPressed = Color(0x0A000000);
   static const actionIdle = BiliColors.chromeShadeClear;
 
@@ -5281,14 +5286,14 @@ abstract final class WatchLaterTheme {
   /// name 20 pt centred 17.33 down (16.83 here: the stand-in sits it 0.5 low), 公开 · N个内容 17 pt grey centred 46.67
   /// down, and a 0.5 hairline 12 in from each side atop every row after the first.
   static const folderSheetHeight = 1664 / 3;
-  static Color get folderSheetFill => BiliColors.card;
+  static Color get folderSheetFill => tone(0xFFFFFFFF, 0xFF1E2022);
   static Color get folderGrabberInk => tone(0xFFC9CCD0, 0xFF46494D);
   static const folderHeaderCentre = 97 / 3;
   static const folderIconLeft = 12.0;
   static const folderIconTop = 74 / 3;
   static const folderIconWidth = 16.0;
   static const folderIconHeight = 15.0;
-  static Color get folderIconInk => tone(0xFFF3C14A, 0xFFF3C14A); // night?
+  static Color get folderIconInk => tone(0xFFF3C14A, 0xFFCCA23E);
   static const folderTitleLeft = 34.0;
   static const folderTitleText = 22.0;
   static const folderNewText = 20.0;
@@ -5363,7 +5368,7 @@ abstract final class OwnSpaceTheme {
   static const labelNumberWeight = 2.1;
   static const labelNumberGap = 2.5;
   static const labelNumberChamfer = 5 / 3;
-  static Color get labelInk => tone(0xFFFFFFFF, 0xFF17181A);
+  static const labelInk = Color(0xFFFFFFFF);
   static const labelRuleLeft = 399.0;
   static const labelRule = 1.0;
   static const labelRuleHeight = 10.0;
@@ -5374,7 +5379,7 @@ abstract final class OwnSpaceTheme {
   static const skinWidth = 52 / 3;
   static const skinHeight = 46 / 3;
   static const skinStroke = 4 / 3;
-  static Color get skinInk => tone(0xFFFFFFFF, 0xFF17181A);
+  static const skinInk = Color(0xFFFFFFFF);
   static const skinTarget = 44.0;
 
   /// An animated 空间头图's sound button (24, 169): the APK's 24 pt disc drawn 26 across, its middle 417 across and 63
@@ -5448,7 +5453,7 @@ abstract final class OwnSpaceTheme {
   static Color get barInk => SpaceTheme.barInk;
 
   /// A skin's light text without a colour of its own.
-  static Color get barLightInk => tone(0xFFFFFFFF, 0xFF17181A);
+  static const barLightInk = Color(0xFFFFFFFF);
 }
 
 /// The own space's tabs: 主页's sections (114, 115), 收藏 (116), 追番 (117) and 投稿's empty page (108), measured in
@@ -5498,7 +5503,7 @@ abstract final class OwnSpaceTabsTheme {
   static const cardShadowBlur = 2.0;
   static const cardShadowDrop = 1.0;
   static const coverHeight = 126.0;
-  static Color get coverEmpty => BiliColors.pageGrey;
+  static Color get coverEmpty => tone(0xFFF1F2F3, 0xFF1E2022);
 
   /// Under the cover, 10 in: the title 13 pt, its middle 13.33 below (a video's in up to two lines 18 apart); a
   /// folder's "N个内容 · 公开" 12 pt grey, its middle 34.17 below.
@@ -5531,7 +5536,7 @@ abstract final class OwnSpaceTabsTheme {
 
   /// A folder without a cover: the TV in a lighter grey, 81.67 × 76.33 and centred (114). 116's rows draw it smaller
   /// and darker.
-  static Color get tvInk => tone(0xFFF6F7F8, 0xFF101011);
+  static Color get tvInk => tone(0xFFF6F7F8, 0xFF2B2C2F);
   static const tvWidth = 245 / 3;
   static const tvHeight = 229 / 3;
 
@@ -5540,7 +5545,7 @@ abstract final class OwnSpaceTabsTheme {
   static const stackSize = 20.0;
   static const stackRadius = 7 / 3;
   static const stackFill = Color(0x80000000);
-  static Color get stackInk => tone(0xFFFFFFFF, 0xFF17181A);
+  static const stackInk = Color(0xFFFFFFFF);
   static const stackInset = 4.0;
 
   /// 追番's posters (114, 117): three a row 12 apart, 130.67 × 175 with a 6 corner, darkening over their bottom 47 to
@@ -5550,7 +5555,7 @@ abstract final class OwnSpaceTabsTheme {
   static const posterHeight = 175.0;
   static const posterGap = 12.0;
   static const posterRadius = 6.0;
-  static Color get posterEmpty => BiliColors.pageGrey;
+  static Color get posterEmpty => tone(0xFFF1F2F3, 0xFF1E2022);
   static const posterShadeHeight = 47.0;
   static const posterShade = Color(0xCC000000);
   static const posterInk = BiliColors.onCover;
@@ -5619,7 +5624,7 @@ abstract final class OwnSpaceTabsTheme {
   static const rowCountText = 12.0;
   static const rowCountLine = 17.0;
   static const rowCountCentre = 193 / 3;
-  static Color get rowTvInk => tone(0xFFCCCCCC, 0xFFCCCCCC); // night?
+  static Color get rowTvInk => tone(0xFFCCCCCC, 0xFF46494D);
   static const rowTvWidth = 34.0;
   static const rowTvHeight = 33.0;
   static const rowStackBottom = 5.0;
@@ -6447,12 +6452,12 @@ abstract final class FriendsTheme {
   /// #505050.
   static const tabRow = 118 / 3;
   static const tabRule = 1 / 3;
-  static Color get tabRuleInk => tone(0xFFE7E7E7, 0xFFE7E7E7); // night?
+  static Color get tabRuleInk => tone(0xFFE7E7E7, 0xFF2F3134);
   static const tabWidth = 156.0;
   static const tabText = 14.0;
   static const tabLine = 20.0;
   static const tabLabelCentre = 133 / 6;
-  static Color get tabInk => tone(0xFF505050, 0xFF505050); // night?
+  static Color get tabInk => tone(0xFF505050, 0xFFB9BDC2);
   static Color get tabChosen => BiliColors.pink;
   static const underlineWidth = 28.0;
   static const underlineHeight = 2.0;
@@ -6466,20 +6471,20 @@ abstract final class FriendsTheme {
   static const fieldTop = 22 / 3;
   static const fieldHeight = 30.0;
   static const fieldInset = 12.0;
-  static Color get field => tone(0xFFF4F4F4, 0xFFF4F4F4); // night?
+  static Color get field => tone(0xFFF4F4F4, 0xFF1E2022);
   static const fieldEndSearching = 193 / 3;
   static const magnifier = 38 / 3;
   static const magnifierCentre = 15.0;
-  static Color get magnifierInk => tone(0xFF999999, 0xFF999999); // night?
+  static Color get magnifierInk => tone(0xFF999999, 0xFF757A81);
   static const fieldTextLeft = 30.0;
   static const fieldText = 13.0;
   static const fieldLine = 18.0;
   static Color get fieldInk => BiliColors.text;
-  static Color get placeholder => tone(0xFFC0C0C0, 0xFFC0C0C0); // night?
+  static Color get placeholder => tone(0xFFC0C0C0, 0xFF5E6267);
   static Color get caret => BiliColors.pink;
   static const clear = 37 / 3;
   static const clearCentre = 85 / 6;
-  static Color get clearInk => tone(0xFF999999, 0xFF999999); // night?
+  static Color get clearInk => tone(0xFF999999, 0xFF757A81);
   static const cancelText = 16.0;
   static const cancelLine = 22.0;
   static Color get cancelInk => BiliColors.pink;
@@ -6538,8 +6543,8 @@ abstract final class FriendsTheme {
   static const pillHeight = 24.0;
   static const pillRight = 12.0;
   static const pillTop = 65 / 3;
-  static Color get pillFill => tone(0xFFE7E7E7, 0xFFE7E7E7); // night?
-  static Color get pillInk => tone(0xFF999999, 0xFF999999); // night?
+  static Color get pillFill => tone(0xFFE7E7E7, 0xFF2F3134);
+  static Color get pillInk => tone(0xFF999999, 0xFF757A81);
   static const pillText = 13.0;
   static const pillLine = 18.0;
   static const pillGlyphLeft = 10.0;
@@ -6568,7 +6573,7 @@ abstract final class FriendsTheme {
   static const sheetDim = Color(0x4D000000);
   static const sheetIn = Duration(milliseconds: 280);
   static const sheetOut = Duration(milliseconds: 220);
-  static Color get sheetFill => BiliColors.card;
+  static Color get sheetFill => tone(0xFFFFFFFF, 0xFF1E2022);
 
   /// 已关注's sheet (166): a 1/3 #EBEDF0 top, then 设置分组 and 取消关注 49.67 tall with the same rule between, their
   /// pink glyphs centred 21 in (drawn: the APK's differ) and the words 14 pt #323233 from 40, both 26.5 down; an 8
@@ -6576,12 +6581,12 @@ abstract final class FriendsTheme {
   static const actionRow = 149 / 3;
   static const actionCentre = 26.5;
   static const actionRule = 1 / 3;
-  static Color get actionRuleInk => tone(0xFFEBEDF0, 0xFFEBEDF0); // night?
+  static Color get actionRuleInk => tone(0xFFEBEDF0, 0xFF2F3134);
   static const actionGlyphCentre = 21.0;
   static const actionTextLeft = 40.0;
   static const actionText = 14.0;
   static const actionLine = 20.0;
-  static Color get actionInk => tone(0xFF323233, 0xFF323233); // night?
+  static Color get actionInk => tone(0xFF323233, 0xFFE7E9EB);
   static Color get actionGlyphInk => BiliColors.pink;
   static const actionGlyphStroke = 0.9;
   static const groupGlyphWidth = 18.0;
@@ -6589,7 +6594,7 @@ abstract final class FriendsTheme {
   static const unfollowGlyphWidth = 20.0;
   static const unfollowGlyphHeight = 19.0;
   static const actionGap = 8.0;
-  static Color get actionGapFill => tone(0xFFFAF8F6, 0xFF211D1B);
+  static Color get actionGapFill => tone(0xFFFAF8F6, 0xFF0A0B0C);
   static const cancelRow = 148 / 3;
   static const cancelRowText = 16.0;
   static const cancelRowLine = 22.0;
@@ -6608,10 +6613,10 @@ abstract final class FriendsTheme {
   static const groupTitleLeft = 38.0;
   static const groupTitleText = 15.0;
   static const groupTitleLine = 21.0;
-  static Color get groupInk => tone(0xFF212121, 0xFF212121); // night?
+  static Color get groupInk => tone(0xFF212121, 0xFFE7E9EB);
   static const newGroupText = 13.0;
   static const newGroupLine = 18.0;
-  static Color get newGroupInk => tone(0xFF999999, 0xFF999999); // night?
+  static Color get newGroupInk => tone(0xFF999999, 0xFF757A81);
   static const plus = 34 / 3;
   static const plusStroke = 1.0;
   static const plusGap = 8 / 3;
@@ -6623,9 +6628,9 @@ abstract final class FriendsTheme {
   static const groupTipCentre = 37.0;
   static const groupTipText = 10.0;
   static const groupTipLine = 14.0;
-  static Color get groupTipInk => tone(0xFF999999, 0xFF999999); // night?
+  static Color get groupTipInk => tone(0xFF999999, 0xFF757A81);
   static const tick = 22.0;
-  static Color get tickRing => tone(0xFFE7E7E7, 0xFFE7E7E7); // night?
+  static Color get tickRing => tone(0xFFE7E7E7, 0xFF46494D);
   static const tickRingWidth = 1.0;
   static Color get tickFill => BiliColors.pink;
   static const tickInk = BiliColors.onPink;
@@ -6648,7 +6653,7 @@ abstract final class FollowingListTheme {
   static const rowCentre = 22.0;
   static Color get bar => BiliColors.card;
   static Color get barInk => BiliColors.text;
-  static Color get barLightInk => tone(0xFFFFFFFF, 0xFF17181A);
+  static const barLightInk = Color(0xFFFFFFFF);
   static const barHairline = 2 / 3;
   static Color get hairline => BiliColors.divider;
 
@@ -6684,7 +6689,7 @@ abstract final class FollowingListTheme {
   static const searchTop = 6.0 - barHairline;
   static const searchBottom = 17 / 3;
   static const searchRule = 1 / 3;
-  static Color get field => BiliColors.pageGrey;
+  static Color get field => tone(0xFFF1F2F3, 0xFF1E2022);
   static const fieldHeight = 30.0;
   static const fieldInset = 12.0;
   static const fieldText = 13.0;
@@ -6729,7 +6734,7 @@ abstract final class FollowingListTheme {
   static const menuDrop = 1.0;
   static Color get menuInk => tone(0xFF484C53, 0xFFB9BDC2);
   static Color get menuChosen => BiliColors.pink;
-  static Color get menuFill => BiliColors.card;
+  static Color get menuFill => tone(0xFFFFFFFF, 0xFF242628);
   static const checkWidth = 11.17;
   static const checkHeight = 7.17;
   static const checkStroke = 1.5;
@@ -6750,8 +6755,8 @@ abstract final class FollowingListTheme {
   static const faceInset = 12.0;
   static const badge = 12.0;
   static const badgeRing = 1.0;
-  static Color get badgePerson => IntroTheme.badgePerson;
-  static Color get badgeOrganisation => IntroTheme.badgeOrganisation;
+  static Color get badgePerson => tone(0xFFFFCC00, 0xFFFFCC00);
+  static Color get badgeOrganisation => tone(0xFF3EA2F4, 0xFF40C5F1);
   static const nameLeft = 64.0;
   static const nameText = 14.0;
   static const nameLine = 20.0;
@@ -7730,7 +7735,7 @@ abstract final class OfflineListTheme {
   static const barRow = 44.0;
   static Color get bar => BiliColors.card;
   static Color get barInk => BiliColors.text;
-  static Color get barLightInk => tone(0xFFFFFFFF, 0xFF17181A);
+  static const barLightInk = Color(0xFFFFFFFF);
 
   /// The title, 17 pt semibold, centred on the screen and the row.
   static const titleText = 17.0;
@@ -7782,7 +7787,7 @@ abstract final class OfflineListTheme {
   static const fieldLeft = 12.0;
   static const fieldRight = 52.0;
   static const fieldHeight = 28.0;
-  static Color get field => BiliColors.pageGrey;
+  static Color get field => tone(0xFFF1F2F3, 0xFF1E2022);
   static const fieldText = 14.0;
   static const fieldLine = 20.0;
   static Color get fieldInk => BiliColors.text;
@@ -7810,7 +7815,7 @@ abstract final class OfflineListTheme {
   static const coverWidth = 139.0;
   static const coverHeight = 78.0;
   static const coverRadius = 6.0;
-  static Color get coverPlaceholder => BiliColors.pageGrey;
+  static Color get coverPlaceholder => tone(0xFFF1F2F3, 0xFF1E2022);
   static const textLeft = 159.0;
   static const textRight = 12.0;
 
@@ -7846,7 +7851,7 @@ abstract final class OfflineListTheme {
   static Color get vip => BiliColors.pink;
 
   /// Between rows a 2/3 hairline from the cover's left to the screen's edge, halfway between the covers.
-  static Color get divider => tone(0xFFEAEBED, 0xFFEAEBED); // night?
+  static Color get divider => tone(0xFFEAEBED, 0xFF2F3134);
   static const dividerHeight = 2 / 3;
 
   /// On the cover: the length (or watched / length) 10 pt white in a 15.67 tall pill of black at 0.4, 4 in from the
@@ -7891,7 +7896,7 @@ abstract final class OfflineListTheme {
   static const pillTop = 12.0;
   static const pillLeft = 12.0;
   static const allHeight = 32.0;
-  static Color get allFill => BiliColors.softGrey;
+  static Color get allFill => tone(0xFFF6F7F8, 0xFF1E2022);
   static const allPadLeft = 14.0;
   static const allPadRight = 34 / 3;
   static const allGlyphWidth = 8.0;
@@ -7937,6 +7942,7 @@ abstract final class OfflineListTheme {
   /// 确认 20 pt in a 44.33 row, each 4 further out than its half's middle.
   static const confirmWidth = 280.0;
   static const confirmRadius = 8.0;
+  static Color get confirmFill => tone(0xFFFFFFFF, 0xFF242628);
   static const confirmDim = Color(0x99000000);
   static const confirmTitleText = 20.0;
   static const confirmTitleWeight = FontWeight.w600;
@@ -7956,14 +7962,15 @@ abstract final class OfflineListTheme {
   /// card 16 in at 19 down with 8 corners, three 52 rows split by 0.5 #E3E5E7 rules 16 in; 14 pt words 16 in, the
   /// chosen pink; (大会员专享) 10 pt white in a 13 tall pink stadium 8.67 after the words, 4.33 each side; 20 under
   /// the card.
-  static Color get sheet => BiliColors.softGrey;
+  static Color get sheet => tone(0xFFF6F7F8, 0xFF202123);
   static const sheetRadius = 12.0;
   static const sheetDim = Color(0x52000000);
   static const sheetMotion = Duration(milliseconds: 250);
   static const handleWidth = 30.0;
   static const handleHeight = 3.0;
   static const handleTop = 8.0;
-  static Color get handle => tone(0xFFC9CCD0, 0xFF46494D);
+  static Color get handle => tone(0xFFC9CCD0, 0xFF4D4D4F);
+  static Color get card => tone(0xFFFFFFFF, 0xFF242628);
   static const cardTop = 19.0;
   static const cardInset = 16.0;
   static const cardRadius = 8.0;
@@ -8038,7 +8045,7 @@ abstract final class OfflinePageTheme {
   static const barsHeight = 25 / 3;
   static const barsGap = 29 / 6;
   static const barMin = 3.0;
-  static Color get barsInk => tone(0xFFFB7299, 0xFFFB7299); // night?
+  static Color get barsInk => tone(0xFFFB7299, 0xFFD44E7D);
   static const barsCycle = Duration(milliseconds: 900);
 
   /// Heights at rest, as 160 caught them.
@@ -8080,7 +8087,7 @@ abstract final class OfflinePageTheme {
   static const sheetDim = Color(0x80000000);
   static const sheetIn = Duration(milliseconds: 280);
   static const sheetOut = Duration(milliseconds: 220);
-  static Color get sheetFill => BiliColors.card;
+  static Color get sheetFill => tone(0xFFFFFFFF, 0xFF1E2022);
   static Color get sheetBand => BiliColors.pageGrey;
   static const sheetRowHeight = 50.0;
   static const sheetBandHeight = 5.0;

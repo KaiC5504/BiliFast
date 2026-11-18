@@ -82,7 +82,7 @@ class ConcurrencySheet extends StatelessWidget {
               padding: const EdgeInsets.symmetric(horizontal: _T.cardInset),
               child: Container(
                 clipBehavior: Clip.antiAlias,
-                decoration: BoxDecoration(color: BiliColors.card, borderRadius: BorderRadius.circular(_T.cardRadius)),
+                decoration: BoxDecoration(color: _T.card, borderRadius: BorderRadius.circular(_T.cardRadius)),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.stretch,

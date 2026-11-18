@@ -638,7 +638,7 @@ class _Header extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => ColoredBox(
-    color: SearchResultTheme.page,
+    color: SearchResultTheme.headerFill,
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [

@@ -17,6 +17,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import '../../app/fake_keychain.dart';
+import '../../history/pixel_probe.dart';
 import '../../playback/fakes.dart';
 import '../../support/look_alike.dart';
 import '../../support/stand_in_fonts.dart';
@@ -128,8 +129,8 @@ void main() {
   final boundary = GlobalKey();
   late FakeSearchApi search;
 
-  Future<void> show(WidgetTester tester, {bool holdVideos = false}) async {
-    showAsPhone(tester);
+  Future<void> show(WidgetTester tester, {bool holdVideos = false, bool dark = false}) async {
+    showAsPhone(tester, dark: dark);
     final saved = BiliFonts.family;
     addTearDown(() => BiliFonts.family = saved);
     final logger = Logger(session: 'test');
@@ -158,6 +159,7 @@ void main() {
           fontFamily: BiliFonts.family,
           fontFamilyFallback: BiliFonts.fallback,
           textTheme: BiliFonts.untracked,
+          brightness: dark ? Brightness.dark : Brightness.light,
         ),
         builder: (context, child) => RepaintBoundary(
           key: boundary,
@@ -233,5 +235,22 @@ void main() {
     await shoot(tester, '60');
     expect(rectOf(tester, 'search-tab-indicator').top, closeTo(140, 0.01));
     expect(rectOf(tester, 'search-row-user-801').top, closeTo(186, 0.01));
+  });
+
+  testWidgets('254 at night: the field and tab rows a darker grey over the dark rows, with no hairline between', (
+    tester,
+  ) async {
+    await show(tester, dark: true);
+    await shoot(tester, '254');
+    final row = rectOf(tester, 'search-row-BV1look1');
+    final colours = await pixelsAt(tester, find.byKey(boundary), [
+      const Offset(220, 20),
+      const Offset(300, 106 + SearchResultTheme.tabRowHeight / 2),
+      Offset(row.left + 2, row.top + 2),
+    ]);
+    expect(colours, [const Color(0xFF101011), const Color(0xFF101011), const Color(0xFF17181A)]);
+    expect(SearchResultTheme.tabSelected, const Color(0xFFD44E7D));
+    expect(SearchResultTheme.tabInk, const Color(0xFFA2A7AE));
+    expect(SearchResultTheme.metaInk, const Color(0xFF757A81));
   });
 }

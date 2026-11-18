@@ -15,6 +15,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import '../app/fake_keychain.dart';
+import '../history/pixel_probe.dart';
 import '../playback/fakes.dart';
 import '../support/look_alike.dart';
 import '../support/stand_in_fonts.dart';
@@ -95,8 +96,8 @@ void main() {
 
   final boundary = GlobalKey();
 
-  Future<void> show(WidgetTester tester, {required List<String> history}) async {
-    showAsPhone(tester);
+  Future<void> show(WidgetTester tester, {required List<String> history, bool dark = false}) async {
+    showAsPhone(tester, dark: dark);
     final saved = BiliFonts.family;
     addTearDown(() => BiliFonts.family = saved);
     final logger = Logger(session: 'test');
@@ -129,6 +130,7 @@ void main() {
           fontFamily: BiliFonts.family,
           fontFamilyFallback: BiliFonts.fallback,
           textTheme: BiliFonts.untracked,
+          brightness: dark ? Brightness.dark : Brightness.light,
         ),
         builder: (context, child) => RepaintBoundary(
           key: boundary,
@@ -199,5 +201,24 @@ void main() {
       rectMoreOrLessEquals(const Rect.fromLTRB(0, 106, 440, 150), epsilon: 0.5),
     );
     expect(rectOf(tester, 'search-suggestion-桂柚').bottom, closeTo(546, 0.5));
+  });
+
+  testWidgets('253 at night: the page dark, the chips and cells a lighter grey, the rim and words as measured', (
+    tester,
+  ) async {
+    await show(tester, history: _history.sublist(1), dark: true);
+    await shoot(tester, '253');
+    final chip = rectOf(tester, 'search-history-青石');
+    final cell = rectOf(tester, 'search-discovery-云海镇');
+    final colours = await pixelsAt(tester, find.byKey(boundary), [
+      const Offset(220, 20),
+      Offset(chip.left + 2, chip.center.dy),
+      Offset(cell.left + 2, cell.center.dy),
+    ]);
+    // 253: the page #17181A, chips and cells #1E2022.
+    expect(colours, [const Color(0xFF17181A), const Color(0xFF1E2022), const Color(0xFF1E2022)]);
+    expect(SearchTheme.fieldRimColor, const Color(0xFF757A81));
+    expect(SearchTheme.dim, const Color(0xFFA2A7AE));
+    expect(SearchTheme.text, const Color(0xFFE7E9EB));
   });
 }

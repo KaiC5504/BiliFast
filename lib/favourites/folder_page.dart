@@ -158,7 +158,7 @@ class _FolderPageState extends State<FolderPage> {
         child: page!,
       ),
       child: AnnotatedRegion<SystemUiOverlayStyle>(
-        value: SystemUiOverlayStyle.dark,
+        value: BiliTheme.dark ? SystemUiOverlayStyle.light : SystemUiOverlayStyle.dark,
         child: DefaultTextStyle(
           style: favStyle(FavouritesTheme.stateText, BiliColors.text),
           child: ColoredBox(
