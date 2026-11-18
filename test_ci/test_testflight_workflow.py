@@ -66,9 +66,36 @@ class WorkflowTest(unittest.TestCase):
         # PyYAML reads the bare key `on` as True.
         self.assertEqual({"workflow_dispatch"}, set(self.doc[True]))
 
-    def test_uploading_must_be_asked_for(self):
-        upload = self.doc[True]["workflow_dispatch"]["inputs"]["upload"]
-        self.assertEqual((True, False), (upload["required"], upload["default"]))
+    def test_releasing_and_testflight_must_be_asked_for(self):
+        inputs = self.doc[True]["workflow_dispatch"]["inputs"]
+        self.assertEqual({"sha", "release", "testflight", "create_signing"}, set(inputs))
+        for name in ("release", "testflight", "create_signing"):
+            self.assertEqual((True, False), (inputs[name]["required"], inputs[name]["default"]), name)
+
+    def test_signing_runs_only_for_testflight(self):
+        # Opt-in (KaiC, 2026-11-19): a plain release neither signs nor talks to TestFlight beyond the build number.
+        signed = {"Create signing files", "Apply signing settings", "Build IPA", "Describe the IPA", "Check the IPA"}
+        for _, step in self.steps("build"):
+            label = step.get("name", step.get("uses"))
+            if step.get("name") in signed or "upload-artifact" in step.get("uses", "") \
+                    or "flutter-action" in step.get("uses", ""):
+                self.assertEqual("inputs.testflight", step.get("if"), label)
+        for name in ("Upload to TestFlight", "Wait for Apple to finish processing"):
+            self.assertEqual("inputs.testflight && inputs.release", self.step("build", name).get("if"), name)
+        toolchain = self.step("build", "Toolchain")
+        self.assertEqual("${{ inputs.testflight }}", toolchain["env"]["SIGNED"])
+        code = live(toolchain["run"])
+        self.assertLess(code.index('if [ "$SIGNED" = true ]; then'), code.index("flutter precache"))
+        self.assertLess(code.index(LOCKED_INSTALL), code.index('if [ "$SIGNED" != true ]; then\n  exit 0'))
+
+    def test_the_build_number_passes_testflight_and_github(self):
+        number = self.step("build", "Pick the build number")
+        self.assertNotIn("if", number)
+        code = live(number["run"])
+        self.assertIn("get-latest-testflight-build-number", code)
+        self.assertIn('git ls-remote --tags "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY" "refs/tags/v$BUILD_NAME-*"', code)
+        self.assertIn("top=$(( 10#$latest > 10#$released ? 10#$latest : 10#$released ))", code)
+        self.assertIn('echo "number=$next" >> "$GITHUB_OUTPUT"', code)
 
     def test_token_is_read_only(self):
         # Only the release job may write, to publish the unsigned IPA.
@@ -206,7 +233,7 @@ class WorkflowTest(unittest.TestCase):
         self.assertEqual("https://github.com/KaiC5504/BiliFast/releases/latest/download/source.json", url)
 
     def test_the_source_program_gets_every_argument_it_uses(self):
-        # A missing --arg is a jq compile error, which would only show on an upload's release job.
+        # A missing --arg is a jq compile error, which would only show on a real release's job.
         source = self.step("release", "Write the source")["run"]
         program = source_program(source)
         used = set(re.findall(r"\$(\w+)", program)) - {"why", "__loc__"}
@@ -238,8 +265,8 @@ class WorkflowTest(unittest.TestCase):
         self.assertRegex(code, r'\nif \[ -n "\$unlisted" \]; then\n\s*echo [^\n]*\n\s*exit 1\n\s*fi\n')
         self.assertLess(code.index("unlisted=$(jq"), code.index('> "$RUNNER_TEMP/sideload-app.json"'))
 
-    def test_releases_only_follow_an_upload(self):
-        self.assertEqual("inputs.upload", self.jobs["release"]["if"])
+    def test_releases_only_when_asked(self):
+        self.assertEqual("inputs.release", self.jobs["release"]["if"])
         self.assertNotIn("if", self.jobs["sideload"])
         publish = live(self.step("release", "Publish")["run"])
         self.assertIn('gh release create "v$BUILD_NAME-$BUILD_NUMBER"', publish)
@@ -290,7 +317,8 @@ class WorkflowTest(unittest.TestCase):
             self.assertNotRegex(str(job.get("if", "")), UNCONDITIONAL, name)
             for step in job.get("steps", []):
                 self.assertNotIn("continue-on-error", step, f"{name}: {step.get('name')}")
-        self.assertNotIn("if", self.step("build", "Check the IPA"))
+        # The check runs whenever the signed IPA is built, and the upload only ever follows it.
+        self.assertEqual(self.step("build", "Build IPA")["if"], self.step("build", "Check the IPA")["if"])
 
     def test_signing_never_changes_the_account(self):
         # --create only behind the create_signing input, which defaults to off.
@@ -327,7 +355,7 @@ class WorkflowTest(unittest.TestCase):
         self.assertNotIn("--all-versions", self.text)
         step = self.step("build", "Pick the build number")
         self.assertIn('get-latest-testflight-build-number "$ASC_APP_ID" --pre-release-version "$BUILD_NAME"', step["run"])
-        self.assertIn("next=$(( 10#$latest + 1 ))", step["run"])
+        self.assertIn("next=$(( top + 1 ))", step["run"])
         self.assertIn("''|*[!0-9]*)", step["run"])
         self.assertIn('echo "BUILD_NUMBER=$next" >> "$GITHUB_ENV"', step["run"])
 
@@ -335,7 +363,7 @@ class WorkflowTest(unittest.TestCase):
         names = [s.get("name") for _, s in self.steps("build")]
         self.assertLess(names.index("Upload to TestFlight"), names.index("Wait for Apple to finish processing"))
         wait = self.step("build", "Wait for Apple to finish processing")
-        self.assertEqual("inputs.upload", wait["if"])
+        self.assertEqual("inputs.testflight && inputs.release", wait["if"])
         # Build 1 also exists in 0.1.0, so the wait matches the version too, or it would find that old build.
         self.assertIn('--pre-release-version "$BUILD_NAME" --build-version-number "$BUILD_NUMBER"', wait["run"])
         # A failed check is retried a few times, then fails the step with its error, never loops for the hour.
@@ -349,7 +377,7 @@ class WorkflowTest(unittest.TestCase):
     def test_background_prep_runs_before_any_secret_and_must_succeed(self):
         names = [s.get("name") for _, s in self.steps("build")]
         toolchain = self.step("build", "Toolchain")
-        self.assertNotIn("env", toolchain)
+        self.assertEqual({"SIGNED": "${{ inputs.testflight }}"}, toolchain["env"])
         self.assertLess(names.index("Toolchain"), names.index("Create signing files"))
         self.assertIn('wait "$prep"', toolchain["run"])
 
@@ -367,11 +395,11 @@ class WorkflowTest(unittest.TestCase):
     def test_ipa_is_checked_before_it_is_uploaded(self):
         names = [s.get("name") for _, s in self.steps("build")]
         self.assertLess(names.index("Check the IPA"), names.index("Upload to TestFlight"))
-        self.assertEqual("inputs.upload", self.step("build", "Upload to TestFlight")["if"])
+        self.assertEqual("inputs.testflight && inputs.release", self.step("build", "Upload to TestFlight")["if"])
 
 
 class SourceProgramTest(unittest.TestCase):
-    """Runs the release job's jq program on a sample description: the release job only runs on an upload, so this is
+    """Runs the release job's jq program on a sample description: the release job only runs on a release, so this is
     the program's only check before a real release."""
 
     APP = {

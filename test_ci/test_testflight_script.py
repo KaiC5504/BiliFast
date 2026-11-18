@@ -16,10 +16,11 @@ SHA = "a" * 40
 
 
 class FakeGitHub:
-    def __init__(self, busy=False, title="TestFlight dry run"):
+    def __init__(self, busy=False, title="Dry run", shipped="TestFlight upload"):
         self.calls = []
         self.busy = busy
         self.title = title
+        self.shipped = shipped
 
     def __call__(self, *args):
         if args[0] == "git":
@@ -28,7 +29,7 @@ class FakeGitHub:
         joined = " ".join(args)
         if args[1:3] == ("run", "list"):
             status = "in_progress" if self.busy else "completed"
-            return json.dumps([{"databaseId": 1, "displayTitle": f"TestFlight upload {'b' * 40}", "status": status,
+            return json.dumps([{"databaseId": 1, "displayTitle": f"{self.shipped} {'b' * 40}", "status": status,
                                 "conclusion": "success", "headSha": "b" * 40, "headBranch": "main",
                                 "event": "workflow_dispatch", "url": "u1"}])
         if args[1] == "api" and args[2].endswith("deployment-branch-policies"):
@@ -40,6 +41,8 @@ class FakeGitHub:
             return json.dumps([{"name": n} for n in testflight.SECRETS])
         if args[1:3] == ("workflow", "run"):
             return "https://github.com/KaiC5504/BiliFast/actions/runs/2\n"
+        if args[1:3] == ("run", "cancel"):
+            return ""
         if args[1:3] == ("run", "view"):
             return json.dumps({"databaseId": 2, "displayTitle": f"{self.title} {SHA}", "status": "queued",
                                "conclusion": "", "headSha": SHA, "headBranch": "main",
@@ -93,14 +96,15 @@ class StartTest(unittest.TestCase):
         self.assertEqual(6, len(fake.calls))
         self.assertEqual("2", self.last.read_text().strip())
         dispatch = next(c for c in fake.calls if c[1:3] == ("workflow", "run"))
-        self.assertIn("upload=false", dispatch)
+        self.assertIn("release=false", dispatch)
+        self.assertIn("testflight=false", dispatch)
         self.assertIn(f"sha={SHA}", dispatch)
 
-    def upload(self, blobs):
+    def upload(self, blobs, *argv, title="Release", shipped="TestFlight upload"):
         self.stamp.write_text(SHA)
-        fake = FakeGitHub(title="TestFlight upload")
+        fake = FakeGitHub(title=title, shipped=shipped)
         with mock.patch.object(testflight, "blob", lambda sha, path: blobs[sha]):
-            return self.start(fake), fake
+            return self.start(fake, *argv), fake
 
     def test_an_upload_with_the_last_builds_notes_is_refused(self):
         code, fake = self.upload({SHA: "n1", "b" * 40: "n1"})
@@ -110,10 +114,37 @@ class StartTest(unittest.TestCase):
     def test_an_upload_with_new_notes_starts(self):
         code, fake = self.upload({SHA: "n2", "b" * 40: "n1"})
         self.assertEqual(0, code)
-        self.assertIn("upload=true", next(c for c in fake.calls if c[1:3] == ("workflow", "run")))
+        dispatch = next(c for c in fake.calls if c[1:3] == ("workflow", "run"))
+        self.assertIn("release=true", dispatch)
+        self.assertIn("testflight=false", dispatch)
         [copy] = self.kept.iterdir()
         self.assertTrue(copy.name.endswith(f"-{SHA[:8]}.md"), copy.name)
         self.assertEqual("notes", copy.read_text(encoding="utf-8"))
+
+    def test_a_release_since_testflight_went_opt_in_counts_as_shipped(self):
+        code, fake = self.upload({SHA: "n1", "b" * 40: "n1"}, shipped="Release")
+        self.assertEqual(1, code)
+        self.assertEqual(1, len(fake.calls))
+
+    def test_testflight_is_asked_for(self):
+        code, fake = self.upload({SHA: "n2", "b" * 40: "n1"}, "--testflight", title="Release + TestFlight")
+        self.assertEqual(0, code)
+        dispatch = next(c for c in fake.calls if c[1:3] == ("workflow", "run"))
+        self.assertIn("release=true", dispatch)
+        self.assertIn("testflight=true", dispatch)
+
+    def test_a_run_in_the_wrong_mode_is_cancelled(self):
+        # Asked for a plain release, the run came up signing.
+        code, fake = self.upload({SHA: "n2", "b" * 40: "n1"}, title="Release + TestFlight")
+        self.assertEqual(1, code)
+        self.assertTrue(any(c[1:3] == ("run", "cancel") for c in fake.calls))
+        self.assertFalse(self.last.exists())
+
+    def test_create_signing_needs_testflight(self):
+        self.stamp.write_text(SHA)
+        fake = FakeGitHub()
+        self.assertEqual(1, self.start(fake, "--create-signing"))
+        self.assertEqual([], fake.calls)
 
     def test_a_dry_run_keeps_no_copy_of_the_project_notes(self):
         self.stamp.write_text(SHA)

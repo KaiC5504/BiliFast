@@ -1,22 +1,25 @@
 #!/usr/bin/env python3
-"""Start and check the signed TestFlight build (.github/workflows/testflight.yml).
+"""Start and check a release (.github/workflows/testflight.yml).
 
-    python scripts/testflight.py start [--dry-run] [--create-signing] [--again]
+    python scripts/testflight.py start [--testflight] [--dry-run] [--create-signing] [--again]
     python scripts/testflight.py status [RUN_ID]     # one GitHub call; default: the last run started here
 
-start builds origin/main's head. It refuses unless the local gate passed on that commit
-(scripts/gate.py), nothing else is building, and the `testflight` environment is locked to main with
-its secrets in place. There is no separate compile check: the signed build compiles iOS itself, so a
-dry run is the iOS check. --dry-run signs and checks the IPA without
-uploading. --create-signing registers the bundle id and creates the profile or renews an expired
-certificate. --again rebuilds a commit that already shipped. An upload also publishes an unsigned IPA
-for sideloading as the GitHub release v<version>-<build>; a dry run builds it without publishing.
-The release's 更新内容 is docs/release-notes.md, so an upload is refused while that file is still
-the last shipped build's. Each upload also keeps a dated copy of CLAUDE.md under local/.
+start builds origin/main's head and publishes the unsigned IPA for sideloading, with source.json, as
+the GitHub release v<version>-<build>. --testflight also signs the build and uploads it to TestFlight
+(opt-in since 2026-11-19: KaiC installs dev builds from the Mac); the release then waits for Apple to
+accept it. --dry-run publishes nothing: it builds the unsigned IPA, and with --testflight also signs
+and checks the signed one, which makes it the check after a change to signing. --create-signing
+(with --testflight) registers the bundle id and creates the profile or renews an expired certificate.
+--again rebuilds a commit that already shipped.
+
+It refuses unless the local gate passed on that commit (scripts/gate.py), nothing else is building,
+and the `testflight` environment (the build number asks App Store Connect) is locked to main with its
+secrets in place. The release's 更新内容 is docs/release-notes.md, so a release is refused while
+that file is still the last shipped one's. Each release also keeps a dated copy of CLAUDE.md under
+local/.
 
 There is no watch command: polling GitHub tripped its rate limit on 2026-10-17. Start, then run
-`status` once, about 10 minutes later for a dry run and 20 for an upload. An upload is green once
-Apple has finished processing it.
+`status` once, about 10 minutes later, or 20 with --testflight (green once Apple has processed it).
 """
 
 from __future__ import annotations
@@ -40,9 +43,12 @@ SECRETS = {
     "CERT_KEY_B64",
     "SIGNING_NAME",
 }
-# The workflow's run-name starts with one of these.
-UPLOAD = "TestFlight upload"
-DRY_RUN = "TestFlight dry run"
+# The workflow's run-name: "Release" or "Dry run", then " + TestFlight" when signed, then the commit.
+RELEASE = "Release"
+DRY_RUN = "Dry run"
+WITH_TESTFLIGHT = " + TestFlight"
+# Releases before TestFlight was opt-in.
+OLD_UPLOAD = "TestFlight upload"
 FIELDS = "databaseId,displayTitle,status,conclusion,headSha,headBranch,event,url"
 ROOT = Path(__file__).resolve().parents[1]
 GATE_STAMP = ROOT / ".git" / "gate-passed"
@@ -94,8 +100,8 @@ def view(run_id: int | str, fields: str = FIELDS) -> dict:
 
 
 def last_shipped(recent: list[dict]) -> dict | None:
-    """The newest upload run on main that passed, i.e. a build Apple accepted."""
-    return next((r for r in recent if r["displayTitle"].startswith(UPLOAD)
+    """The newest release run on main that passed."""
+    return next((r for r in recent if r["displayTitle"].startswith((RELEASE, OLD_UPLOAD))
                  and r["headBranch"] == "main" and r.get("event") == "workflow_dispatch"
                  and r["conclusion"] == "success"), None)
 
@@ -192,11 +198,15 @@ def cmd_status(run_id: str | None) -> int:
 
 def cmd_start(argv: list[str]) -> int:
     parser = argparse.ArgumentParser(prog="testflight.py start")
-    parser.add_argument("--dry-run", action="store_true", help="sign and check, upload nothing")
+    parser.add_argument("--testflight", action="store_true", help="also sign and upload to TestFlight")
+    parser.add_argument("--dry-run", action="store_true", help="build and check, publish nothing")
     parser.add_argument("--create-signing", action="store_true",
-                        help="register the bundle id / create the profile or certificate")
+                        help="with --testflight: register the bundle id / create the profile or certificate")
     parser.add_argument("--again", action="store_true", help="rebuild a commit that already shipped")
     args = parser.parse_args(argv)
+    if args.create_signing and not args.testflight:
+        print("--create-signing only applies to a signed build: add --testflight.")
+        return 1
 
     git("fetch", "-q", "origin", "main")
     sha = git("rev-parse", "origin/main")
@@ -230,22 +240,22 @@ def cmd_start(argv: list[str]) -> int:
         keep_project_notes(sha)
     output = run("gh", "workflow", "run", WORKFLOW, "-R", REPO, "--ref", "main",
                  "-f", f"sha={sha}",
-                 "-f", f"upload={'false' if args.dry_run else 'true'}",
+                 "-f", f"release={'false' if args.dry_run else 'true'}",
+                 "-f", f"testflight={'true' if args.testflight else 'false'}",
                  "-f", f"create_signing={'true' if args.create_signing else 'false'}")
     new = dispatched_run(output, {r["databaseId"] for r in recent}, sha)
     if not new:
         print("Dispatched, but the run hasn't appeared yet; see `testflight.py status`.")
         LAST_RUN.unlink(missing_ok=True)
         return 0
-    want = DRY_RUN if args.dry_run else UPLOAD
-    if not new["displayTitle"].startswith(want):
+    want = (DRY_RUN if args.dry_run else RELEASE) + (WITH_TESTFLIGHT if args.testflight else "")
+    if new["displayTitle"] != f"{want} {sha}":
         run("gh", "run", "cancel", str(new["databaseId"]), "-R", REPO)
         print(f"run {new['databaseId']} came up as {new['displayTitle']!r}, not {want!r}; "
               "cancelled it.")
         return 1
     LAST_RUN.write_text(f"{new['databaseId']}\n", encoding="utf-8")
-    print(f"started run {new['databaseId']} on {sha[:8]}"
-          + (" (dry run, no upload)" if args.dry_run else ""))
+    print(f"started run {new['databaseId']} on {sha[:8]}: {want}")
     print(new["url"])
     return 0
 

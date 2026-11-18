@@ -1,6 +1,7 @@
-# Signed device build to TestFlight on GitHub Actions. Free and queue-free on a public
-# repo. The only workflow (KaiC's call, 2026-10-18): tests run locally (scripts/gate.py), and a
-# dry run of this one is the iOS compile check. It runs only when dispatched.
+# A release on GitHub Actions: the unsigned IPA and source.json as a GitHub release, and, only when asked
+# (`testflight`), a signed build uploaded to TestFlight. KaiC installs dev builds from the Mac and rarely uses
+# TestFlight (2026-11-19), so it is opt-in but kept working. Free and queue-free on a public repo. The only workflow
+# (KaiC's call, 2026-10-18): tests run locally (scripts/gate.py). It runs only when dispatched.
 #
 # Start it with `python scripts/testflight.py start`, never by hand: that hands main's
 # exact head to this workflow and checks the environment first.
@@ -8,10 +9,10 @@
 # The repo is public, so this log and every artifact are public too. Secrets live in
 # the `testflight` environment, which only main can use (ios-testflight manual-steps §5),
 # and reach only the steps that need them. Never upload the signed IPA, Xcode logs or
-# ios/Flutter/Generated.xcconfig, never `set -x`, `flutter -v` or `env`. An upload also publishes an
-# unsigned IPA, built apart (the sideload job), as a GitHub release, with the source.json sideloading stores read.
-name: TestFlight
-run-name: TestFlight ${{ inputs.upload && 'upload' || 'dry run' }} ${{ inputs.sha }}
+# ios/Flutter/Generated.xcconfig, never `set -x`, `flutter -v` or `env`. The unsigned IPA is built apart (the
+# sideload job), with the source.json sideloading stores read.
+name: Release
+run-name: ${{ inputs.release && 'Release' || 'Dry run' }}${{ inputs.testflight && ' + TestFlight' || '' }} ${{ inputs.sha }}
 
 on:
   workflow_dispatch:
@@ -20,8 +21,13 @@ on:
         description: "Head of main to build"
         required: true
         type: string
-      upload:
-        description: "Upload to TestFlight (off: sign and check the IPA only)"
+      release:
+        description: "Publish the GitHub release (off: a dry run, nothing published)"
+        required: true
+        type: boolean
+        default: false
+      testflight:
+        description: "Also sign the build, and upload it to TestFlight when releasing"
         required: true
         type: boolean
         default: false
@@ -60,11 +66,12 @@ env:
   XCODE_BUILD: 17F113
 
 jobs:
+  # Picks the build number, and with `testflight` signs, checks and uploads the signed IPA.
   build:
-    name: Signed build
+    name: ${{ inputs.testflight && 'Signed build' || 'Build number' }}
     if: github.ref == 'refs/heads/main'
     runs-on: macos-26
-    # About 6 minutes of build, then up to an hour of Apple processing on uploads.
+    # About 6 minutes of signed build, then up to an hour of Apple processing on uploads.
     timeout-minutes: 90
     environment: testflight
     outputs:
@@ -84,6 +91,7 @@ jobs:
           persist-credentials: false
 
       - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.23.0
+        if: inputs.testflight
         with:
           channel: stable
           flutter-version: ${{ env.FLUTTER_VERSION }}
@@ -94,6 +102,8 @@ jobs:
           python-version: "3.13"
 
       - name: Toolchain
+        env:
+          SIGNED: ${{ inputs.testflight }}
         run: |
           xcode="/Applications/Xcode_${XCODE_VERSION}.app"
           if [ ! -d "$xcode" ]; then
@@ -106,9 +116,12 @@ jobs:
             echo "Xcode_$XCODE_VERSION.app is now $(xcodebuild -version | tr '\n' ' ')"
             exit 1
           fi
-          # The iOS engine artifacts and packages download while cli-tools installs.
-          (flutter precache --ios && flutter pub get) > "$RUNNER_TEMP/flutter-prep.log" 2>&1 &
-          prep=$!
+          # The iOS engine artifacts and packages download while cli-tools installs. Without a signed build only
+          # cli-tools is needed, for the build number.
+          if [ "$SIGNED" = true ]; then
+            (flutter precache --ios && flutter pub get) > "$RUNNER_TEMP/flutter-prep.log" 2>&1 &
+            prep=$!
+          fi
           # cli-tools shells out to `openssl smime`; keep OpenSSL 3 first on PATH.
           if [ -d /opt/homebrew/opt/openssl@3/bin ]; then
             echo /opt/homebrew/opt/openssl@3/bin >> "$GITHUB_PATH"
@@ -116,6 +129,9 @@ jobs:
           fi
           # Homebrew's Python refuses global installs (PEP 668), hence setup-python.
           python -m pip install --quiet --require-hashes -r scripts/testflight-requirements.txt
+          if [ "$SIGNED" != true ]; then
+            exit 0
+          fi
           if ! wait "$prep"; then
             cat "$RUNNER_TEMP/flutter-prep.log"
             exit 1
@@ -141,6 +157,7 @@ jobs:
           cat "$RUNNER_TEMP/toolchain.json"
 
       - name: Create signing files
+        if: inputs.testflight
         env:
           APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
           APP_STORE_CONNECT_KEY_IDENTIFIER: ${{ secrets.APP_STORE_CONNECT_KEY_IDENTIFIER }}
@@ -185,6 +202,7 @@ jobs:
             "$(security default-keychain | sed -e 's/^ *"//' -e 's/"$//')" > /dev/null
 
       - name: Apply signing settings
+        if: inputs.testflight
         run: |
           xcode-project use-profiles \
             --project ios/Runner.xcodeproj \
@@ -198,7 +216,8 @@ jobs:
           APP_STORE_CONNECT_KEY_IDENTIFIER: ${{ secrets.APP_STORE_CONNECT_KEY_IDENTIFIER }}
           APP_STORE_CONNECT_PRIVATE_KEY: ${{ secrets.APP_STORE_CONNECT_PRIVATE_KEY }}
         run: |
-          # A new version has no builds yet; anything else non-numeric is an error.
+          # Past both App Store Connect's latest build of this version and its latest GitHub release, since most
+          # releases never reach TestFlight. A new version has no builds yet; anything else non-numeric is an error.
           # For a new app the CLI exits 0 and prints "Did not find latest build ...". Otherwise it
           # logs "Found build number N ..." and then prints N alone on the last line.
           status=0
@@ -213,12 +232,19 @@ jobs:
           case "$latest" in
             ''|*[!0-9]*) echo "App Store Connect gave no build number: '$output'"; exit 1 ;;
           esac
-          next=$(( 10#$latest + 1 ))
-          echo "latest uploaded build of $BUILD_NAME is $latest; this one is $next"
+          # Every release is the tag v<version>-<build>; the repo is public, so listing them needs no token.
+          released=$(git ls-remote --tags "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY" "refs/tags/v$BUILD_NAME-*" \
+            | sed -n 's|.*refs/tags/v[0-9.]*-\([0-9][0-9]*\)$|\1|p' | sort -n | tail -n 1)
+          released=${released:-0}
+          top=$(( 10#$latest > 10#$released ? 10#$latest : 10#$released ))
+          next=$(( top + 1 ))
+          echo "latest of $BUILD_NAME: $latest on TestFlight, $released released; this one is $next"
           echo "BUILD_NUMBER=$next" >> "$GITHUB_ENV"
           echo "number=$next" >> "$GITHUB_OUTPUT"
+          echo "### $BUILD_NAME ($next) from ${GITHUB_SHA:0:8}" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Build IPA
+        if: inputs.testflight
         run: |
           flutter build ipa --release \
             --build-name="$BUILD_NAME" \
@@ -235,6 +261,7 @@ jobs:
           echo "IPA=$GITHUB_WORKSPACE/$1" >> "$GITHUB_ENV"
 
       - name: Describe the IPA
+        if: inputs.testflight
         run: |
           python scripts/ipa_manifest.py describe "$IPA" --sha "$GITHUB_SHA" \
             --toolchain "$RUNNER_TEMP/toolchain.json" \
@@ -243,6 +270,7 @@ jobs:
       # Public: holds no secrets. overwrite: a rerun of this job would otherwise fail on
       # the existing name.
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: inputs.testflight
         with:
           name: testflight-build
           path: ${{ runner.temp }}/testflight-build.json
@@ -251,13 +279,13 @@ jobs:
           overwrite: true
 
       - name: Check the IPA
+        if: inputs.testflight
         run: |
           python scripts/ipa_manifest.py check "$RUNNER_TEMP/testflight-build.json" \
             --bundle-id "$BUNDLE_ID" --build "$BUILD_NUMBER"
-          echo "### $BUILD_NAME ($BUILD_NUMBER) from ${GITHUB_SHA:0:8}" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload to TestFlight
-        if: inputs.upload
+        if: inputs.testflight && inputs.release
         env:
           APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
           APP_STORE_CONNECT_KEY_IDENTIFIER: ${{ secrets.APP_STORE_CONNECT_KEY_IDENTIFIER }}
@@ -267,7 +295,7 @@ jobs:
       # Green means Apple has processed the build; testers can install it minutes later. In this job rather than its
       # own, so cli-tools is already installed and no second runner has to start.
       - name: Wait for Apple to finish processing
-        if: inputs.upload
+        if: inputs.testflight && inputs.release
         env:
           APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
           APP_STORE_CONNECT_KEY_IDENTIFIER: ${{ secrets.APP_STORE_CONNECT_KEY_IDENTIFIER }}
@@ -339,7 +367,7 @@ jobs:
           BUILD_NUMBER: ${{ needs.build.outputs.number }}
         run: |
           case "$BUILD_NUMBER" in
-            ''|*[!0-9]*) echo "the signed build gave no build number: '$BUILD_NUMBER'"; exit 1 ;;
+            ''|*[!0-9]*) echo "the build job gave no build number: '$BUILD_NUMBER'"; exit 1 ;;
           esac
           flutter build ios --release --no-codesign \
             --build-name="$BUILD_NAME" \
@@ -390,7 +418,7 @@ jobs:
           fi
 
       # What this build changed, for the release page and the source. It rides the artifact because the release job
-      # checks nothing out; testflight.py refuses an upload whose notes are still the last build's.
+      # checks nothing out; testflight.py refuses a release whose notes are still the last one's.
       - name: Take the release notes
         run: |
           if ! grep -q '[^[:space:]]' docs/release-notes.md; then
@@ -410,12 +438,13 @@ jobs:
           if-no-files-found: error
           overwrite: true
 
-  # Publishes the unsigned IPA and source.json once Apple has accepted the same build, named by its TestFlight
-  # number. The only job with a write token, and it runs nothing from the repo: inline shell and jq only.
+  # Publishes the unsigned IPA and source.json under the build job's number, once Apple has accepted the same build
+  # when it went to TestFlight too. The only job with a write token, and it runs nothing from the repo: inline shell
+  # and jq only.
   release:
     name: GitHub release
     needs: [build, sideload]
-    if: inputs.upload
+    if: inputs.release
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:

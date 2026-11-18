@@ -23,20 +23,25 @@ to Flutter too.
 - Xcode project: `TARGETED_DEVICE_FAMILY = 1`, iOS 26.0, automatic signing with no team (`use-profiles` fills it in).
   No Podfile: Flutter 3.47.7 brings plugins in through SwiftPM. If a later plugin lacks SwiftPM support,
   `flutter build ipa` generates `ios/Podfile` on the runner; commit it with a real `platform :ios` line.
-- `.github/workflows/testflight.yml`: BiliNative's signed workflow with Kazumi's Flutter steps.
-  - `workflow_dispatch` with `sha`, `upload`, `create_signing`; the SHA guard first; `concurrency: testflight`.
+- `.github/workflows/testflight.yml` (named Release): BiliNative's signed workflow with Kazumi's Flutter steps. A
+  release publishes the unsigned IPA; the signed build and TestFlight upload run only with `testflight` (opt-in since
+  1.5.0 (1)).
+  - `workflow_dispatch` with `sha`, `release`, `testflight`, `create_signing`; the SHA guard first;
+    `concurrency: testflight`.
   - `subosito/flutter-action` pinned to Flutter 3.47.7, Xcode 26.6 (build 17F113) checked exactly.
   - `use-profiles --export-options-plist`, then `flutter build ipa --build-name=$BUILD_NAME --build-number=$BUILD_NUMBER`.
-  - Build number = App Store Connect's latest build of `BUILD_NAME` + 1, so each version counts from 1 (1.0.0 (1)
-    followed 0.2.0 (100)). The processing wait matches version and build number, since numbers repeat across versions.
+  - Build number = one past both App Store Connect's latest build of `BUILD_NAME` and the latest `v<BUILD_NAME>-<n>`
+    release tag, so each version counts from 1 (1.0.0 (1) followed 0.2.0 (100)) and a later TestFlight build never
+    repeats a release's number. The processing wait matches version and build number, since numbers repeat across versions.
   - `scripts/ipa_manifest.py` describes and checks the IPA (bundle id, build, purpose strings, App Store profile,
     beta-reports-active); the JSON manifest is the only artifact.
-  - On uploads, the last step waits for Apple's `VALID` (every 15 s, up to an hour).
-- No other workflow (KaiC, 2026-10-18). Tests run locally in `scripts/gate.py`; a dry run is the iOS compile check.
+  - On TestFlight uploads, the last step waits for Apple's `VALID` (every 15 s, up to an hour).
+- No other workflow (KaiC, 2026-10-18). Tests run locally in `scripts/gate.py`; the Mac (`mac.py`) is the iOS compile
+  check.
 - `test_ci/test_testflight_workflow.py`: Kazumi's static workflow tests, adapted. Also checks Flutter is pinned the
   same in `.fvmrc`, the pubspec and the workflow, and that `testflight.yml` is the only workflow.
 - `test_ci/test_testflight_script.py`: `testflight.py` against a fake `gh`, including how many calls it makes.
-- `scripts/testflight.py`: `start [--dry-run] [--create-signing] [--again]`, `status [RUN_ID]`. It refuses to start unless the local gate passed on the commit, and the
+- `scripts/testflight.py`: `start [--testflight] [--dry-run] [--create-signing] [--again]`, `status [RUN_ID]`. It refuses to start unless the local gate passed on the commit, and the
   `testflight` environment is limited to `main` and holds all five secrets.
 
 ## The `testflight` environment (owner, once)
@@ -48,11 +53,13 @@ The ios-testflight skill's manual-steps §5 for repo `BiliFast`: the three `gh a
 
 ## The loop
 
-1. Rewrite `docs/release-notes.md` (what this build changed, short Chinese bullets for users), then
+1. Read over `docs/release-notes.md` (each slice adds its lines as it lands; short Chinese bullets for users), then
    `python scripts/gate.py` on the committed tree (records the commit), then push. Nothing runs on push.
-2. `python scripts/testflight.py start` (`--dry-run` only when the workflow or scripts change). It refuses unless the gate passed on that commit, and an upload unless the release notes changed since the last shipped build. 6 GitHub calls;
+2. `python scripts/testflight.py start`, with `--testflight` only when KaiC wants TestFlight too (`--dry-run` only
+   when the workflow or scripts change). It refuses unless the gate passed on that commit, and a release unless the
+   release notes changed since the last shipped one. 6 GitHub calls;
    `test_ci/test_testflight_script.py` pins the count.
-3. `python scripts/testflight.py status` once (1 call): about 7 minutes after a dry run, 11 after an upload. Never
+3. `python scripts/testflight.py status` once (1 call): about 10 minutes after a release, 20 with `--testflight`. Never
    `gh run watch` and never poll: on 2026-10-17 polling tripped GitHub's rate limit and blocked KaiC's own requests.
 4. Report the build number, what changed and phone steps.
 

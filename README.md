@@ -149,7 +149,7 @@ BiliFast 的下载引擎是从 BTR 移植过来的，在此基础上又做了提
 
 ## 🛠️ 开发
 
-代码在 Windows 上编写和测试，iOS 版由 GitHub Actions 构建，上传 TestFlight 并发布 IPA。
+代码在 Windows 上编写和测试，iOS 版由 GitHub Actions 构建并发布 IPA。
 
 - Flutter 3.47.7，用 [fvm](https://fvm.app) 管理版本：`fvm flutter test`、`fvm flutter analyze`
 - `python scripts/gate.py` 一键跑完全部检查：引擎、App、工作流、Swift 语法检查，以及运行真实引擎的 Windows 版

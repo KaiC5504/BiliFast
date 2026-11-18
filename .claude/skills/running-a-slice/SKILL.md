@@ -48,7 +48,7 @@ piece needs (such as `playback_controller.dart`) gets one owner; the others buil
 in the contracts commit. Up to about 8 builders.
 
 Wait for his go. After it, run straight through to the phone dev build (step 7); ask him only for a decision that is
-truly his. TestFlight and the public IPA wait for his word to ship (2026-11-16: people download every release, so each
+truly his. The public IPA (and TestFlight, opt-in) waits for his word to ship (2026-11-16: people download every release, so each
 gathers several features).
 
 ## 2. Shared pieces (the contracts commit)
@@ -143,7 +143,8 @@ Fix small findings directly.
    here. The rest of this section runs only when KaiC says ship; the CLAUDE.md status entry is written then, covering
    every held slice, and `docs/release-notes.md` is only read over and trimmed.
 3. Run `python scripts/gate.py` on the committed tree.
-4. Push main, then `python scripts/testflight.py start`.
+4. Push main, then `python scripts/testflight.py start` (the GitHub release and public IPA); add `--testflight`
+   only when KaiC asks for TestFlight too (opt-in since 2026-11-19: he installs `mac.py phone` builds).
 5. Track the run in the background: one `gh run view <id> --json status` every 90 s until it completes, then
    `python scripts/testflight.py status` once; on a failure, `gh run view <id> --log-failed` at once. No fixed sleep,
    nothing faster than 90 s, no `gh run watch`.
