@@ -180,7 +180,7 @@ void main() {
     expect(find.text('即将推出'), findsNothing);
   });
 
-  for (final key in ['me-cast', 'me-scan', 'me-outfit', 'me-night', 'me-edit', 'me-support', 'me-listen']) {
+  for (final key in ['me-cast', 'me-scan', 'me-outfit', 'me-edit', 'me-support', 'me-listen']) {
     testWidgets('$key says 即将推出', (tester) async {
       await showMe(tester);
       await tester.tap(_key(key));

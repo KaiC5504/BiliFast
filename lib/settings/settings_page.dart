@@ -18,6 +18,7 @@ import '../video/player_prefs.dart';
 import 'app_icon.dart';
 import 'app_icon_page.dart';
 import 'btr_page.dart';
+import 'dark_mode_page.dart';
 import 'playback/autoplay_settings_page.dart' show AutoplayLabels;
 import 'playback/home_feed_settings_page.dart';
 import 'playback/playback_settings_page.dart';
@@ -47,7 +48,7 @@ String buildVersionLabel() => switch ((appBuildName, appBuildNumber)) {
   _ => '未知',
 };
 
-/// 设置 (50): 登录 while logged out, the playback pages, 推送设置, BTR, clearing what the app keeps, 开发者 in dev
+/// 设置 (50): 登录 while logged out, the playback pages, 推送设置, 深色设置, BTR, clearing what the app keeps, 开发者 in dev
 /// builds, a sideloaded install's 签名, 退出登录 (51), and the version under it all.
 class SettingsPage extends StatefulWidget {
   const SettingsPage({
@@ -285,6 +286,15 @@ class _SettingsPageState extends State<SettingsPage> with SingleTickerProviderSt
                   SettingsSection(
                     children: [
                       SettingsRow(
+                        key: const ValueKey('settings-dark-mode'),
+                        title: '深色设置',
+                        onTap: () => _push((_) => DarkModePage(model: services.appearance)),
+                      ),
+                    ],
+                  ),
+                  SettingsSection(
+                    children: [
+                      SettingsRow(
                         key: const ValueKey('settings-btr'),
                         title: 'BTR',
                         value: _prefs.btr ? '开启' : '关闭',
@@ -421,7 +431,7 @@ class SettingsScaffold extends StatelessWidget {
     // Its own, not the app's default: pushed or swiped back over a dressed 我的, the page under it is still drawn and
     // its light style would be found through this one.
     return AnnotatedRegion<SystemUiOverlayStyle>(
-      value: SystemUiOverlayStyle.dark,
+      value: BiliTheme.dark ? SystemUiOverlayStyle.light : SystemUiOverlayStyle.dark,
       child: Scaffold(
         backgroundColor: SettingsTheme.page,
         body: Column(
@@ -778,12 +788,16 @@ class SettingsSwitchRow extends StatelessWidget {
     required this.value,
     required this.onChanged,
     this.subtitle,
+    this.tallHeight = SettingsListTheme.switchTallHeight,
   });
 
   final String title;
   final String? subtitle;
   final bool value;
   final ValueChanged<bool> onChanged;
+
+  /// The row's height with a [subtitle].
+  final double tallHeight;
 
   static const _textRight = SettingsListTheme.switchRight + SettingsListTheme.switchWidth + SettingsTheme.valueGap;
 
@@ -798,7 +812,7 @@ class SettingsSwitchRow extends StatelessWidget {
         child: PressHighlight(
           onTap: flip,
           child: SizedBox(
-            height: subtitle == null ? SettingsSection.rowHeight : SettingsListTheme.switchTallHeight,
+            height: subtitle == null ? SettingsSection.rowHeight : tallHeight,
             child: Stack(
               children: [
                 if (subtitle == null)

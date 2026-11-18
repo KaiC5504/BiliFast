@@ -5,8 +5,8 @@ import 'package:flutter/widgets.dart';
 import '../comments/comment_badges.dart' show SegmentGlyph;
 import '../shared/theme.dart';
 
-/// 我的's top row (87): 投屏, 扫一扫, 装扮 and 夜间模式.
-enum MeTopGlyph { cast, scan, outfit, night }
+/// 我的's top row (87): 投屏, 扫一扫, 装扮 and 夜间模式, which is 日间模式's ☀ in dark (251).
+enum MeTopGlyph { cast, scan, outfit, night, day }
 
 /// 更多服务's rows (106): 联系客服, 听视频 and 设置.
 enum MeServiceGlyph { support, listen, settings }
@@ -27,6 +27,7 @@ class MeTopGlyphPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
+    if (glyph == MeTopGlyph.day) return _day(canvas, size);
     final paint = _stroke(MeTheme.topGlyphStroke, color);
     // Each was traced around its own ink's middle; this puts that middle at the box's.
     final (Offset middle, Path path) = switch (glyph) {
@@ -34,6 +35,7 @@ class MeTopGlyphPainter extends CustomPainter {
       MeTopGlyph.scan => (const Offset(12, 12), _scan()),
       MeTopGlyph.outfit => (const Offset(12.9, 11.9), _outfit()),
       MeTopGlyph.night => (const Offset(12.4, 11.7), _night()),
+      MeTopGlyph.day => throw StateError('drawn by _day'),
     };
     canvas
       ..translate(size.width / 2 - middle.dx, size.height / 2 - middle.dy)
@@ -132,6 +134,17 @@ class MeTopGlyphPainter extends CustomPainter {
       ..arcToPoint(right, radius: const Radius.circular(8.85), clockwise: false, largeArc: true)
       ..arcToPoint(top, radius: const Radius.circular(8.13))
       ..close();
+  }
+
+  /// 251's ☀, its ink's middle 0.25 right of the box's and 0.3 above.
+  void _day(Canvas canvas, Size size) {
+    final centre = size.center(const Offset(0.25, -0.3));
+    canvas.drawCircle(centre, MeTheme.sunRing, _stroke(MeTheme.sunStroke, color));
+    final dot = Paint()..color = color;
+    for (var i = 0; i < 6; i++) {
+      final angle = i * math.pi / 3;
+      canvas.drawCircle(centre + Offset(math.cos(angle), math.sin(angle)) * MeTheme.sunRays, MeTheme.sunDot, dot);
+    }
   }
 
   @override

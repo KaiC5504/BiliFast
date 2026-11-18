@@ -311,12 +311,16 @@ class _MePageState extends State<MePage> with RouteAware {
             key: _headerKey,
             children: [
               MeHeader(view: view, actions: actions, reserveCard: _reserveCard(view), animate: animate, ink: ink),
-              _TopRow(onTap: _soon, color: ink ?? MeTheme.topGlyph),
+              _TopRow(
+                onTap: _soon,
+                onDayNight: () => unawaited(AppScope.of(context).appearance.toggle()),
+                color: ink ?? MeTheme.topGlyph,
+              ),
             ],
           );
           final card = MeHeader.hasCard(view) || _reserveCard(view);
           return AnnotatedRegion<SystemUiOverlayStyle>(
-            value: skin != null && skin.lightStatusMe(card: card)
+            value: (skin == null ? BiliTheme.dark : skin.lightStatusMe(card: card))
                 ? SystemUiOverlayStyle.light
                 : SystemUiOverlayStyle.dark,
             child: Column(
@@ -386,13 +390,13 @@ class _SkinPicture extends StatelessWidget {
             still
           else
             SkinVideo(file: video, loop: skin.equip.colors.headMyselfVideoLoop, placeholder: still),
-          const Positioned(
+          Positioned(
             left: 0,
             right: 0,
             bottom: 0,
             height: MeTheme.skinFade,
             child: DecoratedBox(
-              key: ValueKey('me-skin-fade'),
+              key: const ValueKey('me-skin-fade'),
               decoration: BoxDecoration(
                 gradient: LinearGradient(
                   begin: Alignment.topCenter,
@@ -409,34 +413,38 @@ class _SkinPicture extends StatelessWidget {
   }
 }
 
-/// 投屏, 扫一扫, 装扮 and 夜间模式, none built yet.
+/// 投屏, 扫一扫 and 装扮, not built yet, and 夜间模式's ☾ (日间模式's ☀ in dark), which switches the mode.
 class _TopRow extends StatelessWidget {
-  const _TopRow({required this.onTap, required this.color});
+  const _TopRow({required this.onTap, required this.onDayNight, required this.color});
 
   final VoidCallback onTap;
+  final VoidCallback onDayNight;
   final Color color;
-
-  static const _glyphs = [
-    (MeTopGlyph.cast, 'me-cast', '投屏'),
-    (MeTopGlyph.scan, 'me-scan', '扫一扫'),
-    (MeTopGlyph.outfit, 'me-outfit', '装扮'),
-    (MeTopGlyph.night, 'me-night', '夜间模式'),
-  ];
 
   @override
   Widget build(BuildContext context) {
     final width = MediaQuery.sizeOf(context).width;
+    final dark = BiliTheme.dark;
+    final glyphs = [
+      (MeTopGlyph.cast, 'me-cast', '投屏', onTap),
+      (MeTopGlyph.scan, 'me-scan', '扫一扫', onTap),
+      (MeTopGlyph.outfit, 'me-outfit', '装扮', onTap),
+      if (dark)
+        (MeTopGlyph.day, 'me-night', '日间模式', onDayNight)
+      else
+        (MeTopGlyph.night, 'me-night', '夜间模式', onDayNight),
+    ];
     return SizedBox(
       height: MeTheme.topTapHeight,
       width: width,
       child: Stack(
         children: [
-          for (final (index, (glyph, key, label)) in _glyphs.indexed)
+          for (final (index, (glyph, key, label, tap)) in glyphs.indexed)
             Positioned(
               left:
                   width -
                   MeTheme.topLastFromRight -
-                  MeTheme.topPitch * (_glyphs.length - 1 - index) -
+                  MeTheme.topPitch * (glyphs.length - 1 - index) -
                   MeTheme.topPitch / 2,
               top: MeTheme.topCentre - MeTheme.topTapHeight / 2,
               width: MeTheme.topPitch,
@@ -444,7 +452,7 @@ class _TopRow extends StatelessWidget {
               child: MeTap(
                 key: ValueKey(key),
                 label: label,
-                onTap: onTap,
+                onTap: tap,
                 child: Center(
                   child: CustomPaint(
                     size: const Size.square(MeTheme.topGlyphBox),
