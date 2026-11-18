@@ -343,7 +343,8 @@ class CollapsingPlayer extends ChangeNotifier {
 
   /// The tab out of sight scrolls on with the shown one as far as it must to be at the box's height, so switching
   /// tabs never grows the box back: the official page keeps it small whichever tab shrank it. A tab further down
-  /// is left where it is.
+  /// keeps its content where it is and takes the box's height by its pause point instead, so a swipe to it doesn't
+  /// shrink the box either (30): the box is one height whichever tab shows.
   void _keepInStep() {
     if (_only != null || _steppingIn || (!_paused && _grow.isAnimating)) return;
     final position = tabs.position;
@@ -353,7 +354,12 @@ class CollapsingPlayer extends ChangeNotifier {
     for (final tab in PageTab.values) {
       if (tab == shown) continue;
       final needed = _offsetAt(tab, height);
-      if (tabs.offsetOf(tab) >= needed - 1e-6) continue;
+      final offset = tabs.offsetOf(tab);
+      if (offset > needed + 1e-6) {
+        if (_paused && _following(tab).$1 < height - 1e-6) _from[tab] = _pauseFor(offset, height);
+        continue;
+      }
+      if (offset >= needed - 1e-6) continue;
       final positions = tabs.scrollOf(tab).positions;
       if (positions.isEmpty) {
         tabs.carry(tab, needed);
@@ -371,6 +377,11 @@ class CollapsingPlayer extends ChangeNotifier {
   }
 
   bool _steppingIn = false;
+
+  /// The pause point at which a tab at [offset], further down than the box's [height] asks, holds it at that height:
+  /// past `full - floor` the start is the floor, so the height is the floor less what is scrolled after the point. An
+  /// upright video's box taller than 16:9 can't be held that far down, and takes the tallest it can there.
+  double _pauseFor(double offset, double height) => math.min(offset, height + offset - _floor);
 
   /// The offset at which [tab] would hold the box at [height].
   double _offsetAt(PageTab tab, double height) {

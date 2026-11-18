@@ -149,7 +149,7 @@ void main() {
     });
 
     testWidgets('paused, 评论 scrolled to the bar keeps it the bar back on 简介 at its top; 简介 scrolled back up grows '
-        'it, and 评论 further down is left where it is', (tester) async {
+        'it, and 评论 further down keeps its place and takes the same height, through the swipe too (30)', (tester) async {
       await host(tester);
       collapse.paused = true;
       await showComments(tester);
@@ -164,8 +164,19 @@ void main() {
       scroll(PageTab.intro).jumpTo(reserve - 50);
       expect(collapse.height, closeTo(bar + 50, 1e-9));
       expect(tabs.offsetOf(PageTab.comments), 2000);
+
+      tabs.pager.jumpTo(220);
+      await tester.pump();
+      expect(tabs.position, 0.5);
+      expect(collapse.height, closeTo(bar + 50, 1e-9), reason: 'nothing to dip through the swipe');
       await showComments(tester);
-      expect(collapse.height, bar);
+      expect(collapse.height, closeTo(bar + 50, 1e-9));
+      expect(tabs.offsetOf(PageTab.comments), 2000, reason: '评论 keeps its content where it was read');
+
+      scroll(PageTab.comments).jumpTo(2010);
+      expect(collapse.height, closeTo(bar + 40, 1e-9));
+      scroll(PageTab.comments).jumpTo(1980);
+      expect(collapse.height, closeTo(bar + 70, 1e-9), reason: 'it grows as 评论 scrolls back up from there');
     });
 
     testWidgets('a tab never laid out starts at the height the shown one gave the box', (tester) async {
