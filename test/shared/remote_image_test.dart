@@ -85,6 +85,29 @@ final class _GifResponse extends Stream<List<int>> implements HttpClientResponse
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
 
+const _red = Color(0xFFFF0000);
+
+/// A [width] × [height] PNG, red over its top half and blue under it.
+Future<Uint8List> _halves(WidgetTester tester, int width, int height) async => (await tester.runAsync(() async {
+  final recorder = ui.PictureRecorder();
+  final half = height / 2;
+  Canvas(recorder)
+    ..drawRect(Rect.fromLTWH(0, 0, width.toDouble(), half), Paint()..color = _red)
+    ..drawRect(Rect.fromLTWH(0, half, width.toDouble(), half), Paint()..color = const Color(0xFF0000FF));
+  final picture = recorder.endRecording();
+  final image = await picture.toImage(width, height);
+  picture.dispose();
+  final png = await image.toByteData(format: ui.ImageByteFormat.png);
+  image.dispose();
+  return png!.buffer.asUint8List();
+}))!;
+
+Future<Color> _pixel(WidgetTester tester, ui.Image image, int x, int y) async {
+  final rgba = (await tester.runAsync(image.toByteData))!;
+  final at = (y * image.width + x) * 4;
+  return Color.fromARGB(rgba.getUint8(at + 3), rgba.getUint8(at), rgba.getUint8(at + 1), rgba.getUint8(at + 2));
+}
+
 void main() {
   tearDown(
     () => PaintingBinding.instance.imageCache
@@ -207,12 +230,14 @@ void main() {
     late int downloads;
     late List<String> asked;
     Object? failure;
+    late Map<String, Object> refusing;
 
     setUp(() {
       answers = [];
       downloads = 0;
       asked = [];
       failure = null;
+      refusing = {};
     });
 
     tearDown(() => ImageDiskCache.shared = null);
@@ -224,7 +249,7 @@ void main() {
         fetch: (url, _) async {
           downloads++;
           asked.add('$url');
-          if (failure case final failure?) throw failure;
+          if (refusing['$url'] ?? failure case final failure?) throw failure;
           return answers.removeAt(0);
         },
       );
@@ -402,6 +427,80 @@ void main() {
       expect(downloads, 1);
       await drop(tester);
     });
+
+    testWidgets('a long picture answered whole is kept at its box from the top, and got ready ahead is the one drawn', (
+      tester,
+    ) async {
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetDevicePixelRatio);
+      await keep(tester);
+      answers.add(await _halves(tester, 40, 400));
+      const long = 'https://i1.hdslb.com/bfs/new_dyn/kept-long.jpg';
+      const size = Size(20, 30);
+      await tester.pumpWidget(const SizedBox());
+      final context = tester.element(find.byType(SizedBox));
+      expect(
+        await tester.runAsync(() => RemoteImage.precache(context, long, size: size, alignment: Alignment.topCenter)),
+        isTrue,
+      );
+      expect(asked, [widthImageUrl(long, width: 60)]);
+      expect(PaintingBinding.instance.imageCache.currentSizeBytes, 20 * 30 * 4, reason: 'only the box is kept');
+
+      await tester.pumpWidget(
+        Directionality(
+          textDirection: TextDirection.ltr,
+          child: Center(
+            child: SizedBox.fromSize(
+              size: size,
+              child: const RemoteImage(long, size: size, alignment: Alignment.topCenter),
+            ),
+          ),
+        ),
+      );
+      final image = tester.widget<RawImage>(find.byType(RawImage)).image!;
+      expect([image.width, image.height], [20, 30], reason: 'the 40×400 answer decoded 20 wide, its top 30 kept');
+      expect(await _pixel(tester, image, 10, 29), _red, reason: 'the centre would be blue here');
+      expect(downloads, 1);
+      await drop(tester);
+    });
+
+    testWidgets('a long picture whose whole address is refused or does not decode is drawn from the centre crop', (
+      tester,
+    ) async {
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetDevicePixelRatio);
+      await keep(tester);
+      final png = await _halves(tester, 40, 400);
+      await tester.pumpWidget(const SizedBox());
+      final context = tester.element(find.byType(SizedBox));
+      Future<bool?> ready(String url) => tester.runAsync(
+        () => RemoteImage.precache(context, url, size: const Size(20, 30), alignment: Alignment.topCenter),
+      );
+      List<String> both(String url) => [widthImageUrl(url, width: 60), sizedImageUrl(url, width: 60, height: 60)];
+
+      const refused = 'https://i1.hdslb.com/bfs/new_dyn/refused-long.jpg';
+      refusing[widthImageUrl(refused, width: 60)] = NetworkImageLoadException(statusCode: 400, uri: Uri.parse(refused));
+      answers.add(png);
+      expect(await ready(refused), isTrue);
+      expect(asked, both(refused));
+
+      const broken = 'https://i1.hdslb.com/bfs/new_dyn/broken-long.jpg';
+      answers.addAll([Uint8List.fromList(List.filled(64, 7)), png]);
+      expect(await ready(broken), isTrue);
+      expect(asked.skip(2), both(broken));
+
+      PaintingBinding.instance.imageCache.clear();
+      asked.clear();
+      expect(await ready(refused), isTrue);
+      expect(await ready(broken), isTrue);
+      expect(asked, isEmpty, reason: 'the centre crops come back from storage, the whole ones are not asked again');
+
+      const offline = 'https://i1.hdslb.com/bfs/new_dyn/offline-long.jpg';
+      failure = const PictureDownloadException('URLSession -1009');
+      expect(await ready(offline), isFalse);
+      expect(asked, [widthImageUrl(offline, width: 60)], reason: 'a lost connection would lose the centre crop too');
+      await drop(tester);
+    });
   });
 
   testWidgets('a CDN suffix is asked for whatever the box and the pixel ratio; without one the box is rounded up', (
@@ -475,6 +574,34 @@ void main() {
     ]);
     expect(widthImageUrl(long, width: 720), '$long@720w.webp');
     expect([for (final image in images) image.alignment], [Alignment.topCenter, Alignment.center]);
+    final whole = images.first.image as StoredNetworkImage;
+    expect(whole.box, const Size(720, 957), reason: 'kept at the box in device pixels');
+    expect(whole.alignment, Alignment.topCenter);
+    expect(whole.centreFallback, sizedImageUrl(long, width: 720, height: 960));
+    expect((images.last.image as StoredNetworkImage).box, isNull);
+  });
+
+  test('a picture kept in part keeps what covering its box shows there, and is keyed by its box', () {
+    const box = Size(720, 957);
+    expect(StoredNetworkImage.shownPart(720, 16000, box, Alignment.topCenter), const Rect.fromLTWH(0, 0, 720, 957));
+    expect(
+      StoredNetworkImage.shownPart(720, 16000, box, Alignment.bottomCenter),
+      const Rect.fromLTWH(0, 16000 - 957, 720, 957),
+    );
+    expect(
+      StoredNetworkImage.shownPart(500, 10000, box, Alignment.topCenter),
+      const Rect.fromLTWH(0, 0, 500, 665),
+      reason: 'an answer narrower than the box is kept at its own scale',
+    );
+    expect(StoredNetworkImage.shownPart(720, 960, box, Alignment.topCenter), const Rect.fromLTWH(0, 0, 720, 957));
+    expect(StoredNetworkImage.shownPart(1, 1, box, Alignment.topCenter), const Rect.fromLTWH(0, 0, 1, 1));
+
+    const url = 'https://i1.hdslb.com/bfs/new_dyn/long.jpg@720w.webp';
+    const kept = StoredNetworkImage(url, box: box, alignment: Alignment.topCenter);
+    expect(kept, const StoredNetworkImage(url, box: box, alignment: Alignment.topCenter));
+    expect(kept, isNot(const StoredNetworkImage(url, box: Size(720, 960), alignment: Alignment.topCenter)));
+    expect(kept, isNot(const StoredNetworkImage(url, box: box)));
+    expect(kept, isNot(const StoredNetworkImage(url, box: box, alignment: Alignment.bottomCenter)));
   });
 
   test("i0's and i2's pictures are asked from i1, so one connection carries them all; other hosts stay", () {

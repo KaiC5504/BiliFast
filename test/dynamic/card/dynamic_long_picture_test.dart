@@ -144,7 +144,11 @@ void main() {
       );
       await StoredPictures.arrive(tester);
       final image = tester.widget<Image>(find.descendant(of: _frame, matching: find.byType(Image)));
-      expect((image.image as StoredNetworkImage).url, widthImageUrl(url, width: 240));
+      final provider = image.image as StoredNetworkImage;
+      expect(provider.url, widthImageUrl(url, width: 240));
+      expect(provider.box?.width, 240, reason: 'only the frame is kept once decoded');
+      expect(provider.box?.height, closeTo(tester.getSize(_frame).height, 1));
+      expect(provider.alignment, Alignment.topCenter);
       expect(image.alignment, Alignment.topCenter);
       expect(pictures.downloads, [widthImageUrl(url, width: 240)]);
       await pictures.drop(tester);
