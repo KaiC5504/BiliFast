@@ -287,8 +287,7 @@ void main() {
 
   Future<void> shot(WidgetTester tester, String name) async {
     final shots = Platform.environment['BILIFAST_SHOTS'];
-    if (shots != null)
-      await saveShot(tester, find.byKey(screen), '$shots/$name');
+    if (shots != null) await saveShot(tester, find.byKey(screen), '$shots/$name');
   }
 
   Future<void> close(WidgetTester tester) async {
@@ -451,8 +450,7 @@ void main() {
       );
       final colours = <Color?>[];
       mention.text.visitChildren((span) {
-        if (span is TextSpan && span.text == '@解说奶爸')
-          colours.add(span.style?.color);
+        if (span is TextSpan && span.text == '@解说奶爸') colours.add(span.style?.color);
         return true;
       });
       expect(colours, [const Color(0xFF00699D)]);
