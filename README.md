@@ -11,10 +11,9 @@
   [**安装**](#-安装) · [功能](#-功能) · [常见问题](#-常见问题) · [播放原理](#-播放原理) · [实测](#-实测) · [Releases](https://github.com/KaiC5504/BiliFast/releases)
 
   <!-- 截图都是我们自己的 App（Windows 版，未登录），不放官方 App 的截图。 -->
-  <img src="docs/screenshots/home.png" width="32%" alt="首页" />
-  <img src="docs/screenshots/video.png" width="32%" alt="视频页" />
-  <br/>
-  <img src="docs/screenshots/landscape.png" width="65%" alt="全屏" />
+  <img src="docs/screenshots/home.png" width="14.5%" alt="首页" />
+  <img src="docs/screenshots/video.png" width="14.5%" alt="视频页" />
+  <img src="docs/screenshots/landscape.png" width="67%" alt="全屏" />
 </div>
 
 BiliFast 是一个从零开始写的第三方 B 站客户端，用 Flutter 开发，不是在官方 App 上打补丁。目标就两个：
