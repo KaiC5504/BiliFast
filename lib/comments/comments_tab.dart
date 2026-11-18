@@ -96,6 +96,7 @@ class _CommentsTabState extends State<CommentsTab> {
                     ),
                   ),
                   ...commentListSlivers(model: model, callbacks: widget.callbacks, headerKept: _listShown),
+                  const ReserveRoom(),
                 ],
               ),
             ),

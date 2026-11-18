@@ -135,6 +135,7 @@ class IntroTab extends StatelessWidget {
               child: Center(child: _RetryLine(onRetry: content.onRetryDetail!)),
             ),
           SliverToBoxAdapter(child: SizedBox(height: bottom)),
+          const ReserveRoom(),
         ],
       ),
     );

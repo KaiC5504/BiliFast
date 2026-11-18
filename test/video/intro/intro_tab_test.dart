@@ -346,10 +346,13 @@ void main() {
     expect(tester.getTopLeft(find.byType(UploaderRow)).dy, closeTo(180 - scroll.offset, 0.01));
   });
 
-  testWidgets('the list ends with room for the home indicator', (tester) async {
+  testWidgets('the list ends with room for the home indicator, then room to scroll the reserve away when short', (
+    tester,
+  ) async {
     await host(tester, IntroContent(detail: detail(), related: [card('BV1x')]));
     final scroll = tester.widget<CustomScrollView>(find.byType(CustomScrollView, skipOffstage: false));
-    final last = scroll.slivers.last as SliverToBoxAdapter;
-    expect((last.child! as SizedBox).height, 34 + PageTheme.introBottom);
+    expect(scroll.slivers.last, isA<ReserveRoom>());
+    final bottom = scroll.slivers[scroll.slivers.length - 2] as SliverToBoxAdapter;
+    expect((bottom.child! as SizedBox).height, 34 + PageTheme.introBottom);
   });
 }

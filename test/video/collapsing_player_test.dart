@@ -179,6 +179,39 @@ void main() {
       expect(collapse.height, closeTo(bar + 70, 1e-9), reason: 'it grows as 评论 scrolls back up from there');
     });
 
+    testWidgets('a first visit to 评论 while its first page is out keeps the bar: its room lets it take the offset (30)', (
+      tester,
+    ) async {
+      tester.view.physicalSize = const Size(440, 956);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      Widget loading() => CustomScrollView(
+        key: const PageStorageKey('评论'),
+        primary: true,
+        slivers: [
+          SliverToBoxAdapter(child: Builder(builder: (context) => SizedBox(height: PlayerReserve.of(context)))),
+          const SliverFillRemaining(hasScrollBody: false, child: Center(child: Text('loading'))),
+          const ReserveRoom(),
+        ],
+      );
+      await tester.pumpWidget(
+        MaterialApp(
+          home: CollapseReserve(
+            collapse: collapse,
+            child: PageTabs(controller: tabs, intro: list('简介'), comments: loading()),
+          ),
+        ),
+      );
+      collapse.paused = true;
+      scroll(PageTab.intro).jumpTo(2000);
+      expect(collapse.height, bar);
+
+      await showComments(tester);
+      await tester.pumpAndSettle();
+      expect(tabs.offsetOf(PageTab.comments), closeTo(reserve, 1e-9));
+      expect(collapse.height, closeTo(bar, 1e-9));
+    });
+
     testWidgets('a tab never laid out starts at the height the shown one gave the box', (tester) async {
       await host(tester);
       collapse.paused = true;

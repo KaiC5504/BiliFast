@@ -29,6 +29,21 @@ class PlayerReserve extends InheritedWidget {
   bool updateShouldNotify(PlayerReserve oldWidget) => oldWidget.height != height;
 }
 
+/// Room after a tab's content so it can always scroll its reserve away: a short list (评论's first page still out, a
+/// few comments) then takes the offset that holds the box at the other tab's height, where it would sit at its top
+/// and spring the box back to full (30, the first visit to 评论).
+class ReserveRoom extends StatelessWidget {
+  const ReserveRoom({super.key});
+
+  @override
+  Widget build(BuildContext context) => SliverLayoutBuilder(
+    builder: (context, constraints) {
+      final room = PlayerReserve.of(context) + constraints.viewportMainAxisExtent - constraints.precedingScrollExtent;
+      return SliverToBoxAdapter(child: SizedBox(height: math.max(0, room)));
+    },
+  );
+}
+
 /// [PlayerReserve] at [collapse]'s reserve, following it through a change of shape without rebuilding [child]: only
 /// the lists' gaps (each tab reads it in a Builder around its gap) rebuild, in the frame the box changes and their
 /// offsets are kept.

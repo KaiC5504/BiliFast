@@ -3776,7 +3776,8 @@ void main() {
         ..changed();
       await frames(tester);
       final name = find.byKey(const ValueKey('related-uploader'));
-      await tester.ensureVisible(name);
+      // Mid-screen: 简介's room lets it scroll the row to the top, under the box.
+      unawaited(Scrollable.ensureVisible(tester.element(name), alignment: 0.5));
       await frames(tester);
 
       await tester.tap(name);
