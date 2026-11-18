@@ -346,6 +346,63 @@ void main() {
       expect(api.calls.where((call) => call == 'ups offset=u1'), hasLength(2), reason: 'the last page');
     });
 
+    test('logs each page of faces by counts, its dots and the live apart, never a name or a mid', () async {
+      const plain = [DynamicUp(mid: 105, name: '测试无更新一', face: ''), DynamicUp(mid: 106, name: '测试无更新二', face: '')];
+      final api = _ListedUpsApi({
+        null: DynamicUpList(
+          ups: [faces[0], faces[1], plain[0]],
+          offset: 'u1',
+          hasMore: true,
+          dropped: 1,
+          liveMids: const [102, 900],
+        ),
+        'u1': DynamicUpList(ups: [plain[0], plain[1], faces[2]]),
+      });
+      final model = FollowTabModel(api: api, mid: () => 12345, logger: logger);
+      addTearDown(model.dispose);
+      await model.start();
+      await model.loadMoreUps();
+      expect(model.ups.map((up) => up.mid), [101, 102, 105, 106, 103]);
+
+      final events = logged('dynamic ups');
+      expect(events, hasLength(2));
+      expect(events.first.f.keys.toSet(), {
+        'page',
+        'count',
+        'added',
+        'dots',
+        'dotsFirst',
+        'dropped',
+        'live',
+        'liveListed',
+        'more',
+        'ms',
+      });
+      Map<String, LogValue> counts(LogEvent event) => {...event.f}..remove('ms');
+      expect(counts(events.first), {
+        'page': const LogString('first'),
+        'count': const LogInt(3),
+        'added': const LogInt(3),
+        'dots': const LogInt(2),
+        'dotsFirst': const LogBool(true),
+        'dropped': const LogInt(1),
+        'live': const LogInt(2),
+        'liveListed': const LogInt(1),
+        'more': const LogBool(true),
+      });
+      expect(counts(events.last), {
+        'page': const LogString('next'),
+        'count': const LogInt(3),
+        'added': const LogInt(2),
+        'dots': const LogInt(1),
+        'dotsFirst': const LogBool(false),
+        'dropped': const LogInt(0),
+        'live': const LogInt(0),
+        'liveListed': const LogInt(0),
+        'more': const LogBool(false),
+      });
+    });
+
     test('logged out, 我的追番 · 追剧 is never asked', () async {
       final api = FakeDynamicApi(posts: posts(3), upList: faces);
       final model = FollowTabModel(api: api, mid: () => null, logger: logger);
@@ -356,4 +413,17 @@ void main() {
       expect(model.bangumi, isEmpty);
     });
   });
+}
+
+/// 最常访问 answered exactly as given, by offset.
+final class _ListedUpsApi extends FakeDynamicApi {
+  _ListedUpsApi(this.pages) : super(posts: posts(3));
+
+  final Map<String?, DynamicUpList> pages;
+
+  @override
+  Future<DynamicUpList> ups({String? offset}) async {
+    calls.add('ups offset=${offset ?? ''}');
+    return pages[offset]!;
+  }
 }

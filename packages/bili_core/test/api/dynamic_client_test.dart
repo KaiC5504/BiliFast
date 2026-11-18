@@ -148,6 +148,7 @@ void main() {
     http.routes[uplistPath] = (200, fixture('uplist'));
     final first = await client.dynamicUps();
     expect(first.ups, hasLength(2));
+    expect(first.dropped, 1, reason: "the fixture's face without a usable mid");
     final next = await client.dynamicUps(offset: first.offset);
     expect(next.ups.single.name, '测试常看三');
     expect(http.query(http.requestsTo(uplistPath).single)['offset'], 'fake-offset-portal-0001');

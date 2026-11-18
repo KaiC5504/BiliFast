@@ -351,11 +351,23 @@ final class DynamicUp {
 }
 
 final class DynamicUpList {
-  const DynamicUpList({required this.ups, this.offset = '', this.hasMore = false});
+  const DynamicUpList({
+    required this.ups,
+    this.offset = '',
+    this.hasMore = false,
+    this.dropped = 0,
+    this.liveMids = const [],
+  });
 
   final List<DynamicUp> ups;
   final String offset;
   final bool hasMore;
+
+  /// Faces that wouldn't decode (no usable mid), for the log.
+  final int dropped;
+
+  /// The portal's `live_users`: the followed who are live now, kept apart from [ups]; empty on uplist's pages.
+  final List<int> liveMids;
 }
 
 /// 我的关注's sort (130). 推荐排序 has no known web call and asks as 最常访问 does (KaiC's call, 2026-10-26).
@@ -456,14 +468,21 @@ abstract final class DynamicDecode {
     return _item(data.map['item'] ?? data.map);
   }
 
-  /// The portal's `up_list` or uplist's `data`.
+  /// The portal's `up_list` and `live_users`, or uplist's `data`.
   static DynamicUpList ups(Object? json) {
     final data = JsonObject.from(json, 'up list');
     final list = data.nested('up_list') ?? data;
+    final raw = _list(list.map['items']);
+    final ups = lossy(raw, _up);
     return DynamicUpList(
-      ups: list.lenientList('items', _up),
+      ups: ups,
       offset: _string(list.map['offset']),
       hasMore: list.flag('has_more'),
+      dropped: raw.length - ups.length,
+      liveMids: [
+        for (final user in _list(data.nested('live_users')?.map['items']))
+          if (user is Map<String, Object?>) ?_int(user['mid']),
+      ],
     );
   }
 

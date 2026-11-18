@@ -273,6 +273,7 @@ class FollowTabModel extends ChangeNotifier {
     if (_upsLoading && !replacing) return;
     final mine = replacing ? ++_upsGeneration : _upsGeneration;
     _upsLoading = true;
+    final watch = Stopwatch()..start();
     try {
       final list = await api.ups(offset: replacing ? null : _upsOffset);
       if (mine != _upsGeneration || _disposed) return;
@@ -286,6 +287,7 @@ class FollowTabModel extends ChangeNotifier {
       _upsOffset = list.offset;
       _upsMore = list.hasMore && list.offset.isNotEmpty && fresh.isNotEmpty;
       if (replacing) _upsFailed = false;
+      _logUps(list, replacing: replacing, added: fresh.length, ms: watch.elapsedMilliseconds);
     } catch (error) {
       if (mine != _upsGeneration || _disposed) return;
       if (!replacing) _upsFailed = true;
@@ -294,6 +296,24 @@ class FollowTabModel extends ChangeNotifier {
       if (mine == _upsGeneration) _upsLoading = false;
       _notify();
     }
+  }
+
+  /// Counts only, never a name or a mid: enough to set a page beside the official app's row (which comes from its own
+  /// gRPC feed, so the two can differ) and see whether the website dotted fewer faces or kept a live one apart.
+  void _logUps(DynamicUpList list, {required bool replacing, required int added, required int ms}) {
+    final live = list.liveMids.toSet();
+    _logger.info(LogCategory.api, 'dynamic ups', {
+      'page': replacing ? 'first' : 'next',
+      'count': list.ups.length,
+      'added': added,
+      'dots': list.ups.where((up) => up.hasUpdate).length,
+      'dotsFirst': !list.ups.skipWhile((up) => up.hasUpdate).any((up) => up.hasUpdate),
+      'dropped': list.dropped,
+      'live': live.length,
+      'liveListed': list.ups.where((up) => live.contains(up.mid)).length,
+      'more': _upsMore,
+      'ms': ms,
+    });
   }
 
   Future<void> _askBangumi() => _bangumiCall.run(_loadBangumi);
