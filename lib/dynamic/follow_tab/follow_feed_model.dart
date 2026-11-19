@@ -38,6 +38,11 @@ class FollowFeed extends ChangeNotifier {
   int _generation = 0;
   bool _disposed = false;
 
+  /// Accounts unfollowed over this list, each with the count of unfollows when it went: a page asked before then can
+  /// still hold their posts.
+  final _unfollowed = <int, int>{};
+  int _unfollows = 0;
+
   List<DynamicItem> get items => _items;
 
   /// Moves on each time the list starts over (a reload, a sign-out).
@@ -102,24 +107,33 @@ class FollowFeed extends ChangeNotifier {
     _needsLogin = false;
     _offset = null;
     _first.forget();
+    _unfollowed.clear();
     _notify();
   }
 
   Future<String?> _load({required bool replacing}) async {
     final mine = _generation;
+    final asked = _unfollows;
     _loading = true;
     _notify();
     final watch = Stopwatch()..start();
     try {
       final page = await load(replacing ? null : _offset);
       if (mine != _generation || _disposed) return null;
+      // A first page starts the list over: Bilibili left out whoever was unfollowed before it was asked (and shows
+      // them again if followed since), so only those who went while it was out are still kept out.
+      if (replacing) _unfollowed.removeWhere((_, at) => at <= asked);
       final kept = replacing ? <DynamicItem>[] : [..._items];
       final seen = {for (final item in kept) item.id};
       final fresh = [
         for (final item in page.items)
           if (seen.add(item.id)) item,
       ];
-      _items = [...kept, ...fresh];
+      final added = [
+        for (final item in fresh)
+          if (!_unfollowed.containsKey(item.author.mid)) item,
+      ];
+      _items = [...kept, ...added];
       _offset = page.offset;
       _isEnd = !page.hasMore || page.offset.isEmpty || fresh.isEmpty;
       _error = null;
@@ -128,7 +142,7 @@ class FollowFeed extends ChangeNotifier {
       _logger.info(LogCategory.api, 'dynamic feed', {
         'type': name,
         'count': page.items.length,
-        'added': fresh.length,
+        'added': added.length,
         'more': !_isEnd,
         'skipped': _skipped(page.skipped),
         'ms': watch.elapsedMilliseconds,
@@ -155,8 +169,10 @@ class FollowFeed extends ChangeNotifier {
     }
   }
 
-  /// An unfollowed account's posts leave at once, as a refresh would drop them (263).
+  /// An unfollowed account's posts leave at once, as a refresh would drop them (263), and a page already out when it
+  /// went doesn't bring them back.
   void removeAuthor(int mid) {
+    _unfollowed[mid] = ++_unfollows;
     final kept = [
       for (final item in _items)
         if (item.author.mid != mid) item,

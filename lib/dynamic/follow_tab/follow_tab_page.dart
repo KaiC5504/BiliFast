@@ -3,6 +3,7 @@ import 'dart:math' as math;
 
 import 'package:bili_core/api.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 
 import '../../app/app_environment.dart';
@@ -70,6 +71,10 @@ class _FollowTabPageState extends State<FollowTabPage> with SkinRefreshRoom, Tic
 
   /// Posts of an unfollowed account still drawn where they were, by id.
   final _leaving = <String, _Leaving>{};
+
+  /// Each post's height as the list last laid it out, which the list's offsets still count once it is no longer built.
+  final _heights = <String, double>{};
+  final _postsKey = GlobalKey();
   bool _started = false;
   bool _signedOut = false;
 
@@ -184,6 +189,7 @@ class _FollowTabPageState extends State<FollowTabPage> with SkinRefreshRoom, Tic
       }
       _leaving.clear();
       _cardKeys.clear();
+      _heights.clear();
       _model?.signOut();
       _started = false;
     } else if (widget.active) {
@@ -204,13 +210,15 @@ class _FollowTabPageState extends State<FollowTabPage> with SkinRefreshRoom, Tic
       _leaving.remove(each.item.id);
       each.dispose();
     }
-    if (_cardKeys.length > model.all.items.length + model.video.items.length) {
+    final posts = model.all.items.length + model.video.items.length;
+    if (_cardKeys.length > posts || _heights.length > posts) {
       final kept = {
         for (final item in [...model.all.items, ...model.video.items]) item.id,
         for (final each in _leaving.values)
           if (each.moving) each.item.id,
       };
       _cardKeys.removeWhere((id, _) => !kept.contains(id));
+      _heights.removeWhere((id, _) => !kept.contains(id));
     }
     setState(() {});
     _inline?.settleSoon();
@@ -228,7 +236,7 @@ class _FollowTabPageState extends State<FollowTabPage> with SkinRefreshRoom, Tic
       !widget.faceSheet.isOpen;
 
   /// [mid]'s posts leave both lists. Those on screen fade where they lie while the posts under them close the gap
-  /// (263); the others close at once, the list moved up by those drawn above the screen so what shows stays put.
+  /// (263); the others close at once, the list moved up by those above the screen so what shows stays put.
   ///
   /// Each stays in the list as an empty row until the list starts over: the list hands a post that changes index the
   /// laid-out offset of the one that had it before, so taking rows out above the screen would shift what shows.
@@ -237,19 +245,31 @@ class _FollowTabPageState extends State<FollowTabPage> with SkinRefreshRoom, Tic
     final feed = model.current;
     final view = _listArea();
     final moving = view != null && _showing && !MediaQuery.disableAnimationsOf(context);
+    final rows = _rows(feed);
+    RenderBox? built(_Shown row) {
+      final box = _cardKeys[row.item.id]?.currentContext?.findRenderObject();
+      return box is RenderBox && box.attached && box.hasSize ? box : null;
+    }
+
+    // The list lays out only the rows near the screen; those before them count in its offsets by their last height.
+    final firstBuilt = rows.indexWhere((row) => row.leaving == null && built(row) != null);
     var lift = 0.0;
+    var closed = 0.0;
     String? after;
-    for (final (index, row) in _rows(feed).indexed) {
+    for (final (index, row) in rows.indexed) {
       final item = row.item;
       if (row.leaving == null && item.author.mid == mid) {
-        final box = _cardKeys[item.id]?.currentContext?.findRenderObject();
-        final rect = box is RenderBox && box.attached && box.hasSize ? box.localToGlobal(Offset.zero) & box.size : null;
+        final box = built(row);
+        final rect = box == null ? null : box.localToGlobal(Offset.zero) & box.size;
         final band = index == 0;
+        final kept = band ? DynamicFeedTheme.band : 0.0;
         var onScreen = false;
         if ((rect, view) case (final rect?, final view?)) {
           final above = rect.bottom <= view.top;
-          if (above) lift += rect.height - (band ? DynamicFeedTheme.band : 0);
+          if (above) lift += rect.height - kept;
           onScreen = moving && !above && rect.top < view.bottom;
+        } else if (rect == null && index < firstBuilt) {
+          closed += math.max((_heights[item.id] ?? 0) - kept, 0);
         }
         final leaving = _Leaving(
           item: item,
@@ -267,6 +287,7 @@ class _FollowTabPageState extends State<FollowTabPage> with SkinRefreshRoom, Tic
     }
     model.removeAuthor(mid);
     if (lift > 0 && _scroll.hasClients) _scroll.jumpTo(_scroll.offset - lift);
+    if (_postsKey.currentContext?.findRenderObject() case final _RenderPostsSliver posts) posts.closeAbove(closed);
   }
 
   /// The gap has closed: the faded card is let go.
@@ -548,22 +569,27 @@ class _FollowTabPageState extends State<FollowTabPage> with SkinRefreshRoom, Tic
                 ),
               )
             else ...[
-              SliverList.builder(
-                itemCount: rows.length,
-                // Keyed by post, so a row keeps its place (and its laid-out offset) while posts around it go.
-                findChildIndexCallback: (key) => key is ValueKey<String> ? at[key.value] : null,
-                itemBuilder: (context, index) {
-                  final row = rows[index];
-                  final id = row.item.id;
-                  if (row.leaving case final leaving?) return _LeavingGap(key: ValueKey(id), leaving: leaving);
-                  return KeyedSubtree(
-                    key: ValueKey(id),
-                    child: KeyedSubtree(
-                      key: _cardKeys[id] ??= GlobalKey(),
-                      child: FollowPosts.row(row.item, inline, bandAbove: index == 0),
-                    ),
-                  );
-                },
+              _PostsSliver(
+                key: _postsKey,
+                delegate: SliverChildBuilderDelegate(
+                  childCount: rows.length,
+                  // Keyed by post, so a row keeps its place (and its laid-out offset) while posts around it go.
+                  findChildIndexCallback: (key) => key is ValueKey<String> ? at[key.value] : null,
+                  (context, index) {
+                    final row = rows[index];
+                    final id = row.item.id;
+                    if (row.leaving case final leaving?) return _LeavingGap(key: ValueKey(id), leaving: leaving);
+                    return _Measured(
+                      key: ValueKey(id),
+                      id: id,
+                      heights: _heights,
+                      child: KeyedSubtree(
+                        key: _cardKeys[id] ??= GlobalKey(),
+                        child: FollowPosts.row(row.item, inline, bandAbove: index == 0),
+                      ),
+                    );
+                  },
+                ),
               ),
               SliverToBoxAdapter(
                 child: FollowFooter(
@@ -649,6 +675,76 @@ class _Band extends StatelessWidget {
     height: DynamicFeedTheme.band,
     child: ColoredBox(color: DynamicFeedTheme.bandFill),
   );
+}
+
+/// The posts, which can close rows taken out above those laid out ([_RenderPostsSliver.closeAbove]).
+class _PostsSliver extends SliverList {
+  const _PostsSliver({super.key, required super.delegate});
+
+  @override
+  _RenderPostsSliver createRenderObject(BuildContext context) =>
+      _RenderPostsSliver(childManager: context as SliverMultiBoxAdaptorElement);
+}
+
+class _RenderPostsSliver extends RenderSliverList {
+  _RenderPostsSliver({required super.childManager});
+
+  double _closing = 0;
+
+  /// [height] of rows before the first one laid out has gone. The list would still place its rows by their old
+  /// offsets and find the gap only back at its top, correcting the scroll there; so they move up now, and the scroll
+  /// with them, and nothing shown moves.
+  void closeAbove(double height) {
+    if (height <= 0) return;
+    _closing += height;
+    markNeedsLayout();
+  }
+
+  @override
+  void performLayout() {
+    final first = firstChild;
+    final offset = first == null ? null : childScrollOffset(first);
+    final closing = offset == null ? 0.0 : math.min(_closing, offset);
+    _closing = 0;
+    if (closing > 0) {
+      for (var child = first; child != null; child = childAfter(child)) {
+        final data = child.parentData! as SliverMultiBoxAdaptorParentData;
+        if (data.layoutOffset case final at?) data.layoutOffset = at - closing;
+      }
+      geometry = SliverGeometry(scrollOffsetCorrection: -closing);
+      return;
+    }
+    super.performLayout();
+  }
+}
+
+/// A post's row, noting the height it was laid out at under its [id].
+class _Measured extends SingleChildRenderObjectWidget {
+  const _Measured({super.key, required this.id, required this.heights, required super.child});
+
+  final String id;
+  final Map<String, double> heights;
+
+  @override
+  _RenderMeasured createRenderObject(BuildContext context) => _RenderMeasured(id, heights);
+
+  @override
+  void updateRenderObject(BuildContext context, _RenderMeasured renderObject) => renderObject
+    ..id = id
+    ..heights = heights;
+}
+
+class _RenderMeasured extends RenderProxyBox {
+  _RenderMeasured(this.id, this.heights);
+
+  String id;
+  Map<String, double> heights;
+
+  @override
+  void performLayout() {
+    super.performLayout();
+    heights[id] = size.height;
+  }
 }
 
 /// A row of the list: a post, or one leaving it.

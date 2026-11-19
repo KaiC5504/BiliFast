@@ -1,3 +1,6 @@
+import 'dart:async';
+import 'dart:math' as math;
+
 import 'package:bili_core/api.dart';
 import 'package:bilifast/dynamic/fake_dynamic_api.dart';
 import 'package:bilifast/dynamic/follow_tab/follow_feed_model.dart';
@@ -199,6 +202,52 @@ void main() {
     expect(tester.getRect(shown('p2')).top, 284 + 120);
   });
 
+  testWidgets('posts far above the screen, never built since, close too: scrolled back up the list moves only as far '
+      'as it is scrolled, and starts under the top', (tester) async {
+    FollowPosts.cardOverride = (item, inline) => SizedBox(height: 120, child: Text('post ${item.id}'));
+    // Long enough that the list's end stays far below the screen.
+    final rig = await open(tester, api: FakeDynamicApi(posts: _mixed(40), upList: faces, pageSize: 40));
+    final list = tester.getRect(find.byKey(const ValueKey('follow-list')));
+    final scroll = listScroll(tester);
+    scroll.jumpTo(284 + 120 * 16 - list.top);
+    await tester.pump();
+    expect(tester.getRect(shown('p16')).top, list.top);
+    // p13 (by 2) lies in the cache above the screen; 2's p1, p5 and p9 are far above it, not built.
+    expect(shown('p13'), findsOneWidget);
+    for (final id in ['p1', 'p5', 'p9']) {
+      expect(shown(id), findsNothing);
+    }
+
+    rig.services.follows.changed(2, following: false);
+    for (var frame = 0; frame < 3; frame++) {
+      await tester.pump();
+      expect(tester.getRect(shown('p16')).top, list.top, reason: 'frame $frame');
+    }
+    await settle(tester);
+    expect(tester.getRect(shown('p16')).top, list.top);
+
+    Map<String, double> tops() => {
+      for (var n = 0; n < 40; n++)
+        if (find.text('post p$n').evaluate().isNotEmpty) 'p$n': tester.getRect(find.text('post p$n')).top,
+    };
+    var at = scroll.pixels;
+    while (at > 0) {
+      final before = tops();
+      final step = math.min(45.0, at);
+      at -= step;
+      scroll.jumpTo(at);
+      await tester.pump();
+      expect(scroll.pixels, at, reason: 'no correction at $at');
+      final after = tops();
+      for (final MapEntry(key: id, value: top) in before.entries) {
+        if (after[id] case final moved?) expect(moved - top, step, reason: '$id at $at');
+      }
+    }
+    expect(tester.getRect(shown('p0')).top, 284);
+    expect(tester.getRect(shown('p2')).top, 284 + 120);
+    expect(tester.getRect(shown('p3')).top, 284 + 240);
+  });
+
   testWidgets('posts leave at once while 关注 is out of sight', (tester) async {
     final rig = await open(tester);
     await tester.tap(find.byKey(ValueKey('home-tab-${HomeTab.home.name}')));
@@ -225,6 +274,83 @@ void main() {
     final reloaded = feed.generation;
     feed.clear();
     expect(feed.generation, greaterThan(reloaded));
+  });
+
+  group('a page out when the unfollow lands', () {
+    late FakeDynamicApi api;
+    late FollowFeed feed;
+
+    void make(List<DynamicItem> list) {
+      api = FakeDynamicApi(posts: list);
+      feed = FollowFeed(name: 'all', load: (offset) => api.feed(DynamicFeedType.all, offset: offset));
+      addTearDown(feed.dispose);
+    }
+
+    List<int> mids() => [for (final item in feed.items) item.author.mid];
+    List<String> ids() => [for (final item in feed.items) item.id];
+
+    /// Runs [call] with the feed's answer held until [mid] is unfollowed.
+    Future<void> heldOver(Future<void> Function() call, int mid) async {
+      final hold = api.holds['feed'] = Completer<void>();
+      final out = call();
+      feed.removeAuthor(mid);
+      api.holds.remove('feed');
+      hold.complete();
+      await out;
+    }
+
+    test("a next page doesn't bring the account's posts back", () async {
+      make(_mixed(30));
+      await feed.start();
+      await heldOver(feed.loadMore, 2);
+      expect(ids(), containsAll(['p10', 'p11', 'p12']), reason: 'the page landed');
+      expect(mids(), isNot(contains(2)));
+      await feed.loadMore();
+      expect(ids(), contains('p20'));
+      expect(mids(), isNot(contains(2)), reason: 'kept out for the rest of this list');
+    });
+
+    test("a refresh's first page doesn't either, nor the pages after it", () async {
+      make(_mixed(30));
+      await feed.start();
+      await heldOver(feed.reload, 2);
+      expect(ids(), contains('p0'));
+      expect(mids(), isNot(contains(2)));
+      await feed.loadMore();
+      expect(ids(), contains('p10'));
+      expect(mids(), isNot(contains(2)));
+    });
+
+    test('a page of nothing but their posts adds nothing and the list pages on', () async {
+      make([...posts(10), ...posts(10, mid: 2, from: 10), ...posts(10, from: 20)]);
+      await feed.start();
+      await heldOver(feed.loadMore, 2);
+      expect(ids(), posts(10).map((item) => item.id));
+      expect(feed.isEnd, isFalse);
+      await feed.loadMore();
+      expect(ids(), contains('p20'));
+    });
+
+    test('followed again, a refresh shows their posts, and so do the pages after it', () async {
+      make(_mixed(30));
+      await feed.start();
+      feed.removeAuthor(2);
+      expect(mids(), isNot(contains(2)));
+      // Asked after the unfollow, so whatever Bilibili answers is shown: here 2's posts, as after a 关注 again.
+      await feed.reload();
+      expect(ids(), contains('p1'));
+      await feed.loadMore();
+      expect(ids(), contains('p13'));
+    });
+
+    test('signing out forgets them too', () async {
+      make(_mixed(30));
+      await feed.start();
+      feed.removeAuthor(2);
+      feed.clear();
+      await feed.start();
+      expect(ids(), contains('p1'));
+    });
   });
 
   group('⋮ → 取消关注 on a post', () {
