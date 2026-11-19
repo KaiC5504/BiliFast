@@ -354,7 +354,10 @@ void main() {
           offset: 'u1',
           hasMore: true,
           dropped: 1,
-          liveMids: const [102, 900],
+          liveUps: const [
+            DynamicLiveUp(mid: 102, name: '', face: ''),
+            DynamicLiveUp(mid: 900, name: '', face: ''),
+          ],
         ),
         'u1': DynamicUpList(ups: [plain[0], plain[1], faces[2]]),
       });

@@ -152,6 +152,17 @@ class FollowFeed extends ChangeNotifier {
     }
   }
 
+  /// An unfollowed account's posts leave at once, as a refresh would drop them (263).
+  void removeAuthor(int mid) {
+    final kept = [
+      for (final item in _items)
+        if (item.author.mid != mid) item,
+    ];
+    if (kept.length == _items.length) return;
+    _items = kept;
+    _notify();
+  }
+
   /// `DYNAMIC_TYPE_LIVE:2,…`: kinds only, never a post's words.
   static String _skipped(Map<String, int> skipped) =>
       [for (final MapEntry(:key, :value) in skipped.entries) '$key:$value'].join(',');
@@ -197,6 +208,7 @@ class FollowTabModel extends ChangeNotifier {
 
   DynamicFeedType _type = DynamicFeedType.all;
   List<DynamicUp> _ups = const [];
+  List<DynamicLiveUp> _liveUps = const [];
   String _upsOffset = '';
   bool _upsMore = false;
   bool _upsLoading = false;
@@ -220,7 +232,16 @@ class FollowTabModel extends ChangeNotifier {
   DynamicFeedType get type => _type;
   FollowFeed get current => _type == DynamicFeedType.video ? video : all;
   List<DynamicUp> get ups => _ups;
+
+  /// The followed who are live now, from the faces' first page.
+  List<DynamicLiveUp> get liveUps => _liveUps;
   bool get started => _upsStarted;
+
+  /// Drops an unfollowed account's posts from both lists.
+  void removeAuthor(int mid) {
+    all.removeAuthor(mid);
+    video.removeAuthor(mid);
+  }
 
   /// Shown only on 视频, and only when the account follows any.
   List<FollowedBangumi> get bangumi => _type == DynamicFeedType.video ? _bangumi : const [];
@@ -284,6 +305,7 @@ class FollowTabModel extends ChangeNotifier {
           if (seen.add(up.mid)) up,
       ];
       _ups = [...kept, ...fresh];
+      if (replacing) _liveUps = list.liveUps;
       _upsOffset = list.offset;
       _upsMore = list.hasMore && list.offset.isNotEmpty && fresh.isNotEmpty;
       if (replacing) _upsFailed = false;
@@ -343,6 +365,7 @@ class FollowTabModel extends ChangeNotifier {
     _generation++;
     _upsGeneration++;
     _ups = const [];
+    _liveUps = const [];
     _upsOffset = '';
     _upsMore = false;
     _upsLoading = false;

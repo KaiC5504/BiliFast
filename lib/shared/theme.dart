@@ -8586,6 +8586,8 @@ abstract final class MessageTabTheme {
   static const alertMessageCentre = 176 / 3;
   static Color get alertMessage => tone(0xFF61666D, 0xFFA2A7AE);
   static const alertBody = 93.0;
+  /// A title with no message (关注's 确认取消关注?, no reference: KaiC chose this alert over iOS's), centred in its body.
+  static const alertTitleOnlyBody = 76.0;
   static const alertRule = 2 / 3;
   static Color get alertRuleInk => BiliColors.divider;
   static const alertButton = 44.0;

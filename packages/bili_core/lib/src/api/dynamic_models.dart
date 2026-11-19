@@ -350,13 +350,25 @@ final class DynamicUp {
   final bool hasUpdate;
 }
 
+/// A followed account that is live now (the portal's `live_users.items`), led in 最常访问 with 直播中 (263).
+final class DynamicLiveUp {
+  const DynamicLiveUp({required this.mid, required this.name, required this.face, this.roomId = 0});
+
+  final int mid;
+  final String name;
+  final String face;
+
+  /// 0 when the answer gave none.
+  final int roomId;
+}
+
 final class DynamicUpList {
   const DynamicUpList({
     required this.ups,
     this.offset = '',
     this.hasMore = false,
     this.dropped = 0,
-    this.liveMids = const [],
+    this.liveUps = const [],
   });
 
   final List<DynamicUp> ups;
@@ -367,7 +379,9 @@ final class DynamicUpList {
   final int dropped;
 
   /// The portal's `live_users`: the followed who are live now, kept apart from [ups]; empty on uplist's pages.
-  final List<int> liveMids;
+  final List<DynamicLiveUp> liveUps;
+
+  List<int> get liveMids => [for (final up in liveUps) up.mid];
 }
 
 /// 我的关注's sort (130). 推荐排序 has no known web call and asks as 最常访问 does (KaiC's call, 2026-10-26).
@@ -479,9 +493,10 @@ abstract final class DynamicDecode {
       offset: _string(list.map['offset']),
       hasMore: list.flag('has_more'),
       dropped: raw.length - ups.length,
-      liveMids: [
+      liveUps: [
         for (final user in _list(data.nested('live_users')?.map['items']))
-          if (user is Map<String, Object?>) ?_int(user['mid']),
+          if (user is Map<String, Object?>)
+            if (_int(user['mid']) case final mid?) DynamicLiveUp(mid: mid, name: '', face: ''),
       ],
     );
   }
