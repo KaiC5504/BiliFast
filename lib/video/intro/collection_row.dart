@@ -1,4 +1,5 @@
 import 'package:flutter/widgets.dart';
+import 'package:lottie/lottie.dart';
 
 import '../../shared/menu.dart';
 import '../../shared/theme.dart';
@@ -94,41 +95,53 @@ class CollectionRow extends StatelessWidget {
   }
 }
 
-/// The official app's "now playing" mark: a short bar between two tall ones, centred on the line.
+/// The official app's "now playing" mark, the APK's Lottie: three round-ended bars rising and falling out of step,
+/// centred on the line. It moves all the time, the video paused or not, as the official one does; Reduce Motion holds
+/// it on font-check 02's frame.
 class PlayingBars extends StatelessWidget {
   const PlayingBars({super.key, required this.color, this.height = IntroListTheme.barsHeight});
+
+  static const asset = 'assets/lottie/detail_playing.json';
+
+  /// Tests hold every mark still, as Reduce Motion does, or no pumpAndSettle under one would settle.
+  @visibleForTesting
+  static bool debugHoldStill = false;
+
+  /// Parses the Lottie ahead of the first video page, whose marks would otherwise miss their first frames.
+  static Future<void> precache() => AssetLottie(asset).load();
 
   final Color color;
   final double height;
 
   @override
-  Widget build(BuildContext context) => CustomPaint(
-    size: Size(IntroListTheme.barsWidth * height / IntroListTheme.barsHeight, height),
-    painter: _BarsPainter(color),
-  );
-}
-
-class _BarsPainter extends CustomPainter {
-  const _BarsPainter(this.color);
-
-  final Color color;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final bar = IntroListTheme.barWidth * size.height / IntroListTheme.barsHeight;
-    final step = (size.width - bar) / 2;
-    final paint = Paint()..color = color;
-    for (final (index, share) in IntroListTheme.barShares.indexed) {
-      final h = size.height * share;
-      canvas.drawRRect(
-        RRect.fromRectAndRadius(Rect.fromLTWH(index * step, (size.height - h) / 2, bar, h), Radius.circular(bar / 2)),
-        paint,
-      );
-    }
+  Widget build(BuildContext context) {
+    final scale = height / IntroListTheme.barsHeight;
+    final comp = IntroListTheme.barsComp * scale;
+    final still = debugHoldStill || MediaQuery.disableAnimationsOf(context);
+    return SizedBox(
+      width: IntroListTheme.barsWidth * scale,
+      height: height,
+      child: OverflowBox(
+        minWidth: comp,
+        maxWidth: comp,
+        minHeight: comp,
+        maxHeight: comp,
+        child: Lottie.asset(
+          PlayingBars.asset,
+          controller: still ? const AlwaysStoppedAnimation(IntroListTheme.barsStill) : null,
+          // The held frame lies between two of the file's.
+          frameRate: still ? FrameRate.max : null,
+          delegates: LottieDelegates(
+            values: [
+              ValueDelegate.strokeColor(const ['**'], value: color),
+            ],
+          ),
+          width: comp,
+          height: comp,
+        ),
+      ),
+    );
   }
-
-  @override
-  bool shouldRepaint(_BarsPainter oldDelegate) => oldDelegate.color != color;
 }
 
 /// A thin › with round ends, as at the end of the official app's rows and chips.

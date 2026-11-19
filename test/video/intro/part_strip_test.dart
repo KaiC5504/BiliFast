@@ -82,6 +82,25 @@ void main() {
     expect(tester.getSize(chip(0)), const Size(IntroListTheme.partChipWidth, IntroListTheme.partChipHeight));
   });
 
+  testWidgets('the playing chip\'s mark keeps its place: pink, 0.85 of the text tall, at the chip\'s inner start', (
+    tester,
+  ) async {
+    await show(tester, PartStrip(parts: parts(3, current: 1), onChoose: (_) {}, onOpenList: () {}));
+
+    final mark = find.descendant(of: chip(1), matching: find.byType(PlayingBars));
+    const height = IntroListTheme.partChipText * 0.85;
+    expect(tester.widget<PlayingBars>(mark).color, BiliColors.pink);
+    final box = tester.getRect(mark);
+    expect(box.width, moreOrLessEquals(IntroListTheme.barsWidth * height / IntroListTheme.barsHeight));
+    expect(box.height, moreOrLessEquals(height));
+    expect(
+      box.left,
+      closeTo(tester.getRect(chip(1)).left + IntroListTheme.partChipPad + IntroListTheme.partChipBorder, 0.2),
+    );
+    final line = tester.getRect(find.descendant(of: chip(1), matching: find.byType(RichText)).first);
+    expect(box.center.dy, closeTo(line.top + IntroListTheme.partChipLine / 2, 0.5));
+  });
+
   testWidgets('opens scrolled to the playing chip, and follows it when another part plays', (tester) async {
     await show(tester, PartStrip(parts: parts(20, current: 15), onChoose: (_) {}, onOpenList: () {}));
 

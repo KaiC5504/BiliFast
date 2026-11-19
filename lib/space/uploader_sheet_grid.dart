@@ -7,6 +7,7 @@ import '../player_ui/end_screen_portrait.dart' show CountGlyph, CountPainter;
 import '../shared/loading_tv.dart';
 import '../shared/remote_image.dart';
 import '../shared/theme.dart';
+import '../video/intro/collection_row.dart' show PlayingBars;
 
 TextStyle sheetStyle(double size, Color color, {double? line, FontWeight? weight}) => TextStyle(
   fontFamily: BiliFonts.family,
@@ -150,51 +151,25 @@ class _Stats extends StatelessWidget {
   }
 }
 
-/// The three bars before the playing video's title.
+/// The moving playing mark before the playing video's title.
 class PlayingMark extends StatelessWidget {
   const PlayingMark({super.key});
 
   @override
-  Widget build(BuildContext context) => const Padding(
-    padding: EdgeInsets.only(
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.only(
       left: UploaderSheetTheme.barsLead,
       right: UploaderSheetTheme.barsTrail,
       top: UploaderSheetTheme.barsDrop * 2,
     ),
-    child: CustomPaint(
-      key: ValueKey('uploader-sheet-playing'),
-      size: Size(UploaderSheetTheme.barWidth + UploaderSheetTheme.barPitch * 2, UploaderSheetTheme.barTall),
-      painter: _BarsPainter(),
+    child: SizedBox.fromSize(
+      key: const ValueKey('uploader-sheet-playing'),
+      size: UploaderSheetTheme.barsBox,
+      child: Center(
+        child: PlayingBars(color: UploaderSheetTheme.barsInk, height: UploaderSheetTheme.barsHeight),
+      ),
     ),
   );
-}
-
-class _BarsPainter extends CustomPainter {
-  const _BarsPainter();
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()..color = UploaderSheetTheme.barsInk;
-    const half = UploaderSheetTheme.barWidth / 2;
-    final middle = size.height / 2;
-    for (final (i, height) in const [
-      UploaderSheetTheme.barTall,
-      UploaderSheetTheme.barShort,
-      UploaderSheetTheme.barTall,
-    ].indexed) {
-      final x = half + i * UploaderSheetTheme.barPitch;
-      canvas.drawRRect(
-        RRect.fromRectAndRadius(
-          Rect.fromCenter(center: Offset(x, middle), width: UploaderSheetTheme.barWidth, height: height),
-          const Radius.circular(half),
-        ),
-        paint,
-      );
-    }
-  }
-
-  @override
-  bool shouldRepaint(_BarsPainter oldDelegate) => false;
 }
 
 /// Under the grid: the next page's spinner, 已经到底啦~ (76), or 加载失败，点击重试. Idle with more to come it stays
