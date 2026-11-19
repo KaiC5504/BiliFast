@@ -11,7 +11,7 @@ import 'package:flutter_test/flutter_test.dart';
 import '../../support/look_alike.dart';
 import 'follow_fixtures.dart';
 
-const _bars = AssetImage('assets/images/dynamic/live_ing.gif');
+const _bars = AssetImage('assets/images/live/live_ing.gif');
 
 /// 263's 最常访问 with two of the followed live, as KaiC's iPhone draws it under the system font, measured in px / 3
 /// (names made up, as long as 263's). With BILIFAST_SHOTS naming a folder outside the repo, the 3× shot is saved

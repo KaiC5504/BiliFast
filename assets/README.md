@@ -25,7 +25,6 @@ Taken unchanged:
 | `lottie/story_seek_bar_icon_1.json`, `_2.json` | `assets/story_seek_bar_icon_1.json`, `_2.json` |
 | `lottie/feed_like.json` | `assets/inline_click_to_like.json` |
 | `lottie/detail_playing.json` | `assets/theseus_detail_playing.json` |
-| `images/dynamic/live_ing.gif` | `ic_live_comm_live_ing` |
 | `images/player/paused_play.png` | `bili_player_play` |
 | `images/home/batch_refresh.png` | `ic_promo_index_refresh` |
 | `images/card/inline_muted.png`, `inline_sound.png` | `ic_volumn_inline_switch_off`, `_on` |

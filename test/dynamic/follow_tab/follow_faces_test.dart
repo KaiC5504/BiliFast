@@ -59,7 +59,7 @@ void main() {
     expect(
       find.byKey(const ValueKey('follow-face-20000909'), skipOffstage: false),
       findsNothing,
-      reason: 'live_users is kept apart from the row',
+      reason: 'a live face leads apart from the ordinary faces',
     );
   });
 }

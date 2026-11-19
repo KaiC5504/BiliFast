@@ -97,7 +97,7 @@ void main() {
     final bars = tester.getRect(
       find.descendant(
         of: find.byKey(const ValueKey('follow-live-102')),
-        matching: find.image(const AssetImage('assets/images/dynamic/live_ing.gif')),
+        matching: find.image(const AssetImage('assets/images/live/live_ing.gif')),
       ),
     );
     expect(bars, Rect.fromLTWH(119 - 26 + 2, 108 + 21 - 8 + 1, 16, 16));

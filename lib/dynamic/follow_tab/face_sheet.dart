@@ -217,7 +217,8 @@ class _FaceSheetLayerState extends State<FaceSheetLayer> with SingleTickerProvid
     final sheetTop = padding.top + DynamicFeedTheme.sheetTop;
     final origin = widget.controller.originTop ?? rowTop;
     final open = widget.controller.isOpen;
-    final chosen = math.max(0, _ups.indexWhere((face) => face.mid == up.mid));
+    final shown = FollowFacesRow.shown(_ups, model.liveUps);
+    final chosen = math.max(0, shown.indexWhere((face) => face.mid == up.mid));
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: BiliTheme.dark ? SystemUiOverlayStyle.light : SystemUiOverlayStyle.dark,
       child: AnimatedBuilder(
@@ -259,6 +260,7 @@ class _FaceSheetLayerState extends State<FaceSheetLayer> with SingleTickerProvid
                   ignoring: !open,
                   child: FollowFacesRow(
                     ups: _ups,
+                    liveUps: model.liveUps,
                     dot: model.hasUpdate,
                     controller: _faces,
                     onOpen: widget.controller.select,

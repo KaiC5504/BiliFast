@@ -313,7 +313,7 @@ class _FaceSlot extends StatelessWidget {
 class _LivePill extends StatelessWidget {
   const _LivePill();
 
-  static const _bars = 'assets/images/dynamic/live_ing.gif';
+  static const _bars = 'assets/images/live/live_ing.gif';
 
   @override
   Widget build(BuildContext context) {
