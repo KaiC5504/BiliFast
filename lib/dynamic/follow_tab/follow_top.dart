@@ -5,6 +5,8 @@ import 'package:flutter/widgets.dart';
 
 import '../../live/live_entry.dart';
 import '../../live/live_routes.dart';
+import '../../shared/in_sight.dart';
+import '../../shared/paced_gif.dart';
 import '../../shared/remote_image.dart';
 import '../../shared/theme.dart';
 import '../../video/intro/collection_row.dart' show Chevron;
@@ -332,14 +334,11 @@ class _LivePill extends StatelessWidget {
                 top: DynamicFeedTheme.liveBarsDrop,
                 width: DynamicFeedTheme.liveBars,
                 height: DynamicFeedTheme.liveBars,
-                // Each of the gif's frames repaints only its square, not the row around it.
-                child: RepaintBoundary(
-                  child: Image.asset(
-                    _bars,
-                    width: DynamicFeedTheme.liveBars,
-                    height: DynamicFeedTheme.liveBars,
-                    gaplessPlayback: true,
-                    excludeFromSemantics: true,
+                // Each of the gif's frames repaints only its square, not the row around it, and a pill scrolled away
+                // draws none.
+                child: const TickingInSight(
+                  child: RepaintBoundary(
+                    child: PacedGif(_bars, size: Size.square(DynamicFeedTheme.liveBars)),
                   ),
                 ),
               ),
@@ -403,8 +402,8 @@ class FollowFacesRow extends StatefulWidget {
   final VoidCallback? onNearEnd;
   final ScrollController? controller;
 
-  /// Drawn under the faces, inside the scrolled content: the face sheet's pointer. Its origin is the first of [shown],
-  /// after any live faces.
+  /// Drawn under the faces, inside the scrolled content: the face sheet's pointer. Its origin is the row's first face,
+  /// live or not; [centreOf] places a face there.
   final Widget Function(BuildContext context)? below;
 
   /// [ups] as the row draws them: without anyone already led as live.
@@ -415,6 +414,23 @@ class FollowFacesRow extends StatefulWidget {
       for (final up in ups)
         if (!live.contains(up.mid)) up,
     ];
+  }
+
+  /// How far across the row's content [mid]'s face is centred: the live faces first, then the line and the rest.
+  /// Null when the row doesn't draw them.
+  static double? centreOf(int mid, List<DynamicUp> ups, List<DynamicLiveUp> liveUps) {
+    const pitch = DynamicFeedTheme.facePitch;
+    final live = liveUps.indexWhere((up) => up.mid == mid);
+    if (live >= 0) return pitch * (live + 0.5);
+    final index = shown(ups, liveUps).indexWhere((up) => up.mid == mid);
+    if (index < 0) return null;
+    final lead = liveUps.isEmpty
+        ? 0.0
+        : liveUps.length * pitch +
+              DynamicFeedTheme.liveRuleBefore +
+              DynamicFeedTheme.liveRuleWidth +
+              DynamicFeedTheme.liveRuleAfter;
+    return lead + pitch * (index + 0.5);
   }
 
   /// Opens a live face's room; tests put their own here.
@@ -456,6 +472,9 @@ class _FollowFacesRowState extends State<FollowFacesRow> {
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        for (final up in live)
+          FollowLiveFace(key: ValueKey('follow-live-${up.mid}'), up: up, onTap: () => _openLive(up)),
+        if (live.isNotEmpty && ups.isNotEmpty) const _LiveRule(),
         for (final up in ups)
           FollowFace(
             key: ValueKey('follow-face-${up.mid}'),
@@ -465,7 +484,6 @@ class _FollowFacesRowState extends State<FollowFacesRow> {
           ),
       ],
     );
-    final rest = below == null ? faces : Stack(clipBehavior: Clip.none, children: [faces, below(context)]);
     return NotificationListener<ScrollNotification>(
       onNotification: _scrolled,
       child: SingleChildScrollView(
@@ -475,17 +493,7 @@ class _FollowFacesRowState extends State<FollowFacesRow> {
         padding: const EdgeInsets.symmetric(horizontal: DynamicFeedTheme.facesInset),
         // The live ring stands 2 pt above the row's box; the row spans the screen, so sideways nothing shows past it.
         clipBehavior: live.isEmpty ? Clip.hardEdge : Clip.none,
-        child: live.isEmpty
-            ? rest
-            : Row(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  for (final up in live)
-                    FollowLiveFace(key: ValueKey('follow-live-${up.mid}'), up: up, onTap: () => _openLive(up)),
-                  if (ups.isNotEmpty) ...[const _LiveRule(), rest],
-                ],
-              ),
+        child: below == null ? faces : Stack(clipBehavior: Clip.none, children: [faces, below(context)]),
       ),
     );
   }

@@ -1791,11 +1791,15 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
                   final upright = pad
                       ? (size: constraints.biggest, top: top)
                       : _uprightFrame ?? (size: constraints.biggest, top: top);
-                  // 评论详情 and the uploader sheet cover the tab row and the list, for VoiceOver too.
-                  Widget belowPlayer(Widget child) => ExcludeSemantics(
-                    excluding: _threadOpen || _uploaderSheet.isOpen,
-                    child: _WithoutPadding(top: true, child: child),
-                  );
+                  // 评论详情 and the uploader sheet cover the tab row and the list, for VoiceOver too, and stop what
+                  // ticks there: each frame of 简介's playing mark is a frame of the whole page.
+                  Widget belowPlayer(Widget child) {
+                    final covered = _threadOpen || _uploaderSheet.isOpen;
+                    return ExcludeSemantics(
+                      excluding: covered,
+                      child: TickerMode(enabled: !covered, child: _WithoutPadding(top: true, child: child)),
+                    );
+                  }
                   // Out of sight in full screen, except while the player grows over it or shrinks back.
                   Widget hideable(bool hidden, Widget child) =>
                       Offstage(offstage: hidden, child: TickerMode(enabled: !hidden, child: child));

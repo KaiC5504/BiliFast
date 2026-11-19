@@ -1,6 +1,7 @@
 import 'package:flutter/widgets.dart';
 import 'package:lottie/lottie.dart';
 
+import '../../shared/in_sight.dart';
 import '../../shared/menu.dart';
 import '../../shared/theme.dart';
 import '../player_session.dart' show Episode;
@@ -96,8 +97,9 @@ class CollectionRow extends StatelessWidget {
 }
 
 /// The official app's "now playing" mark, the APK's Lottie: three round-ended bars rising and falling out of step,
-/// centred on the line. It moves all the time, the video paused or not, as the official one does; Reduce Motion holds
-/// it on font-check 02's frame.
+/// centred on the line. It moves all the time, the video paused or not, as the official one does, but only while it
+/// is in sight, and at [IntroListTheme.barsFps]: each of its frames is a whole frame of the app, which a paused page
+/// otherwise never draws. Reduce Motion holds it on font-check 02's frame.
 class PlayingBars extends StatelessWidget {
   const PlayingBars({super.key, required this.color, this.height = IntroListTheme.barsHeight});
 
@@ -118,7 +120,7 @@ class PlayingBars extends StatelessWidget {
     final scale = height / IntroListTheme.barsHeight;
     final comp = IntroListTheme.barsComp * scale;
     final still = debugHoldStill || MediaQuery.disableAnimationsOf(context);
-    return SizedBox(
+    final bars = SizedBox(
       width: IntroListTheme.barsWidth * scale,
       height: height,
       child: OverflowBox(
@@ -129,8 +131,11 @@ class PlayingBars extends StatelessWidget {
         child: Lottie.asset(
           PlayingBars.asset,
           controller: still ? const AlwaysStoppedAnimation(IntroListTheme.barsStill) : null,
-          // The held frame lies between two of the file's.
-          frameRate: still ? FrameRate.max : null,
+          // The held frame lies between two of the file's. Moving, the package's ticker waits on a timer between
+          // frames at this rate, so no vsync in between draws anything.
+          frameRate: still ? FrameRate.max : const FrameRate(IntroListTheme.barsFps),
+          // Each frame repaints the mark's own layer, never the page's picture around it.
+          addRepaintBoundary: true,
           delegates: LottieDelegates(
             values: [
               ValueDelegate.strokeColor(const ['**'], value: color),
@@ -141,6 +146,7 @@ class PlayingBars extends StatelessWidget {
         ),
       ),
     );
+    return still ? bars : TickingInSight(child: bars);
   }
 }
 

@@ -2532,6 +2532,29 @@ void main() {
       await back(tester);
     });
 
+    testWidgets('评论详情 stops what ticks in the tabs under it, never the player, its danmaku or the thread itself', (
+      tester,
+    ) async {
+      bool ticking(Finder finder) => TickerMode.valuesOf(tester.element(finder)).enabled;
+      final list = find.byType(CommentsTab, skipOffstage: false);
+      await onComments(tester);
+      expect(ticking(list), isTrue);
+
+      await tester.tap(inRow(100, 'comment-replies'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
+      expect(find.byType(ThreadView), findsOneWidget);
+      expect(ticking(list), isFalse);
+      expect(ticking(find.byType(ThreadView)), isTrue, reason: 'its rise and its list run');
+      expect(ticking(find.byType(VideoPlayerArea).last), isTrue);
+      expect(ticking(find.byType(DanmakuLayer, skipOffstage: false).last), isTrue);
+      await frames(tester, 20);
+
+      await back(tester);
+      expect(model(tester).thread, isNull);
+      expect(ticking(list), isTrue);
+    });
+
     testWidgets('the model goes with the page when it is popped', (tester) async {
       await onComments(tester);
       final comments = model(tester);
@@ -3600,6 +3623,41 @@ void main() {
       expect(chrome.visible, isNot(shown));
       expect(sheet(tester).isOpen, isTrue);
       await back(tester);
+      await back(tester);
+    });
+
+    testWidgets('it stops what ticks in the tabs under it (简介\'s playing mark), never the player, its box and '
+        'danmaku, or the sheet itself; closed, the tabs tick again', (tester) async {
+      bool ticking(Finder finder) => TickerMode.valuesOf(tester.element(finder)).enabled;
+      final intro = find.byType(IntroTab, skipOffstage: false);
+      final tabRow = find.byKey(const ValueKey('tab-comments'), skipOffstage: false);
+      await host(tester, pageApi: api, spaceApi: spaceApi);
+      pushVideo(const VideoRoute(bvid: bv, cid: p1, start: 0));
+      await opened(tester);
+      sessions.single
+        ..detail = detail(bv, ownerMid: owner)
+        ..changed();
+      await tester.pump();
+      expect(ticking(intro), isTrue);
+      expect(ticking(tabRow), isTrue);
+
+      openUploader(tester.element(find.byType(PageTabs).last), const UploaderRef(mid: owner, name: 'UP主'));
+      await tester.pump();
+      await tester.pump(UploaderSheetTheme.rise ~/ 2);
+      final rising = tester.getRect(find.byType(UploaderSheet)).top;
+      expect(rising, greaterThan(area(tester).bottom + 50), reason: 'the sheet\'s own rise runs');
+      expect(ticking(intro), isFalse);
+      expect(ticking(tabRow), isFalse);
+      expect(ticking(find.byType(VideoPlayerArea).last), isTrue);
+      expect(ticking(find.byType(DanmakuLayer, skipOffstage: false).last), isTrue);
+      expect(ticking(find.byType(UploaderSheet)), isTrue);
+      await frames(tester);
+      expect(tester.getRect(find.byType(UploaderSheet)).top, area(tester).bottom);
+
+      await back(tester);
+      expect(sheet(tester).isOpen, isFalse);
+      expect(ticking(intro), isTrue);
+      expect(ticking(tabRow), isTrue);
       await back(tester);
     });
 
