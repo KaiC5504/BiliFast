@@ -14,6 +14,7 @@ import 'package:bilifast/playback/playback_controller.dart';
 import 'package:bilifast/player/bili_player.dart';
 import 'package:bilifast/player/playback_clock.dart';
 import 'package:bilifast/player_ui/player_loading.dart';
+import 'package:bilifast/settings/playback/autoplay_settings_page.dart';
 import 'package:bilifast/shared/theme.dart';
 import 'package:bilifast/video/player_prefs.dart';
 import 'package:bilifast/video/video_route.dart';
@@ -98,15 +99,63 @@ void main() {
       await _toastGone(tester);
     });
 
-    testWidgets('取消关注 unfollows, tells every page, and toasts', (tester) async {
+    Future<void> askUnfollow(WidgetTester tester) async {
+      await tester.tap(find.byKey(const ValueKey('dynamic-more-unfollow')));
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets('取消关注 asks first: 确认取消关注? alone, 再想想 and the pink 取消关注', (tester) async {
+      final host = await open(tester, post('1'));
+      await askUnfollow(tester);
+      expect(find.byKey(const ValueKey('dynamic-more-sheet')), findsNothing);
+      final alert = find.byKey(const ValueKey('dynamic-unfollow'));
+      expect(alert, findsOneWidget);
+      expect(find.descendant(of: alert, matching: find.byType(Text)).evaluate().map((e) => (e.widget as Text).data), [
+        '确认取消关注?',
+        '再想想',
+        '取消关注',
+      ]);
+      expect(find.byKey(const ValueKey('dynamic-unfollow-再想想')), findsOneWidget);
+      final action = find.byKey(const ValueKey('dynamic-unfollow-取消关注'));
+      final actionText = tester.widget<Text>(find.descendant(of: action, matching: find.byType(Text)));
+      expect(actionText.style!.color, BiliColors.pink);
+      expect(
+        tester.getSize(alert).height,
+        MessageTabTheme.alertTitleOnlyBody + MessageTabTheme.alertRule + MessageTabTheme.alertButton,
+      );
+      expect(host.api.unfollowed, isEmpty, reason: 'nothing asked before the answer');
+    });
+
+    testWidgets('再想想, or a tap on the dim, changes nothing', (tester) async {
+      final host = await open(tester, post('1'));
+      var told = false;
+      host.services.follows.addListener(() => told = true);
+      await askUnfollow(tester);
+      await tester.tap(find.byKey(const ValueKey('dynamic-unfollow-再想想')));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('dynamic-unfollow')), findsNothing);
+
+      await tester.tap(find.byKey(const ValueKey('dynamic-more')));
+      await tester.pumpAndSettle();
+      await askUnfollow(tester);
+      await tester.tapAt(const Offset(20, 40));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('dynamic-unfollow')), findsNothing);
+      expect(host.api.calls, isEmpty);
+      expect(told, isFalse);
+      expect(find.byKey(const ValueKey('toast')), findsNothing);
+    });
+
+    testWidgets('取消关注 confirmed unfollows, tells every page, and toasts 已取消关注', (tester) async {
       final host = await open(tester, post('1'));
       final changes = <({int mid, bool following})>[];
       host.services.follows.addListener(() => changes.add(host.services.follows.last!));
-      await tester.tap(find.byKey(const ValueKey('dynamic-more-unfollow')));
+      await askUnfollow(tester);
+      await tester.tap(find.byKey(const ValueKey('dynamic-unfollow-取消关注')));
       await tester.pumpAndSettle();
       expect(host.api.unfollowed, [7]);
       expect(changes, [(mid: 7, following: false)]);
-      expect(_toast('取消关注成功'), findsOneWidget);
+      expect(_toast('已取消关注'), findsOneWidget);
       await _toastGone(tester);
     });
 
@@ -115,19 +164,95 @@ void main() {
       final host = await open(tester, post('1'), api: api);
       var told = false;
       host.services.follows.addListener(() => told = true);
-      await tester.tap(find.byKey(const ValueKey('dynamic-more-unfollow')));
+      await askUnfollow(tester);
+      await tester.tap(find.byKey(const ValueKey('dynamic-unfollow-取消关注')));
       await tester.pumpAndSettle();
       expect(told, isFalse);
       expect(_toast('不能对自己进行此操作'), findsOneWidget);
       await _toastGone(tester);
     });
 
-    testWidgets('logged out, 取消关注 asks for the login', (tester) async {
+    testWidgets('logged out, 取消关注 asks for the login, not whether to', (tester) async {
       final host = await open(tester, post('1'), loggedIn: false);
-      await tester.tap(find.byKey(const ValueKey('dynamic-more-unfollow')));
-      await tester.pumpAndSettle();
+      await askUnfollow(tester);
+      expect(find.byKey(const ValueKey('dynamic-unfollow')), findsNothing);
       expect(host.gate.requests, 1);
       expect(host.api.unfollowed, isEmpty);
+    });
+
+    DynamicItem videoPost() => post('v1', kind: DynamicKind.video, major: _video);
+
+    testWidgets('263: a video post adds 稍后再看 and 前往关闭自动播放 over 分享, in the rows as drawn', (tester) async {
+      await open(tester, videoPost());
+      const names = ['watchLater', 'autoplay', 'share', 'unfollow', 'report'];
+      final rows = [for (final name in names) tester.getRect(find.byKey(ValueKey('dynamic-more-$name')))];
+      expect(rows.map((row) => row.height).toSet(), {50.0});
+      for (var i = 1; i < rows.length; i++) {
+        expect(rows[i].top, rows[i - 1].bottom);
+      }
+      final labels = ['稍后再看', '前往关闭自动播放', '分享', '取消关注', '举报'];
+      for (final (i, label) in labels.indexed) {
+        final row = find.byKey(ValueKey('dynamic-more-${names[i]}'));
+        expect(find.descendant(of: row, matching: find.text(label)), findsOneWidget);
+      }
+      Rect icon(String name) =>
+          tester.getRect(find.descendant(of: find.byKey(ValueKey('dynamic-more-$name')), matching: find.byType(Image)));
+      final watchLater = icon('watchLater');
+      expect(watchLater.width, closeTo(20, 0.01));
+      expect(watchLater.center.dx, closeTo(31.67, 0.01));
+      expect(watchLater.center.dy, closeTo(rows[0].center.dy, 0.01));
+      final autoplay = icon('autoplay');
+      expect(autoplay.width, closeTo(59 / 3, 0.01));
+      expect(autoplay.center.dx, closeTo(31.5, 0.01));
+      expect(autoplay.center.dy - rows[1].center.dy, closeTo(1 / 3, 0.01));
+    });
+
+    testWidgets('稍后再看 adds the video and says so; a refusal says why', (tester) async {
+      final host = await open(tester, videoPost());
+      await tester.tap(find.byKey(const ValueKey('dynamic-more-watchLater')));
+      await tester.pumpAndSettle();
+      expect(host.pageApi.calls, ['addToWatchLater aid=1']);
+      expect(_toast('已添加至稍后再看'), findsOneWidget);
+      await _toastGone(tester);
+
+      host.pageApi.failures['addToWatchLater'] = const BiliError.api(code: 90001, message: '稍后再看已满');
+      await tester.tap(find.byKey(const ValueKey('dynamic-more')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('dynamic-more-watchLater')));
+      await tester.pumpAndSettle();
+      expect(_toast('稍后再看已满'), findsOneWidget);
+      await _toastGone(tester);
+    });
+
+    testWidgets('稍后再看 logged out goes through the login gate', (tester) async {
+      final host = await open(tester, videoPost(), loggedIn: false);
+      await tester.tap(find.byKey(const ValueKey('dynamic-more-watchLater')));
+      await tester.pumpAndSettle();
+      expect(host.gate.requests, 1);
+      expect(host.pageApi.calls, isEmpty);
+    });
+
+    testWidgets('前往关闭自动播放 opens 自动播放设置, whose row opens 动态视频是否自动播放', (tester) async {
+      await open(tester, videoPost());
+      await tester.tap(find.byKey(const ValueKey('dynamic-more-autoplay')));
+      await tester.pumpAndSettle();
+      expect(find.byType(AutoplaySettingsPage), findsOneWidget);
+      expect(find.byKey(const ValueKey('autoplay-list')), findsOneWidget);
+    });
+
+    testWidgets('posts that are not videos keep their three rows', (tester) async {
+      for (final item in [
+        post('1'),
+        post('2', kind: DynamicKind.draw),
+        post('3', kind: DynamicKind.forward, original: videoPost()),
+      ]) {
+        await open(tester, item);
+        expect(find.byKey(const ValueKey('dynamic-more-watchLater')), findsNothing);
+        expect(find.byKey(const ValueKey('dynamic-more-autoplay')), findsNothing);
+        expect(find.byKey(const ValueKey('dynamic-more-share')), findsOneWidget);
+        await tester.tap(find.byKey(const ValueKey('dynamic-more-cancel')));
+        await tester.pumpAndSettle();
+      }
     });
 
     testWidgets('举报 toasts', (tester) async {

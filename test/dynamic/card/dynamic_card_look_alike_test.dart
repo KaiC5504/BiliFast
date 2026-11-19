@@ -332,4 +332,32 @@ void main() {
     final shots = Platform.environment['BILIFAST_SHOTS'];
     if (shots != null) await saveShot(tester, find.byKey(screen), '$shots/dynamic-137-ours.png');
   });
+
+  testWidgets("a video post's ⋮ sheet (263) and 取消关注's alert under the system font", (tester) async {
+    const screen = ValueKey('screen');
+    await pumpCardHost(tester, DynamicCard(item: cards['128']!), systemFont: true, screen: screen);
+    showAsPhone(tester);
+    await tester.runAsync(() async {
+      final context = tester.element(find.byType(DynamicCard));
+      for (final asset in [
+        DynamicArt.watchLater,
+        DynamicArt.autoplayOff,
+        DynamicArt.share,
+        DynamicArt.unfollow,
+        DynamicArt.report,
+      ]) {
+        await precacheImage(AssetImage(asset), context);
+      }
+    });
+    await tester.tap(find.byKey(const ValueKey('dynamic-more')));
+    await tester.pumpAndSettle();
+    expect(tester.getRect(find.byKey(const ValueKey('dynamic-more-watchLater'))).top, 617, reason: '263: 1851 px down');
+    final shots = Platform.environment['BILIFAST_SHOTS'];
+    if (shots != null) await saveShot(tester, find.byKey(screen), '$shots/dynamic-263-sheet-ours.png');
+
+    await tester.tap(find.byKey(const ValueKey('dynamic-more-unfollow')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('dynamic-unfollow')), findsOneWidget);
+    if (shots != null) await saveShot(tester, find.byKey(screen), '$shots/dynamic-263-alert-ours.png');
+  });
 }

@@ -7,20 +7,28 @@ import 'package:flutter/widgets.dart';
 
 import '../../app/app_environment.dart';
 import '../../app/app_scope.dart';
+import '../../settings/playback/autoplay_settings_page.dart';
+import '../../settings/playback/playback_settings_page.dart' show openSettingsPage;
+import '../../shared/bili_alert.dart';
 import '../../shared/menu.dart' show PressHighlight;
 import '../../shared/theme.dart';
 import '../../shared/toast.dart';
 import '../../video/actions/actions_model.dart' show ActionsModel;
 import 'dynamic_open.dart';
 
-enum _MoreChoice { share, unfollow, report }
+enum _MoreChoice { watchLater, autoplay, share, unfollow, report }
 
-/// ⋮ on a card (137): 分享, then 取消关注 and 举报 (which toasts) when [DynamicItem.menu] offers them, and 取消.
+/// ⋮ on a card (137, 263): on a video post 稍后再看 and 前往关闭自动播放 first; 分享, then 取消关注 and 举报 (which toasts)
+/// when [DynamicItem.menu] offers them, and 取消.
 Future<void> showDynamicMoreSheet(BuildContext context, DynamicItem item) async {
   final choice = await Navigator.of(context)
       .push(_MoreSheetRoute(item: item, reduceMotion: MediaQuery.disableAnimationsOf(context)));
   if (choice == null || !context.mounted) return;
   switch (choice) {
+    case _MoreChoice.watchLater:
+      if (item.major case final DynamicVideo video) await _watchLater(context, video.aid);
+    case _MoreChoice.autoplay:
+      openSettingsPage(context, (_) => const AutoplaySettingsPage());
     case _MoreChoice.share:
       try {
         await DynamicOpen.share(item.shareLink);
@@ -35,16 +43,42 @@ Future<void> showDynamicMoreSheet(BuildContext context, DynamicItem item) async 
   }
 }
 
-Future<void> _unfollow(BuildContext context, int mid) async {
+Future<void> _watchLater(BuildContext context, int aid) async {
   final services = AppScope.of(context);
   if (services.environment.account case LoggedOut() || LoginExpired()) {
     await services.loginGate.request(context);
     return;
   }
   try {
+    await services.pageApi.addToWatchLater(aid: aid);
+    if (context.mounted) showToast(context, '已添加至稍后再看');
+  } catch (error) {
+    Logger.shared.warn(LogCategory.api, 'dynamic watch later failed', {'error': '${error.runtimeType}'});
+    if (!context.mounted) return;
+    if (error is BiliError && error.needsLogin) {
+      await services.loginGate.request(context);
+    } else {
+      showToast(context, ActionsModel.failureMessage(error));
+    }
+  }
+}
+
+/// Asked first in Bilibili's own white alert (KaiC's choice over the official app's iOS one on 263).
+Future<void> _unfollow(BuildContext context, int mid) async {
+  final services = AppScope.of(context);
+  if (services.environment.account case LoggedOut() || LoginExpired()) {
+    await services.loginGate.request(context);
+    return;
+  }
+  final sure = await showBiliAlert(
+    context,
+    const AlertWords(key: 'dynamic-unfollow', title: '确认取消关注?', cancel: '再想想', action: '取消关注'),
+  );
+  if (!sure || !context.mounted) return;
+  try {
     await services.dynamicApi.unfollow(mid);
     services.follows.changed(mid, following: false);
-    if (context.mounted) showToast(context, '取消关注成功');
+    if (context.mounted) showToast(context, '已取消关注');
   } catch (error) {
     Logger.shared.warn(LogCategory.api, 'dynamic unfollow failed', {'error': '${error.runtimeType}'});
     if (!context.mounted) return;
@@ -97,6 +131,24 @@ class _MoreSheetRoute extends PopupRoute<_MoreChoice> {
     final bottom = MediaQuery.paddingOf(context).bottom;
     void pick(_MoreChoice choice) => Navigator.of(context).pop(choice);
     final rows = [
+      if (item.major is DynamicVideo) ...[
+        (
+          choice: _MoreChoice.watchLater,
+          label: '稍后再看',
+          asset: DynamicArt.watchLater,
+          width: DynamicCardTheme.sheetWatchLaterWidth,
+          centre: DynamicCardTheme.sheetWatchLaterCentre,
+          rise: DynamicCardTheme.sheetWatchLaterRise,
+        ),
+        (
+          choice: _MoreChoice.autoplay,
+          label: '前往关闭自动播放',
+          asset: DynamicArt.autoplayOff,
+          width: DynamicCardTheme.sheetAutoplayWidth,
+          centre: DynamicCardTheme.sheetAutoplayCentre,
+          rise: DynamicCardTheme.sheetAutoplayRise,
+        ),
+      ],
       (
         choice: _MoreChoice.share,
         label: '分享',

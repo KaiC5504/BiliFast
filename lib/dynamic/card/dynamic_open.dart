@@ -123,6 +123,8 @@ abstract final class DynamicArt {
   static const share = 'assets/images/dynamic/arrow_share_line.png';
   static const unfollow = 'assets/images/dynamic/person_unfollow_line.png';
   static const report = 'assets/images/dynamic/warning_report_triangle_line.png';
+  static const watchLater = 'assets/images/dynamic/arrow_play_next_line.png';
+  static const autoplayOff = 'assets/images/dynamic/autoplay_off_line.png';
   static const tv = 'assets/images/dynamic/ic_upper_tv_play.png';
   static const muted = 'assets/images/card/inline_muted.png';
   static const sound = 'assets/images/card/inline_sound.png';

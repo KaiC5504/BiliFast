@@ -39,6 +39,9 @@ class FollowFeed extends ChangeNotifier {
   bool _disposed = false;
 
   List<DynamicItem> get items => _items;
+
+  /// Moves on each time the list starts over (a reload, a sign-out).
+  int get generation => _generation;
   bool get started => _started;
   bool get loading => _loading;
 
