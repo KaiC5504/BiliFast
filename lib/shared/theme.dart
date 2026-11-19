@@ -6238,6 +6238,15 @@ abstract final class DynamicCardTheme {
   static const sheetShareRise = 1.0;
   static const sheetUnfollowRise = -1 / 3;
   static const sheetReportRise = 2 / 3;
+
+  /// A video post's two rows over 分享 (263): 稍后再看 (`arrow_play_next_line`, 60 px) centred 31.67 in on the row's
+  /// middle, 前往关闭自动播放 (`autoplay_off_line`, 59 px) 31.5 in and 0.33 below it.
+  static const sheetWatchLaterWidth = 60 / 3;
+  static const sheetAutoplayWidth = 59 / 3;
+  static const sheetWatchLaterCentre = 31.67;
+  static const sheetAutoplayCentre = 31.5;
+  static const sheetWatchLaterRise = 0.0;
+  static const sheetAutoplayRise = -1 / 3;
 }
 
 /// The 关注 tab: header, 全部 / 视频, 最常访问, 我的追番 · 追剧 and the face sheet (127, 128, 139), measured in px / 3.
@@ -6396,6 +6405,12 @@ abstract final class DynamicFeedTheme {
   static const reloadScroll = Duration(milliseconds: 300);
   static const reloadHeader = Duration(milliseconds: 200);
   static const reloadCollapse = Duration(milliseconds: 100);
+
+  /// An unfollowed account's post leaving (263 at 30 fps): it fades where it lies, over the posts under it as they rise
+  /// into its place, both on one curve; 90% done by 190 ms, settled by 380. `linearToEaseOut` over 380 ms follows the
+  /// clip's frames within 1.1 pt.
+  static const leave = Duration(milliseconds: 380);
+  static const leaveCurve = Curves.linearToEaseOut;
 
   /// The face sheet (139): the page behind frosted to #F2F2F2, the faces row moved up to 16.33 pt under the status bar,
   /// the sheet from 127 pt under it with 8 pt corners, the APK's `dy_ic_indicator_triangle` drawn 15.67 × 8 pt with
@@ -8620,8 +8635,9 @@ abstract final class MessageTabTheme {
   static const alertMessageCentre = 176 / 3;
   static Color get alertMessage => tone(0xFF61666D, 0xFFA2A7AE);
   static const alertBody = 93.0;
-  /// A title with no message (关注's 确认取消关注?, no reference: KaiC chose this alert over iOS's), centred in its body.
-  static const alertTitleOnlyBody = 76.0;
+  /// A title with no message (关注's 确认取消关注?, no reference: KaiC chose this alert over iOS's), centred in its body:
+  /// its ink about 26 from the top and from the rule, a little more than 211's words leave (21 above, 27 below).
+  static const alertTitleOnlyBody = 70.0;
   static const alertRule = 2 / 3;
   static Color get alertRuleInk => BiliColors.divider;
   static const alertButton = 44.0;

@@ -15,6 +15,7 @@ import '../../shared/release_refresh.dart';
 import '../../shared/theme.dart';
 import '../../shared/toast.dart';
 import '../../skin/skin.dart';
+import '../../space/follow_book.dart';
 import '../../space/space_route.dart';
 import '../../space/uploader_tap.dart';
 import '../following/following_route.dart';
@@ -27,6 +28,7 @@ import 'follow_top.dart';
 /// The bottom bar's 关注 (127, 128): the header, 全部 / 视频, 最常访问 and, on 视频, 我的追番 · 追剧 over the posts,
 /// paged, pulled to refresh. It loads the first time it is shown. A face opens the face sheet ([faceSheet], drawn by
 /// `MainShell` over the bar too); video cards play muted where they settle while 关注 is shown with nothing over it.
+/// An unfollow made anywhere takes that account's posts off both lists at once.
 class FollowTabPage extends StatefulWidget {
   const FollowTabPage({
     super.key,
@@ -55,12 +57,19 @@ class FollowTabPage extends StatefulWidget {
   State<FollowTabPage> createState() => _FollowTabPageState();
 }
 
-class _FollowTabPageState extends State<FollowTabPage> with SkinRefreshRoom {
+class _FollowTabPageState extends State<FollowTabPage> with SkinRefreshRoom, TickerProviderStateMixin {
   static const _soon = '暂未开放';
 
   late AppServices _services;
   late AppEnvironment _environment;
+  late FollowBook _follows;
   FollowTabModel? _model;
+
+  /// Each post's card, so a leaving one can be lifted out of the list and fade over it.
+  final _cardKeys = <String, GlobalKey>{};
+
+  /// Posts of an unfollowed account still drawn where they were, by id.
+  final _leaving = <String, _Leaving>{};
   bool _started = false;
   bool _signedOut = false;
 
@@ -102,6 +111,7 @@ class _FollowTabPageState extends State<FollowTabPage> with SkinRefreshRoom {
     if (_model != null) return;
     _services = AppScope.of(context);
     _environment = _services.environment..addListener(_accountChanged);
+    _follows = _services.follows..addListener(_followsChanged);
     _signedOut = _loggedOut;
     _model = FollowTabModel(
       api: _services.dynamicApi,
@@ -136,6 +146,10 @@ class _FollowTabPageState extends State<FollowTabPage> with SkinRefreshRoom {
     widget.countReloads?.removeListener(_reloadOverCount);
     widget.faceSheet.removeListener(_sheetChanged);
     _environment.removeListener(_accountChanged);
+    _follows.removeListener(_followsChanged);
+    for (final leaving in _leaving.values) {
+      leaving.dispose();
+    }
     _paging.dispose();
     _inline?.dispose();
     _model?.dispose();
@@ -165,6 +179,11 @@ class _FollowTabPageState extends State<FollowTabPage> with SkinRefreshRoom {
     _signedOut = out;
     if (out) {
       widget.faceSheet.close();
+      for (final leaving in _leaving.values) {
+        leaving.dispose();
+      }
+      _leaving.clear();
+      _cardKeys.clear();
       _model?.signOut();
       _started = false;
     } else if (widget.active) {
@@ -175,8 +194,117 @@ class _FollowTabPageState extends State<FollowTabPage> with SkinRefreshRoom {
 
   void _modelChanged() {
     if (!mounted) return;
+    final model = _model!;
+    // A list that started over drops what was left of the old one.
+    final stale = [
+      for (final each in _leaving.values)
+        if (each.generation != each.feed.generation) each,
+    ];
+    for (final each in stale) {
+      _leaving.remove(each.item.id);
+      each.dispose();
+    }
+    if (_cardKeys.length > model.all.items.length + model.video.items.length) {
+      final kept = {
+        for (final item in [...model.all.items, ...model.video.items]) item.id,
+        for (final each in _leaving.values)
+          if (each.moving) each.item.id,
+      };
+      _cardKeys.removeWhere((id, _) => !kept.contains(id));
+    }
     setState(() {});
     _inline?.settleSoon();
+  }
+
+  void _followsChanged() {
+    if (_follows.last case (:final mid, following: false) when _model != null) _drop(mid);
+  }
+
+  /// 关注 shows with nothing over it, so a post can be seen leaving.
+  bool get _showing =>
+      widget.active &&
+      TickerMode.valuesOf(context).enabled &&
+      (ModalRoute.of(context)?.isCurrent ?? true) &&
+      !widget.faceSheet.isOpen;
+
+  /// [mid]'s posts leave both lists. Those on screen fade where they lie while the posts under them close the gap
+  /// (263); the others close at once, the list moved up by those drawn above the screen so what shows stays put.
+  ///
+  /// Each stays in the list as an empty row until the list starts over: the list hands a post that changes index the
+  /// laid-out offset of the one that had it before, so taking rows out above the screen would shift what shows.
+  void _drop(int mid) {
+    final model = _model!;
+    final feed = model.current;
+    final view = _listArea();
+    final moving = view != null && _showing && !MediaQuery.disableAnimationsOf(context);
+    var lift = 0.0;
+    String? after;
+    for (final (index, row) in _rows(feed).indexed) {
+      final item = row.item;
+      if (row.leaving == null && item.author.mid == mid) {
+        final box = _cardKeys[item.id]?.currentContext?.findRenderObject();
+        final rect = box is RenderBox && box.attached && box.hasSize ? box.localToGlobal(Offset.zero) & box.size : null;
+        final band = index == 0;
+        var onScreen = false;
+        if ((rect, view) case (final rect?, final view?)) {
+          final above = rect.bottom <= view.top;
+          if (above) lift += rect.height - (band ? DynamicFeedTheme.band : 0);
+          onScreen = moving && !above && rect.top < view.bottom;
+        }
+        final leaving = _Leaving(
+          item: item,
+          feed: feed,
+          generation: feed.generation,
+          after: after,
+          height: rect?.height ?? 0,
+          band: band,
+          controller: onScreen ? AnimationController(vsync: this, duration: DynamicFeedTheme.leave) : null,
+        );
+        leaving.controller?.forward().whenComplete(() => _landed(leaving));
+        _leaving[item.id] = leaving;
+      }
+      after = item.id;
+    }
+    model.removeAuthor(mid);
+    if (lift > 0 && _scroll.hasClients) _scroll.jumpTo(_scroll.offset - lift);
+  }
+
+  /// The gap has closed: the faded card is let go.
+  void _landed(_Leaving leaving) {
+    if (!mounted || !identical(_leaving[leaving.item.id], leaving)) return;
+    setState(() {
+      leaving.land();
+      _cardKeys.remove(leaving.item.id);
+    });
+  }
+
+  /// [feed]'s posts as drawn: with those leaving it still in their places.
+  List<_Shown> _rows(FollowFeed feed) {
+    final items = feed.items;
+    final leaving = [
+      for (final each in _leaving.values)
+        if (identical(each.feed, feed) && each.generation == feed.generation) each,
+    ];
+    if (leaving.isEmpty) return [for (final item in items) _Shown(item)];
+    final ids = {for (final item in items) item.id};
+    final byPlace = <String?, List<_Leaving>>{};
+    for (final each in leaving) {
+      if (!ids.contains(each.item.id)) (byPlace[each.after] ??= []).add(each);
+    }
+    final rows = <_Shown>[];
+    void follow(String? id) {
+      for (final each in byPlace[id] ?? const <_Leaving>[]) {
+        rows.add(_Shown(each.item, leaving: each));
+        follow(each.item.id);
+      }
+    }
+
+    follow(null);
+    for (final item in items) {
+      rows.add(_Shown(item));
+      follow(item.id);
+    }
+    return rows;
   }
 
   void _sheetChanged() {
@@ -331,12 +459,17 @@ class _FollowTabPageState extends State<FollowTabPage> with SkinRefreshRoom {
     if (!_started) return const SizedBox.shrink();
     final model = _model!;
     final feed = model.current;
-    final items = feed.items;
+    final rows = _rows(feed);
+    final at = {for (final (index, row) in rows.indexed) row.item.id: index};
+    final fading = [
+      for (final row in rows)
+        if (row.leaving case final leaving? when leaving.moving) leaving,
+    ];
     final bangumi = model.bangumi;
     final bottom = _inset;
     final still = _still;
     final room = refreshRoom;
-    return _paging.listen(
+    final list = _paging.listen(
       _scroll,
       NotificationListener<ScrollEndNotification>(
         onNotification: (notification) {
@@ -399,7 +532,8 @@ class _FollowTabPageState extends State<FollowTabPage> with SkinRefreshRoom {
                 child: FollowBangumiSection(items: bangumi, onAll: _openOwnBangumi, onOpen: (_) => _soonToast()),
               ),
             ],
-            if (items.isEmpty)
+            // Empty once the last post of an unfollowed account has faded.
+            if (feed.items.isEmpty && fading.isEmpty)
               SliverFillRemaining(
                 hasScrollBody: false,
                 child: Column(
@@ -415,8 +549,21 @@ class _FollowTabPageState extends State<FollowTabPage> with SkinRefreshRoom {
               )
             else ...[
               SliverList.builder(
-                itemCount: items.length,
-                itemBuilder: (context, index) => FollowPosts.row(items[index], inline, bandAbove: index == 0),
+                itemCount: rows.length,
+                // Keyed by post, so a row keeps its place (and its laid-out offset) while posts around it go.
+                findChildIndexCallback: (key) => key is ValueKey<String> ? at[key.value] : null,
+                itemBuilder: (context, index) {
+                  final row = rows[index];
+                  final id = row.item.id;
+                  if (row.leaving case final leaving?) return _LeavingGap(key: ValueKey(id), leaving: leaving);
+                  return KeyedSubtree(
+                    key: ValueKey(id),
+                    child: KeyedSubtree(
+                      key: _cardKeys[id] ??= GlobalKey(),
+                      child: FollowPosts.row(row.item, inline, bandAbove: index == 0),
+                    ),
+                  );
+                },
               ),
               SliverToBoxAdapter(
                 child: FollowFooter(
@@ -432,6 +579,42 @@ class _FollowTabPageState extends State<FollowTabPage> with SkinRefreshRoom {
           ],
         ),
       ),
+    );
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        list,
+        // Over the list, as the official card fades over the posts rising under it.
+        if (fading.isNotEmpty)
+          IgnorePointer(
+            child: ExcludeSemantics(
+              child: ClipRect(
+                child: Stack(
+                  children: [
+                    for (final leaving in fading)
+                      Positioned(
+                        key: ValueKey(leaving.item.id),
+                        left: 0,
+                        right: 0,
+                        top: 0,
+                        child: CompositedTransformFollower(
+                          link: leaving.link,
+                          showWhenUnlinked: false,
+                          child: FadeTransition(
+                            opacity: leaving.opacity,
+                            child: KeyedSubtree(
+                              key: _cardKeys[leaving.item.id] ??= GlobalKey(),
+                              child: FollowPosts.row(leaving.item, inline, bandAbove: leaving.band),
+                            ),
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+      ],
     );
   }
 
@@ -466,4 +649,81 @@ class _Band extends StatelessWidget {
     height: DynamicFeedTheme.band,
     child: ColoredBox(color: DynamicFeedTheme.bandFill),
   );
+}
+
+/// A row of the list: a post, or one leaving it.
+final class _Shown {
+  const _Shown(this.item, {this.leaving});
+
+  final DynamicItem item;
+  final _Leaving? leaving;
+}
+
+/// A post of an unfollowed account gone from [feed], kept in its place after [after] (null: first) as an empty row
+/// until the list starts over ([generation]).
+final class _Leaving {
+  _Leaving({
+    required this.item,
+    required this.feed,
+    required this.generation,
+    required this.after,
+    required this.height,
+    required this.band,
+    required this.controller,
+  }) : _curve = controller == null
+           ? null
+           : CurvedAnimation(parent: controller, curve: DynamicFeedTheme.leaveCurve);
+
+  final DynamicItem item;
+  final FollowFeed feed;
+  final int generation;
+  final String? after;
+
+  /// The row's height as it left (0 when it wasn't drawn), with the band over it when it was the first post ([band]).
+  final double height;
+  final bool band;
+
+  /// Runs while it fades on screen; null closes it at once.
+  final AnimationController? controller;
+  final CurvedAnimation? _curve;
+  final link = LayerLink();
+  bool _landed = false;
+
+  /// Its card still fades over the list.
+  bool get moving => controller != null && !_landed;
+  Animation<double> get progress => moving ? _curve! : kAlwaysCompleteAnimation;
+  Animation<double> get opacity => ReverseAnimation(progress);
+
+  void land() => _landed = true;
+
+  void dispose() {
+    _curve?.dispose();
+    controller?.dispose();
+  }
+}
+
+/// Where a leaving post lay: the gap the posts under it rise into while its card fades over the list, then nothing. It
+/// keeps the band above it when it was first, so the post after it needs none.
+class _LeavingGap extends StatelessWidget {
+  const _LeavingGap({super.key, required this.leaving});
+
+  final _Leaving leaving;
+
+  @override
+  Widget build(BuildContext context) {
+    final band = leaving.band ? DynamicFeedTheme.band : 0.0;
+    return AnimatedBuilder(
+      animation: leaving.progress,
+      builder: (context, _) => CompositedTransformTarget(
+        link: leaving.link,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            if (band > 0) const _Band(),
+            SizedBox(height: math.max(leaving.height - band, 0) * (1 - leaving.progress.value)),
+          ],
+        ),
+      ),
+    );
+  }
 }
