@@ -1,6 +1,10 @@
+import 'dart:async';
+
 import 'package:bili_core/api.dart';
 import 'package:flutter/widgets.dart';
 
+import '../../live/live_entry.dart';
+import '../../live/live_routes.dart';
 import '../../shared/remote_image.dart';
 import '../../shared/theme.dart';
 import '../../video/intro/collection_row.dart' show Chevron;
@@ -52,7 +56,8 @@ class FollowSwitch extends StatelessWidget {
   }
 }
 
-/// A section's title at its left, and 更多 › or 全部 › at its right when [more] is given.
+/// A section's title at its left, and 更多 › or 全部 › at its right when [more] is given, after [lead] and a dot when
+/// that is given too.
 class FollowSectionTitle extends StatelessWidget {
   FollowSectionTitle({
     super.key,
@@ -62,6 +67,7 @@ class FollowSectionTitle extends StatelessWidget {
     this.moreText = DynamicFeedTheme.moreText,
     Color? moreInk,
     this.moreGap = DynamicFeedTheme.moreGap,
+    this.lead,
     this.onMore,
   }) : moreInk = moreInk ?? DynamicFeedTheme.moreInk;
 
@@ -71,6 +77,9 @@ class FollowSectionTitle extends StatelessWidget {
   final double moreText;
   final Color moreInk;
   final double moreGap;
+
+  /// 最常访问's `N人直播中` (263).
+  final String? lead;
   final VoidCallback? onMore;
 
   @override
@@ -82,6 +91,7 @@ class FollowSectionTitle extends StatelessWidget {
       height: DynamicFeedTheme.sectionLine / DynamicFeedTheme.sectionText,
     );
     final more = this.more;
+    final lead = this.lead;
     final onMore = this.onMore;
     return SizedBox(
       height: DynamicFeedTheme.sectionLine,
@@ -103,13 +113,31 @@ class FollowSectionTitle extends StatelessWidget {
               height: DynamicFeedTheme.moreTarget,
               child: FollowTap(
                 key: moreKey,
-                label: more,
+                label: lead == null ? more : '$lead · $more',
                 onTap: onMore,
                 child: Padding(
                   padding: const EdgeInsets.only(left: DynamicFeedTheme.gutter, right: DynamicFeedTheme.chevronRight),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
+                      if (lead != null) ...[
+                        Text(
+                          lead,
+                          key: const ValueKey('follow-faces-live-count'),
+                          style: followStyle(moreText, moreInk),
+                        ),
+                        SizedBox(
+                          width: DynamicFeedTheme.liveLeadGap,
+                          child: Center(
+                            child: SizedBox.square(
+                              dimension: DynamicFeedTheme.liveLeadDot,
+                              child: DecoratedBox(
+                                decoration: ShapeDecoration(color: moreInk, shape: const CircleBorder()),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
                       Text(more, style: followStyle(moreText, moreInk)),
                       SizedBox(width: moreGap),
                       Chevron(
@@ -145,73 +173,212 @@ class FollowFace extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    const dotLeft = DynamicFeedTheme.face / 2 + DynamicFeedTheme.dotOffset - DynamicFeedTheme.dotRing / 2;
+    return FollowTap(
+      label: dot ? '${up.name}，有更新' : up.name,
+      onTap: onTap,
+      child: _FaceSlot(
+        face: up.face,
+        name: up.name,
+        marks: [
+          if (dot)
+            Positioned(
+              key: ValueKey('follow-dot-${up.mid}'),
+              left: dotLeft,
+              top: dotLeft,
+              width: DynamicFeedTheme.dotRing,
+              height: DynamicFeedTheme.dotRing,
+              child: DecoratedBox(
+                decoration: ShapeDecoration(color: BiliColors.card, shape: const CircleBorder()),
+                child: Center(
+                  child: SizedBox.square(
+                    dimension: DynamicFeedTheme.dot,
+                    child: DecoratedBox(
+                      decoration: ShapeDecoration(color: DynamicFeedTheme.dotInk, shape: const CircleBorder()),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+/// A face that is live, leading the row (263): its pink ring and 直播中 over the ring's foot, never the dot.
+class FollowLiveFace extends StatelessWidget {
+  const FollowLiveFace({super.key, required this.up, required this.onTap});
+
+  final DynamicLiveUp up;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    const ringLeft = (DynamicFeedTheme.face - DynamicFeedTheme.liveRing) / 2;
+    const pillWidth = DynamicFeedTheme.livePillWidth + DynamicFeedTheme.livePillRim * 2;
+    const pillHeight = DynamicFeedTheme.livePillHeight + DynamicFeedTheme.livePillRim * 2;
+    return FollowTap(
+      label: '${up.name}，直播中',
+      onTap: onTap,
+      child: _FaceSlot(
+        face: up.face,
+        name: up.name,
+        marks: [
+          Positioned(
+            left: ringLeft,
+            top: ringLeft,
+            width: DynamicFeedTheme.liveRing,
+            height: DynamicFeedTheme.liveRing,
+            child: DecoratedBox(
+              decoration: ShapeDecoration(
+                shape: CircleBorder(
+                  side: BorderSide(color: DynamicFeedTheme.liveRingInk, width: DynamicFeedTheme.liveRingStroke),
+                ),
+              ),
+            ),
+          ),
+          Positioned(
+            key: ValueKey('follow-live-pill-${up.mid}'),
+            left: (DynamicFeedTheme.face - pillWidth) / 2,
+            top: DynamicFeedTheme.face / 2 + DynamicFeedTheme.livePillDrop - pillHeight / 2,
+            width: pillWidth,
+            height: pillHeight,
+            child: const _LivePill(),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// The face in its grey ring with [marks] over it, the name under it on up to two lines, in a
+/// [DynamicFeedTheme.facePitch] slot.
+class _FaceSlot extends StatelessWidget {
+  const _FaceSlot({required this.face, required this.name, required this.marks});
+
+  final String face;
+  final String name;
+  final List<Widget> marks;
+
+  @override
+  Widget build(BuildContext context) {
     final style = followStyle(
       DynamicFeedTheme.nameText,
       DynamicFeedTheme.nameInk,
       height: DynamicFeedTheme.nameLine / DynamicFeedTheme.nameText,
     );
-    const dotLeft = DynamicFeedTheme.face / 2 + DynamicFeedTheme.dotOffset - DynamicFeedTheme.dotRing / 2;
-    return FollowTap(
-      label: dot ? '${up.name}，有更新' : up.name,
-      onTap: onTap,
-      child: SizedBox(
-        width: DynamicFeedTheme.facePitch,
-        child: Column(
-          children: [
-            SizedBox.square(
-              dimension: DynamicFeedTheme.face,
-              child: Stack(
-                clipBehavior: Clip.none,
-                children: [
-                  Positioned.fill(child: ClipOval(child: RemoteImage.avatar(up.face))),
-                  Positioned.fill(
-                    child: DecoratedBox(
-                      decoration: ShapeDecoration(
-                        shape: CircleBorder(
-                          side: BorderSide(color: DynamicFeedTheme.faceRingInk, width: DynamicFeedTheme.faceRing),
-                        ),
+    return SizedBox(
+      width: DynamicFeedTheme.facePitch,
+      child: Column(
+        children: [
+          SizedBox.square(
+            dimension: DynamicFeedTheme.face,
+            child: Stack(
+              clipBehavior: Clip.none,
+              children: [
+                Positioned.fill(child: ClipOval(child: RemoteImage.avatar(face))),
+                Positioned.fill(
+                  child: DecoratedBox(
+                    decoration: ShapeDecoration(
+                      shape: CircleBorder(
+                        side: BorderSide(color: DynamicFeedTheme.faceRingInk, width: DynamicFeedTheme.faceRing),
                       ),
                     ),
                   ),
-                  if (dot)
-                    Positioned(
-                      key: ValueKey('follow-dot-${up.mid}'),
-                      left: dotLeft,
-                      top: dotLeft,
-                      width: DynamicFeedTheme.dotRing,
-                      height: DynamicFeedTheme.dotRing,
-                      child: DecoratedBox(
-                        decoration: ShapeDecoration(color: BiliColors.card, shape: const CircleBorder()),
-                        child: Center(
-                          child: SizedBox.square(
-                            dimension: DynamicFeedTheme.dot,
-                            child: DecoratedBox(
-                              decoration: ShapeDecoration(color: DynamicFeedTheme.dotInk, shape: const CircleBorder()),
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                ],
-              ),
+                ),
+                ...marks,
+              ],
             ),
-            const SizedBox(height: DynamicFeedTheme.nameCentre - DynamicFeedTheme.nameLine / 2),
-            SizedBox(
-              width: DynamicFeedTheme.nameWidth,
-              child: Text(
-                up.name,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                textAlign: TextAlign.center,
-                style: style,
-                strutStyle: BiliFonts.strutOf(context, style),
-              ),
+          ),
+          const SizedBox(height: DynamicFeedTheme.nameCentre - DynamicFeedTheme.nameLine / 2),
+          SizedBox(
+            width: DynamicFeedTheme.nameWidth,
+            child: Text(
+              name,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              textAlign: TextAlign.center,
+              style: style,
+              strutStyle: BiliFonts.strutOf(context, style),
             ),
-          ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// 直播中 on its pink stadium, the bars moving.
+class _LivePill extends StatelessWidget {
+  const _LivePill();
+
+  static const _bars = 'assets/images/dynamic/live_ing.gif';
+
+  @override
+  Widget build(BuildContext context) {
+    final style = followStyle(DynamicFeedTheme.liveText, DynamicFeedTheme.liveInk);
+    return DecoratedBox(
+      decoration: ShapeDecoration(color: DynamicFeedTheme.livePillRimInk, shape: const StadiumBorder()),
+      child: Padding(
+        padding: const EdgeInsets.all(DynamicFeedTheme.livePillRim),
+        child: DecoratedBox(
+          decoration: ShapeDecoration(color: DynamicFeedTheme.livePillFill, shape: const StadiumBorder()),
+          child: Stack(
+            clipBehavior: Clip.none,
+            children: [
+              Positioned(
+                left: DynamicFeedTheme.liveBarsLeft,
+                top: DynamicFeedTheme.liveBarsDrop,
+                width: DynamicFeedTheme.liveBars,
+                height: DynamicFeedTheme.liveBars,
+                // Each of the gif's frames repaints only its square, not the row around it.
+                child: RepaintBoundary(
+                  child: Image.asset(
+                    _bars,
+                    width: DynamicFeedTheme.liveBars,
+                    height: DynamicFeedTheme.liveBars,
+                    gaplessPlayback: true,
+                    excludeFromSemantics: true,
+                  ),
+                ),
+              ),
+              Positioned(
+                left: DynamicFeedTheme.liveBarsLeft + DynamicFeedTheme.liveBars,
+                top: 0,
+                bottom: 0,
+                child: Center(
+                  child: Text('直播中', maxLines: 1, style: style, strutStyle: BiliFonts.strutOf(context, style)),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
   }
+}
+
+/// The line between the live faces and the rest.
+class _LiveRule extends StatelessWidget {
+  const _LiveRule();
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.only(left: DynamicFeedTheme.liveRuleBefore, right: DynamicFeedTheme.liveRuleAfter),
+    child: SizedBox(
+      width: DynamicFeedTheme.liveRuleWidth,
+      height: DynamicFeedTheme.face,
+      child: Center(
+        child: SizedBox(
+          key: const ValueKey('follow-live-rule'),
+          width: DynamicFeedTheme.liveRuleWidth,
+          height: DynamicFeedTheme.liveRuleHeight,
+          child: ColoredBox(color: DynamicFeedTheme.liveRuleInk),
+        ),
+      ),
+    ),
+  );
 }
 
 /// The faces side by side, scrolling sideways when there are more than fit; asks for more near its end.
@@ -236,8 +403,23 @@ class FollowFacesRow extends StatefulWidget {
   final VoidCallback? onNearEnd;
   final ScrollController? controller;
 
-  /// Drawn under the faces, inside the scrolled content: the face sheet's pointer.
+  /// Drawn under the faces, inside the scrolled content: the face sheet's pointer. Its origin is the first of [shown],
+  /// after any live faces.
   final Widget Function(BuildContext context)? below;
+
+  /// [ups] as the row draws them: without anyone already led as live.
+  static List<DynamicUp> shown(List<DynamicUp> ups, List<DynamicLiveUp> liveUps) {
+    if (liveUps.isEmpty) return ups;
+    final live = {for (final up in liveUps) up.mid};
+    return [
+      for (final up in ups)
+        if (!live.contains(up.mid)) up,
+    ];
+  }
+
+  /// Opens a live face's room; tests put their own here.
+  @visibleForTesting
+  static Future<void> Function(BuildContext context, LiveRoomEntry entry) openRoom = openLiveRoom;
 
   @override
   State<FollowFacesRow> createState() => _FollowFacesRowState();
@@ -255,14 +437,26 @@ class _FollowFacesRowState extends State<FollowFacesRow> {
     return false;
   }
 
+  /// A room without its id in the answer opens the face sheet, as any other face does.
+  void _openLive(DynamicLiveUp up) {
+    if (up.roomId <= 0) {
+      widget.onOpen(DynamicUp(mid: up.mid, name: up.name, face: up.face));
+      return;
+    }
+    final entry = LiveRoomEntry(roomId: up.roomId, uid: up.mid, anchorName: up.name, anchorFace: up.face);
+    unawaited(FollowFacesRow.openRoom(context, entry));
+  }
+
   @override
   Widget build(BuildContext context) {
     final below = widget.below;
+    final live = widget.liveUps;
+    final ups = FollowFacesRow.shown(widget.ups, live);
     final faces = Row(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        for (final up in widget.ups)
+        for (final up in ups)
           FollowFace(
             key: ValueKey('follow-face-${up.mid}'),
             up: up,
@@ -271,6 +465,7 @@ class _FollowFacesRowState extends State<FollowFacesRow> {
           ),
       ],
     );
+    final rest = below == null ? faces : Stack(clipBehavior: Clip.none, children: [faces, below(context)]);
     return NotificationListener<ScrollNotification>(
       onNotification: _scrolled,
       child: SingleChildScrollView(
@@ -278,7 +473,19 @@ class _FollowFacesRowState extends State<FollowFacesRow> {
         scrollDirection: Axis.horizontal,
         physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
         padding: const EdgeInsets.symmetric(horizontal: DynamicFeedTheme.facesInset),
-        child: below == null ? faces : Stack(clipBehavior: Clip.none, children: [faces, below(context)]),
+        // The live ring stands 2 pt above the row's box; the row spans the screen, so sideways nothing shows past it.
+        clipBehavior: live.isEmpty ? Clip.hardEdge : Clip.none,
+        child: live.isEmpty
+            ? rest
+            : Row(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  for (final up in live)
+                    FollowLiveFace(key: ValueKey('follow-live-${up.mid}'), up: up, onTap: () => _openLive(up)),
+                  if (ups.isNotEmpty) ...[const _LiveRule(), rest],
+                ],
+              ),
       ),
     );
   }
@@ -321,7 +528,7 @@ class FollowTop extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final faces = ups.isNotEmpty;
+    final faces = ups.isNotEmpty || liveUps.isNotEmpty;
     return ColoredBox(
       color: BiliColors.card,
       child: SizedBox(
@@ -342,6 +549,7 @@ class FollowTop extends StatelessWidget {
                 child: FollowSectionTitle(
                   title: '最常访问',
                   more: type == DynamicFeedType.all ? '更多' : null,
+                  lead: liveUps.isEmpty ? null : '${liveUps.length}人直播中',
                   moreKey: const ValueKey('follow-faces-more'),
                   onMore: onMore,
                 ),

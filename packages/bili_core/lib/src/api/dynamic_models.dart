@@ -493,11 +493,7 @@ abstract final class DynamicDecode {
       offset: _string(list.map['offset']),
       hasMore: list.flag('has_more'),
       dropped: raw.length - ups.length,
-      liveUps: [
-        for (final user in _list(data.nested('live_users')?.map['items']))
-          if (user is Map<String, Object?>)
-            if (_int(user['mid']) case final mid?) DynamicLiveUp(mid: mid, name: '', face: ''),
-      ],
+      liveUps: lossy(_list(data.nested('live_users')?.map['items']), _liveUp),
     );
   }
 
@@ -876,6 +872,35 @@ DynamicUp _up(Object? json) {
     face: up.text('face') ?? '',
     hasUpdate: up.flag('has_update'),
   );
+}
+
+/// No answer we have logged held a live user, so the shape is PiliPlus's (`mid`, `uname`, `face`, `room_id`,
+/// `jump_url`) with the older `w_live_users` call's spellings (`uid`, `link`) also read.
+DynamicLiveUp _liveUp(Object? json) {
+  final user = JsonObject.from(json, 'live user');
+  final mid = _int(user.map['mid']) ?? _int(user.map['uid']);
+  if (mid == null || mid <= 0) throw const DecodeError('live user: missing mid');
+  final room = _int(user.map['room_id']) ?? _roomIn(user.map['jump_url']) ?? _roomIn(user.map['link']) ?? 0;
+  return DynamicLiveUp(
+    mid: mid,
+    name: user.text('uname') ?? '',
+    face: user.text('face') ?? '',
+    roomId: room > 0 ? room : 0,
+  );
+}
+
+/// The room in `https://live.bilibili.com/<id>?…` or `bilibili://live/<id>`.
+int? _roomIn(Object? link) {
+  if (link is! String) return null;
+  final uri = Uri.tryParse(link.startsWith('//') ? 'https:$link' : link);
+  if (uri == null) return null;
+  final segments = uri.pathSegments.where((segment) => segment.isNotEmpty);
+  final id = switch (uri.host) {
+    'live.bilibili.com' => segments.firstOrNull,
+    'live' when uri.scheme == 'bilibili' => segments.firstOrNull,
+    _ => null,
+  };
+  return id == null ? null : int.tryParse(id);
 }
 
 FollowingUser _following(Object? json) {

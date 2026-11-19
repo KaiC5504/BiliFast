@@ -6313,6 +6313,34 @@ abstract final class DynamicFeedTheme {
   static Color get dotInk => BiliColors.pink;
   static const dotOffset = 18.0;
 
+  /// The followed who are live lead the faces (263), in the same 74 pt slots: the face in a 56 pt pink ring (1 pt,
+  /// 1 pt clear of it), no dot; a 52 × 16 pink stadium in a 1 pt white rim, centred 21 pt under the face's centre,
+  /// holds the APK's `ic_live_comm_live_ing` bars drawn 16 pt square 2 pt in and 1 pt down, then 直播中 10 pt white
+  /// straight after them. A 1 × 24 pt line centred on the faces sits 7 pt past the last live slot, 8 before the next.
+  static const liveRing = 56.0;
+  static const liveRingStroke = 1.0;
+  static Color get liveRingInk => BiliColors.pink;
+  static const livePillWidth = 52.0;
+  static const livePillHeight = 16.0;
+  static const livePillRim = 1.0;
+  static Color get livePillRimInk => BiliColors.card;
+  static Color get livePillFill => BiliColors.pink;
+  static const livePillDrop = 21.0;
+  static const liveBars = 16.0;
+  static const liveBarsLeft = 2.0;
+  static const liveBarsDrop = 1.0;
+  static const liveText = 10.0;
+  static const liveInk = BiliColors.onPink;
+  static const liveRuleBefore = 7.0;
+  static const liveRuleAfter = 8.0;
+  static const liveRuleWidth = 1.0;
+  static const liveRuleHeight = 24.0;
+  static Color get liveRuleInk => BiliColors.divider;
+
+  /// `N人直播中 · ` before 更多 in the title's grey, 14 pt from 中 to 更 with a 5/3 pt dot centred between them.
+  static const liveLeadGap = 14.0;
+  static const liveLeadDot = 5 / 3;
+
   /// The row asks Bilibili for more faces once scrolled within this of its end.
   static const facesAhead = 148.0;
 

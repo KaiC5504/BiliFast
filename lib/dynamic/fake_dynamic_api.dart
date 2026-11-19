@@ -13,6 +13,7 @@ class FakeDynamicApi implements DynamicApi {
     this.posts = const [],
     List<DynamicItem>? videoPosts,
     this.upList = const [],
+    this.liveUps = const [],
     this.following = const [],
     this.bangumiList = const [],
     this.spacePages = const {},
@@ -26,6 +27,7 @@ class FakeDynamicApi implements DynamicApi {
   factory FakeDynamicApi.demo() => FakeDynamicApi(
     posts: [...demoLongPictures, ...demoPosts],
     upList: _demoUps,
+    liveUps: demoLiveUps,
     following: [
       for (final up in _demoUps) FollowingUser(mid: up.mid, name: up.name, face: '', vipPink: up.mid.isOdd),
       for (var i = 0; i < 25; i++) FollowingUser(mid: 900 + i, name: '演示关注$i', face: ''),
@@ -39,6 +41,9 @@ class FakeDynamicApi implements DynamicApi {
   final List<DynamicItem> posts;
   final List<DynamicItem> videoPosts;
   final List<DynamicUp> upList;
+
+  /// The portal's live faces, answered with the faces' first page.
+  final List<DynamicLiveUp> liveUps;
   final List<FollowingUser> following;
   final List<FollowedBangumi> bangumiList;
 
@@ -91,8 +96,11 @@ class FakeDynamicApi implements DynamicApi {
   Future<int> updateCount(String baseline) => _answer('updateCount', 'updateCount $baseline', () => newPosts);
 
   @override
-  Future<DynamicUpList> ups({String? offset}) =>
-      _answer('ups', 'ups offset=${offset ?? ''}', () => DynamicUpList(ups: offset == null ? upList : const []));
+  Future<DynamicUpList> ups({String? offset}) => _answer(
+    'ups',
+    'ups offset=${offset ?? ''}',
+    () => offset == null ? DynamicUpList(ups: upList, liveUps: liveUps) : const DynamicUpList(ups: []),
+  );
 
   @override
   Future<DynamicPage> spacePosts(int mid, {String? offset}) => _answer(
@@ -156,6 +164,13 @@ class FakeDynamicApi implements DynamicApi {
     DynamicUp(mid: 102, name: '演示阿木', face: '', hasUpdate: true),
     DynamicUp(mid: 103, name: '演示星河列车', face: '', hasUpdate: true),
     DynamicUp(mid: 104, name: '演示山海', face: ''),
+  ];
+
+  /// 263's two live faces, leading the demo's row; `FakeLiveApi.demo` answers any room. The second is among the faces
+  /// too, so the row shows it only once.
+  static const demoLiveUps = [
+    DynamicLiveUp(mid: 106, name: '演示月月', face: '', roomId: 1000101),
+    DynamicLiveUp(mid: 102, name: '演示阿木', face: '', roomId: 1000102),
   ];
 
   static const _upA = DynamicAuthor(
