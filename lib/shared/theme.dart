@@ -1070,7 +1070,8 @@ abstract final class IntroListTheme {
   static const collectionTrailing = 47 / 3;
   static const collectionTitleText = 14.0;
 
-  static const collectionPlaceText = 13.0;
+  /// 03's 221/221 is 41.67 pt of ink and its digits 8.67 tall, as font-check 02's under the real SF: 12 pt, not 13.
+  static const collectionPlaceText = 12.0;
   static const collectionBarsGap = 7.0;
   static const collectionChevronGap = 6.5;
   static const collectionChevronWidth = 20 / 3;
@@ -1090,6 +1091,9 @@ abstract final class IntroListTheme {
   /// Reduce Motion holds font-check 02's frame, 23.4 of 1-80: tall, short, nearly tall (11.87, 5.73 and 11.03; 02
   /// measures 11.76, 5.66 and 11.03). 03 caught frame 14.1, tall, short, short.
   static const barsStill = (23.4 - 1) / 79;
+
+  /// The file is 60 fps, the APK's night version of it 30: drawn at 30, its fastest bar moves 0.6 pt a frame.
+  static const barsFps = 30.0;
 
   /// The part strip (no screenshot; the official app's style): 选集 N/M › over 140 × 52 chips with two lines.
   static const partHeaderHeight = 36.0;

@@ -1,17 +1,17 @@
-import 'dart:async';
 import 'dart:io';
 
 import 'package:bili_core/api.dart';
 import 'package:bilifast/dynamic/fake_dynamic_api.dart';
 import 'package:bilifast/home/home_tab_bar.dart';
 import 'package:bilifast/home/main_shell.dart';
+import 'package:bilifast/shared/paced_gif.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import '../../support/look_alike.dart';
 import 'follow_fixtures.dart';
 
-const _bars = AssetImage('assets/images/live/live_ing.gif');
+const _bars = 'assets/images/live/live_ing.gif';
 
 /// 263's 最常访问 with two of the followed live, as KaiC's iPhone draws it under the system font, measured in px / 3
 /// (names made up, as long as 263's). With BILIFAST_SHOTS naming a folder outside the repo, the 3× shot is saved
@@ -37,19 +37,12 @@ void main() {
     );
     await settle(tester, 20);
     final context = tester.element(find.byType(MainShell));
-    var barsCached = false;
     await tester.runAsync(() async {
       for (final art in ['follow_write', 'follow_pointer']) {
         await precacheImage(AssetImage('assets/images/dynamic/$art.png'), context);
       }
-      unawaited(precacheImage(_bars, context).then((_) => barsCached = true));
+      await PacedGif.load(_bars);
     });
-    // An animated gif hands out its first frame only from a drawn frame, which runAsync never pumps.
-    for (var i = 0; i < 100 && !barsCached; i++) {
-      await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 20)));
-      await tester.pump();
-    }
-    expect(barsCached, isTrue);
     await tester.tap(find.byKey(ValueKey('home-tab-${HomeTab.follow.name}')));
     await settle(tester, 20);
 
@@ -68,7 +61,7 @@ void main() {
       tester.getRect(find.byKey(const ValueKey('follow-live-pill-201'))),
       Rect.fromCenter(center: const Offset(45, 217), width: 54, height: 18),
     );
-    final bars = find.descendant(of: find.byKey(const ValueKey('follow-live-201')), matching: find.image(_bars));
+    final bars = find.descendant(of: find.byKey(const ValueKey('follow-live-201')), matching: find.byType(PacedGif));
     expect(tester.getRect(bars).topLeft, const Offset(21, 210));
     expect(tester.widget<RawImage>(find.descendant(of: bars, matching: find.byType(RawImage))).image, isNotNull);
     // 更多 › where 127 has it; 2人直播中's 中 ends 14 pt before 更.

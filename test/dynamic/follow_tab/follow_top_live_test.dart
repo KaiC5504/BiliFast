@@ -5,6 +5,7 @@ import 'package:bilifast/dynamic/follow_tab/follow_top.dart';
 import 'package:bilifast/home/home_tab_bar.dart';
 import 'package:bilifast/live/live_entry.dart';
 import 'package:bilifast/live/live_routes.dart';
+import 'package:bilifast/shared/paced_gif.dart';
 import 'package:bilifast/shared/theme.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -94,13 +95,9 @@ void main() {
     await _Top().show(tester);
     final pill = tester.getRect(find.byKey(const ValueKey('follow-live-pill-102')));
     expect(pill, Rect.fromCenter(center: const Offset(119, 108 + 21), width: 54, height: 18));
-    final bars = tester.getRect(
-      find.descendant(
-        of: find.byKey(const ValueKey('follow-live-102')),
-        matching: find.image(const AssetImage('assets/images/live/live_ing.gif')),
-      ),
-    );
-    expect(bars, Rect.fromLTWH(119 - 26 + 2, 108 + 21 - 8 + 1, 16, 16));
+    final bars = find.descendant(of: find.byKey(const ValueKey('follow-live-102')), matching: find.byType(PacedGif));
+    expect(tester.widget<PacedGif>(bars).asset, 'assets/images/live/live_ing.gif');
+    expect(tester.getRect(bars), Rect.fromLTWH(119 - 26 + 2, 108 + 21 - 8 + 1, 16, 16));
     final words = find.descendant(of: find.byKey(const ValueKey('follow-live-102')), matching: find.text('直播中'));
     expect(tester.getRect(words).left, 119 - 26 + 18);
     final rings = [

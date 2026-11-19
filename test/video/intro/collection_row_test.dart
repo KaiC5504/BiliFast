@@ -35,6 +35,7 @@ void main() {
 
     expect(find.text('合集 · MAD系列'), findsOneWidget);
     expect(find.text('221/221'), findsOneWidget);
+    expect(tester.widget<Text>(find.text('221/221')).style?.fontSize, 12, reason: '03 and font-check 02, not 13');
     expect(find.byType(PlayingBars), findsOneWidget);
     final card = tester.getRect(find.byType(PressHighlight));
     expect(card.left, BiliMetrics.gutter);

@@ -71,5 +71,7 @@ void main() {
       expect(bar.y, closeTo(card.center.dy, 0.05));
       expect(bar.ink, IntroListTheme.iconInk);
     }
+    // 03's bars are centred at 339.79, 344 and 348.2, after 12 pt digits; at 13 the wider place pushed them 3.3 left.
+    expect(bars[1].x, closeTo(344.0, 0.35));
   });
 }

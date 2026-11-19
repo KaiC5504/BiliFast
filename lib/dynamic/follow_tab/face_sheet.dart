@@ -217,8 +217,7 @@ class _FaceSheetLayerState extends State<FaceSheetLayer> with SingleTickerProvid
     final sheetTop = padding.top + DynamicFeedTheme.sheetTop;
     final origin = widget.controller.originTop ?? rowTop;
     final open = widget.controller.isOpen;
-    final shown = FollowFacesRow.shown(_ups, model.liveUps);
-    final chosen = math.max(0, shown.indexWhere((face) => face.mid == up.mid));
+    final centre = FollowFacesRow.centreOf(up.mid, _ups, model.liveUps) ?? DynamicFeedTheme.facePitch / 2;
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: BiliTheme.dark ? SystemUiOverlayStyle.light : SystemUiOverlayStyle.dark,
       child: AnimatedBuilder(
@@ -269,7 +268,7 @@ class _FaceSheetLayerState extends State<FaceSheetLayer> with SingleTickerProvid
                       key: const ValueKey('face-sheet-pointer'),
                       duration: _still ? Duration.zero : DynamicFeedTheme.pointerSlide,
                       curve: Curves.easeOut,
-                      left: DynamicFeedTheme.facePitch * (chosen + 0.5) - DynamicFeedTheme.pointerWidth / 2,
+                      left: centre - DynamicFeedTheme.pointerWidth / 2,
                       top: sheetTop - rowTop - DynamicFeedTheme.pointerHeight + DynamicFeedTheme.sheetRule,
                       width: DynamicFeedTheme.pointerWidth,
                       height: DynamicFeedTheme.pointerHeight,
