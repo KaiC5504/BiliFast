@@ -24,6 +24,7 @@ import '../shared/release_refresh.dart';
 import '../shared/theme.dart';
 import '../shared/toast.dart';
 import '../skin/skin.dart';
+import '../video/intro/collection_row.dart' show PlayingBars;
 import '../video/link_opener.dart';
 import '../video/page_playback.dart';
 import '../video/player_prefs.dart';
@@ -156,6 +157,7 @@ class _HomePageState extends State<HomePage> {
     );
     unawaited(LoadingTv.precache(context));
     unawaited(PlayerLoading.precache());
+    unawaited(PlayingBars.precache());
     unawaited(SeekBar.precache());
     unawaited(_refreshFeed());
     _environment.addListener(_accountChanged);
