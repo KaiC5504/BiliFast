@@ -219,6 +219,7 @@ class FollowFacesRow extends StatefulWidget {
   const FollowFacesRow({
     super.key,
     required this.ups,
+    this.liveUps = const [],
     required this.dot,
     required this.onOpen,
     this.onNearEnd,
@@ -227,6 +228,9 @@ class FollowFacesRow extends StatefulWidget {
   });
 
   final List<DynamicUp> ups;
+
+  /// The followed who are live now, led before [ups] with 直播中 (263).
+  final List<DynamicLiveUp> liveUps;
   final bool Function(DynamicUp up) dot;
   final ValueChanged<DynamicUp> onOpen;
   final VoidCallback? onNearEnd;
@@ -286,6 +290,7 @@ class FollowTop extends StatelessWidget {
     super.key,
     required this.type,
     required this.ups,
+    this.liveUps = const [],
     required this.dot,
     required this.onSelect,
     required this.onOpenFace,
@@ -297,6 +302,9 @@ class FollowTop extends StatelessWidget {
 
   final DynamicFeedType type;
   final List<DynamicUp> ups;
+
+  /// The followed who are live now, led before [ups] with 直播中 (263).
+  final List<DynamicLiveUp> liveUps;
   final bool Function(DynamicUp up) dot;
   final ValueChanged<DynamicFeedType> onSelect;
   final ValueChanged<DynamicUp> onOpenFace;
@@ -345,6 +353,7 @@ class FollowTop extends StatelessWidget {
                 top: DynamicFeedTheme.facesTop,
                 height: FollowFace.rowHeight,
                 child: FollowFacesRow(
+                  liveUps: liveUps,
                   ups: ups,
                   dot: dot,
                   onOpen: onOpenFace,

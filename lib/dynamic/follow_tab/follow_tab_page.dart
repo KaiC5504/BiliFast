@@ -383,6 +383,7 @@ class _FollowTabPageState extends State<FollowTabPage> with SkinRefreshRoom {
               child: FollowTop(
                 type: model.type,
                 ups: model.ups,
+                liveUps: model.liveUps,
                 dot: model.hasUpdate,
                 onSelect: model.select,
                 onOpenFace: _openFace,
