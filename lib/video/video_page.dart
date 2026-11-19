@@ -1255,7 +1255,9 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
 
   /// 继续播放: the shown tab back to its top, where the player has its full height again, and play.
   void _resume() {
-    _tabs.scrollToTop(animate: !MediaQuery.disableAnimationsOf(context), tab: _collapse.only);
+    // Under 评论详情 or the uploader sheet the list's ticker is muted, so an animated scroll would wait for the close.
+    final covered = _threadOpen || _uploaderSheet.isOpen;
+    _tabs.scrollToTop(animate: !covered && !MediaQuery.disableAnimationsOf(context), tab: _collapse.only);
     final session = _session;
     if (session == null || session.readout.status.value != PlayerStatus.paused) return;
     _playback?.willPlay();

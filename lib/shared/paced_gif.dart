@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:ui' as ui;
 
+import 'package:bili_core/devlog.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
@@ -23,13 +24,19 @@ class PacedGif extends StatefulWidget {
   static final _decoded = <String, List<ui.FrameInfo>>{};
 
   /// Decodes [asset]'s pictures once for every PacedGif drawing it; a test awaits it in runAsync.
+  /// A failed decode is forgotten, so the next pill asks again.
   static Future<List<ui.FrameInfo>> load(String asset) => _decoding[asset] ??= () async {
-    final data = await rootBundle.load(asset);
-    final codec = await ui.instantiateImageCodec(data.buffer.asUint8List(data.offsetInBytes, data.lengthInBytes));
     try {
-      return _decoded[asset] = [for (var i = 0; i < codec.frameCount; i++) await codec.getNextFrame()];
-    } finally {
-      codec.dispose();
+      final data = await rootBundle.load(asset);
+      final codec = await ui.instantiateImageCodec(data.buffer.asUint8List(data.offsetInBytes, data.lengthInBytes));
+      try {
+        return _decoded[asset] = [for (var i = 0; i < codec.frameCount; i++) await codec.getNextFrame()];
+      } finally {
+        codec.dispose();
+      }
+    } catch (_) {
+      _decoding.remove(asset);
+      rethrow;
     }
   }();
 
@@ -55,7 +62,13 @@ class _PacedGifState extends State<PacedGif> {
   }
 
   Future<void> _load() async {
-    final frames = await PacedGif.load(widget.asset);
+    final List<ui.FrameInfo> frames;
+    try {
+      frames = await PacedGif.load(widget.asset);
+    } catch (error) {
+      Logger.shared.warn(LogCategory.ui, 'paced gif failed', {'error': '${error.runtimeType}'});
+      return;
+    }
     if (!mounted) return;
     setState(() => _frames = frames);
     _sync();

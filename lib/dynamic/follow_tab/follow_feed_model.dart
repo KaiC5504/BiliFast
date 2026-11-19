@@ -43,6 +43,10 @@ class FollowFeed extends ChangeNotifier {
   final _unfollowed = <int, int>{};
   int _unfollows = 0;
 
+  /// Posts of this list kept out or taken out by an unfollow: a page that repeats them still counts as adding nothing,
+  /// so a stuck offset ends the list instead of being asked again.
+  final _dropped = <String>{};
+
   List<DynamicItem> get items => _items;
 
   /// Moves on each time the list starts over (a reload, a sign-out).
@@ -108,6 +112,7 @@ class FollowFeed extends ChangeNotifier {
     _offset = null;
     _first.forget();
     _unfollowed.clear();
+    _dropped.clear();
     _notify();
   }
 
@@ -122,17 +127,24 @@ class FollowFeed extends ChangeNotifier {
       if (mine != _generation || _disposed) return null;
       // A first page starts the list over: Bilibili left out whoever was unfollowed before it was asked (and shows
       // them again if followed since), so only those who went while it was out are still kept out.
-      if (replacing) _unfollowed.removeWhere((_, at) => at <= asked);
+      if (replacing) {
+        _unfollowed.removeWhere((_, at) => at <= asked);
+        _dropped.clear();
+      }
       final kept = replacing ? <DynamicItem>[] : [..._items];
-      final seen = {for (final item in kept) item.id};
+      final seen = {for (final item in kept) item.id, ..._dropped};
       final fresh = [
         for (final item in page.items)
           if (seen.add(item.id)) item,
       ];
-      final added = [
-        for (final item in fresh)
-          if (!_unfollowed.containsKey(item.author.mid)) item,
-      ];
+      final added = <DynamicItem>[];
+      for (final item in fresh) {
+        if (_unfollowed.containsKey(item.author.mid)) {
+          _dropped.add(item.id);
+        } else {
+          added.add(item);
+        }
+      }
       _items = [...kept, ...added];
       _offset = page.offset;
       _isEnd = !page.hasMore || page.offset.isEmpty || fresh.isEmpty;
@@ -173,10 +185,14 @@ class FollowFeed extends ChangeNotifier {
   /// went doesn't bring them back.
   void removeAuthor(int mid) {
     _unfollowed[mid] = ++_unfollows;
-    final kept = [
-      for (final item in _items)
-        if (item.author.mid != mid) item,
-    ];
+    final kept = <DynamicItem>[];
+    for (final item in _items) {
+      if (item.author.mid == mid) {
+        _dropped.add(item.id);
+      } else {
+        kept.add(item);
+      }
+    }
     if (kept.length == _items.length) return;
     _items = kept;
     _notify();

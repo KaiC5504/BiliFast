@@ -69,6 +69,26 @@ void main() {
       expect(calls, 2);
     });
 
+    test('a repeated page holding an unfollowed account\'s posts still ends the paging', () async {
+      var calls = 0;
+      final page = DynamicPage(items: [post(0), post(1, mid: 2), post(2)], offset: 'again', hasMore: true);
+      final feed = FollowFeed(
+        name: 'all',
+        load: (offset) async {
+          calls++;
+          return page;
+        },
+        logger: logger,
+      );
+      await feed.start();
+      feed.removeAuthor(2);
+      expect([for (final item in feed.items) item.id], ['p0', 'p2']);
+      await feed.loadMore();
+      expect(feed.isEnd, isTrue, reason: 'p1 was taken out, not new');
+      await feed.loadMore();
+      expect(calls, 2);
+    });
+
     test('one call at a time', () async {
       final gate = Completer<void>();
       var calls = 0;
