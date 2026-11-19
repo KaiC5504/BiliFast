@@ -6212,7 +6212,8 @@ abstract final class DynamicCardTheme {
   static const sheetHairline = 1 / 3;
   static const sheetHairlineLeft = 20.0;
   static Color get sheetHairlineInk => BiliColors.divider;
-  static Color get sheetIconInk => BiliColors.pink;
+  /// Night: 246 draws them #C64A76, a shade under the palette's pink.
+  static Color get sheetIconInk => tone(0xFFFF6699, 0xFFC64A76);
   static const sheetText = 14.0;
   static const sheetTextLeft = 58.0;
   static Color get sheetInk => BiliColors.text;
@@ -8624,7 +8625,8 @@ abstract final class MessageTabTheme {
   static const alertWidth = 280.0;
   static const alertRadius = 8.0;
   static const alertDim = Color(0x99000000);
-  static Color get alertFill => BiliColors.card;
+  /// 255's at night: the dialog's #242628, lighter than the page's card.
+  static Color get alertFill => BiliColors.dialog;
   static const alertTitleText = 20.0;
   static const alertTitleWeight = FontWeight.w600;
   static const alertTitleLine = 26.0;
