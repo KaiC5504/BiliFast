@@ -1077,13 +1077,19 @@ abstract final class IntroListTheme {
   static const collectionChevronHeight = 12.0;
   static const chevronStroke = 1.3;
 
-  /// Three round-ended bars 1.72 wide and 4.2 apart, centred on the line: tall, short, tall, as font-check 02 draws
-  /// them (11.75, 5.67 and 11). The official mark moves; 03 caught it tall, short, short.
-  static const barWidth = 31 / 18;
+  /// The playing mark, the APK's detail_playing Lottie: an 80 pt comp whose three strokes, 10 wide and 24 apart,
+  /// stretch to 71 tall. 03 and font-check 02 draw it at 4.2/24 of that, its bars 1.75 wide and 4.2 apart and 12.43
+  /// tall at full stretch, centred on the line. The box is 02's frame (11.75 tall), so the rows keep their places and
+  /// a full stretch reaches 0.34 past it above and below.
+  static const barWidth = 1.75;
   static const barStep = 4.2;
   static const barsWidth = barWidth + 2 * barStep;
   static const barsHeight = 11.75;
-  static const barShares = <double>[1, 17 / 35.25, 33 / 35.25];
+  static const barsComp = 80 * barStep / 24;
+
+  /// Reduce Motion holds font-check 02's frame, 23.4 of 1-80: tall, short, nearly tall (11.87, 5.73 and 11.03; 02
+  /// measures 11.76, 5.66 and 11.03). 03 caught frame 14.1, tall, short, short.
+  static const barsStill = (23.4 - 1) / 79;
 
   /// The part strip (no screenshot; the official app's style): 选集 N/M › over 140 × 52 chips with two lines.
   static const partHeaderHeight = 36.0;
@@ -4200,17 +4206,17 @@ abstract final class UploaderSheetTheme {
   static const titleTop = 16.17 - titleLine / 2;
   static Color get titleInk => BiliColors.text;
 
-  /// The page's own video: its title pink after the playing mark, three rounded bars (10, 5.33 and 10 tall, 3.45
-  /// apart) 2 in from the title's start and 6 before its text, a little under the line's middle.
+  /// The page's own video: its title pink after the playing mark, 2 in from the title's start and 6 before its text,
+  /// a little under the line's middle. The mark is 简介's moving one with its bars 3.6 apart, as 62 and 68 draw it
+  /// (1.5 wide, 10.65 tall at full stretch), centred in the 8.4 × 10 box the still bars took.
   static Color get playingInk => BiliColors.pink;
   static Color get barsInk => tone(0xFFEB7093, 0xFFD44E7D);
   static const barsLead = 2.0;
   static const barsTrail = 6.0;
   static const barsDrop = 0.25;
-  static const barWidth = 1.5;
-  static const barPitch = 3.45;
-  static const barTall = 10.0;
-  static const barShort = 16 / 3;
+  static const barsBox = Size(8.4, 10);
+  static const barPitch = 3.6;
+  static const barsHeight = IntroListTheme.barsHeight * barPitch / IntroListTheme.barStep;
 
   /// The cover's ▶ count and date at its bottom left, the length at its bottom right: 10 pt white, its digits
   /// centred 11 above the cover's bottom and the ▶ box 11.17, 7.33 in with 3.5 after it and 11 between the count

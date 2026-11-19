@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:bilifast/shared/theme.dart';
+import 'package:bilifast/video/intro/collection_row.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'support/stand_in_fonts.dart';
@@ -13,7 +14,11 @@ Future<void> testExecutable(FutureOr<void> Function() testMain) async {
   TestWidgetsFlutterBinding.ensureInitialized();
   await loadSystemFontStandIns();
   BiliFonts.systemFallback = systemFallback;
-  // 深色模式 is a global: a test that turns it on never leaks it into the next.
-  setUp(() => BiliTheme.dark = false);
+  setUp(() {
+    // 深色模式 is a global: a test that turns it on never leaks it into the next.
+    BiliTheme.dark = false;
+    // The playing mark loops forever, which no pumpAndSettle outlasts; its own tests let it move.
+    PlayingBars.debugHoldStill = true;
+  });
   await testMain();
 }
