@@ -111,8 +111,12 @@ class PagePlayback extends ChangeNotifier implements KeptPlayback {
   final String? _title;
   PlaySource _source;
 
-  /// The route's list from the 竖屏 sheet's 相关视频, which the page brought back by the small window opens on again.
+  /// The route's list from the 竖屏 sheet's 相关视频, which the page brought back by the small window opens on again
+  /// ([_reopenStory]).
   final RelatedStory? _relatedStory;
+
+  /// Its page left from 竖屏 ([detach]).
+  bool _leftInStory = false;
 
   /// The open under way followed the video before it on its own.
   bool _followed = false;
@@ -248,8 +252,18 @@ class PagePlayback extends ChangeNotifier implements KeptPlayback {
     detail: _detail,
     offline: offline,
     source: _source,
-    relatedStory: _relatedStory,
+    relatedStory: _reopenStory,
   );
+
+  /// The related list a page brought back opens on in 竖屏: only when its page left from 竖屏 (from 详情页 it comes back
+  /// as its small player) and plays a video still in the list (自动连播 may have gone past it), placed on that video.
+  RelatedStory? get _reopenStory {
+    final story = _relatedStory;
+    if (story == null || !_leftInStory) return null;
+    final at = story.cards.indexWhere((card) => card.bvid == _bvid);
+    if (at < 0) return null;
+    return at == story.index ? story : RelatedStory(cards: story.cards, index: at);
+  }
 
   /// Gets a controller of its own and opens the video on it; again after a failed start.
   void start() {
@@ -482,11 +496,13 @@ class PagePlayback extends ChangeNotifier implements KeptPlayback {
     controller.setIdle(false);
   }
 
-  /// [page] left: the asks go nowhere until another page attaches.
-  void detach(Object page) {
+  /// [page] left: the asks go nowhere until another page attaches. [inStory] when it left from 竖屏, where a page
+  /// brought back on a related list goes back to.
+  void detach(Object page, {bool inStory = false}) {
     if (!identical(_page, page)) return;
     _page = null;
     _requestLogin = null;
+    _leftInStory = inStory;
   }
 
   /// [page] is gone and builds nothing with this playback any more.
@@ -588,6 +604,11 @@ class PagePlayback extends ChangeNotifier implements KeptPlayback {
     _quietly(() => controller.setRestorable(false), 'restorable');
   }
 
+  /// The route of the page [pushPage] is pushing, while it pushes it: the page it goes over reads it as it is covered
+  /// (the route observer names no route), and stays in 竖屏 under one that opens there.
+  static VideoRoute? get pushing => _pushing;
+  static VideoRoute? _pushing;
+
   @override
   bool pushPage() {
     final navigator = _services.navigator.currentState;
@@ -598,11 +619,16 @@ class PagePlayback extends ChangeNotifier implements KeptPlayback {
       title: _title,
       playback: this,
       offline: offline,
-      relatedStory: _relatedStory,
+      relatedStory: _reopenStory,
     );
-    unawaited(
-      navigator.push(RestoredPageRoute<void>(builder: (_) => restorePage(route), settings: VideoRoute.pageSettings)),
-    );
+    _pushing = route;
+    try {
+      unawaited(
+        navigator.push(RestoredPageRoute<void>(builder: (_) => restorePage(route), settings: VideoRoute.pageSettings)),
+      );
+    } finally {
+      _pushing = null;
+    }
     return true;
   }
 

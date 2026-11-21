@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 
-import 'package:bili_core/api.dart' show AppToken, HTTPRequest, OfficialIdentity, PlaySource;
+import 'package:bili_core/api.dart' show AppToken, HTTPRequest, OfficialIdentity, PlaySource, VideoCard;
 import 'package:bili_core/devlog.dart';
 import 'package:bili_core/shared.dart' show ManualClock;
 import 'package:bilifast/account/keychain_store.dart';
@@ -494,6 +494,62 @@ void main() {
       playback.close();
       await frames(tester, 4);
       expect(places().last, isNull);
+    });
+
+    testWidgets("a page brought back goes back to its route's related list only when it left from 竖屏, on a video "
+        'still in the list, placed on that video', (tester) async {
+      VideoCard card(String bvid) => VideoCard(
+        aid: 2,
+        bvid: bvid,
+        cid: 30,
+        title: '相关视频',
+        cover: '',
+        duration: 60,
+        ownerMid: 4,
+        ownerName: 'UP',
+        views: 1,
+        danmaku: 1,
+        likes: 1,
+      );
+      await host(tester);
+      final story = RelatedStory(cards: [card(bv), card(other)], index: 1);
+      serves(otherView);
+      final playback = PagePlayback(
+        services: services,
+        route: VideoRoute(bvid: other, start: 0, relatedStory: story),
+        createSession: pageSession,
+        restorePage: page,
+      )..start();
+      await frames(tester, 10);
+
+      final detailPage = Object();
+      playback
+        ..attach(detailPage, requestLogin: () {})
+        ..detach(detailPage)
+        ..letGo(detailPage);
+      expect(playback.restartRoute.relatedStory, isNull, reason: 'left from 详情页');
+
+      final storyPage = Object();
+      playback
+        ..attach(storyPage, requestLogin: () {})
+        ..detach(storyPage, inStory: true)
+        ..letGo(storyPage);
+      expect(playback.restartRoute.relatedStory, same(story), reason: 'its dispose after leaving keeps it');
+
+      serves(Canned.view);
+      playback.openOnPage(bv, followed: true);
+      await frames(tester, 10);
+      final moved = playback.restartRoute.relatedStory!;
+      expect(moved.cards, same(story.cards));
+      expect(moved.index, 0, reason: 'followed on to another video of the list');
+
+      const outside = 'BV1Q541167Qg';
+      serves(Canned.view.replaceAll(bv, outside).replaceAll('80433022', '80433024'));
+      playback.openOnPage(outside, followed: true);
+      await frames(tester, 10);
+      expect(playback.restartRoute.relatedStory, isNull, reason: '自动连播 went past the list');
+      playback.close();
+      await frames(tester, 4);
     });
 
     testWidgets("the next video's details asked ahead save its open the view call, on the entry's part, and its arrival "
