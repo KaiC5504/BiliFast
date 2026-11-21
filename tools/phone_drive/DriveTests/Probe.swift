@@ -22,10 +22,8 @@ final class Probe: XCTestCase {
         let window = app.windows.allElementsBoundByIndex.max { $0.frame.width * $0.frame.height < $1.frame.width * $1.frame.height }
         window?.coordinate(withNormalizedOffset: .zero).withOffset(CGVector(dx: 220, dy: 186)).doubleTap()
         Thread.sleep(forTimeInterval: 1)
-        let now = Int((session.outputVolume * 16).rounded())
-        let button: XCUIDevice.Button = target > now ? .volumeUp : .volumeDown
-        for _ in 0..<abs(target - now) { XCUIDevice.shared.press(button) }
-        Thread.sleep(forTimeInterval: 0.5)
-        print("drive: volume steps \(now) -> \(Int((session.outputVolume * 16).rounded()))")
+        let now = Phone.volumeSteps()
+        Phone.press(target > now ? .volumeUp : .volumeDown, times: abs(target - now))
+        print("drive: volume steps \(now) -> \(Phone.volumeSteps())")
     }
 }

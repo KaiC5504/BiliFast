@@ -14,20 +14,33 @@ enum Phone {
     /// iOS has 16 volume steps; the level is read before muting so it can be put back.
     private static var stepsBefore: Int?
 
+    /// The session's outputVolume only updates while the main run loop turns; Thread.sleep reads a stale level.
+    static func volumeSteps(settling seconds: TimeInterval = 0.6) -> Int {
+        RunLoop.current.run(until: Date().addingTimeInterval(seconds))
+        return Int((AVAudioSession.sharedInstance().outputVolume * 16).rounded())
+    }
+
+    static func press(_ button: XCUIDevice.Button, times: Int) {
+        for _ in 0..<times {
+            XCUIDevice.shared.press(button)
+            RunLoop.current.run(until: Date().addingTimeInterval(0.1))
+        }
+    }
+
     static func mute() {
         let session = AVAudioSession.sharedInstance()
         try? session.setCategory(.ambient, options: [.mixWithOthers])
         try? session.setActive(true)
-        let steps = Int((session.outputVolume * 16).rounded())
+        let steps = volumeSteps()
         stepsBefore = steps
         print("drive: volume steps before \(steps)")
-        for _ in 0..<max(steps, 1) + 1 { XCUIDevice.shared.press(.volumeDown) }
+        press(.volumeDown, times: steps + 1)
     }
 
     static func restoreVolume() {
         guard let steps = stepsBefore else { return }
-        for _ in 0..<steps { XCUIDevice.shared.press(.volumeUp) }
-        print("drive: volume steps after \(Int((AVAudioSession.sharedInstance().outputVolume * 16).rounded()))")
+        press(.volumeUp, times: steps)
+        print("drive: volume steps after \(volumeSteps())")
         stepsBefore = nil
     }
 
