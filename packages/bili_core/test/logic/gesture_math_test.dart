@@ -3,9 +3,19 @@ import 'package:test/test.dart';
 
 void main() {
   test('constants', () {
-    expect(GestureMath.seekSecondsPerWidth, 90);
     expect(GestureMath.axisLockDistance, 10);
     expect(GestureMath.edgeInset, 25);
+    expect(GestureMath.seekCountsAfter, const Duration(milliseconds: 20));
+  });
+
+  test('a width of drag seeks more the longer the video, as measured on the official app', () {
+    // The official app's seconds per player width, read off its own time text (3:31, 9:16, 13:54, 48:37).
+    expect(GestureMath.seekSecondsPerWidth(211), closeTo(82, 1));
+    expect(GestureMath.seekSecondsPerWidth(556), closeTo(131, 1));
+    expect(GestureMath.seekSecondsPerWidth(834), closeTo(170.5, 1));
+    expect(GestureMath.seekSecondsPerWidth(2917), closeTo(464, 4));
+    expect(GestureMath.seekSecondsPerWidth(0), 52.2);
+    expect(GestureMath.seekSecondsPerWidth(double.nan), 52.2);
   });
 
   test('axis locks after ten points', () {
@@ -21,10 +31,18 @@ void main() {
     expect(GestureMath.axis(dx: -8, dy: 8), GestureAxis.horizontal);
   });
 
-  test('seek is 90 seconds per width and clamped', () {
-    expect(GestureMath.seekTarget(start: 100, dx: 200, width: 400, duration: 600), 145);
+  test('seek moves by its share of the width and is clamped', () {
+    // 708 s: 52.2 + 100 = 152.2 s a width.
+    expect(GestureMath.seekTarget(start: 100, dx: 200, width: 400, duration: 708), closeTo(176.1, 1e-9));
+    expect(GestureMath.seekTarget(start: 100, dx: -100, width: 400, duration: 708), closeTo(61.95, 1e-9));
     expect(GestureMath.seekTarget(start: 10, dx: -400, width: 400, duration: 600), 0);
     expect(GestureMath.seekTarget(start: 590, dx: 400, width: 400, duration: 600), 600);
+  });
+
+  test('the same share of the width seeks the same in portrait and landscape', () {
+    final portrait = GestureMath.seekTarget(start: 0, dx: 220, width: 440, duration: 834);
+    final landscape = GestureMath.seekTarget(start: 0, dx: 478, width: 956, duration: 834);
+    expect(portrait, closeTo(landscape, 1e-9));
   });
 
   test('seek without a width or duration stays put', () {

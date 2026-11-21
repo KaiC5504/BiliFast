@@ -203,8 +203,9 @@ void main() {
       expect(rig.device.sets.where((set) => set.startsWith('volume')), isNotEmpty);
 
       final drag = await tester.startGesture(const Offset(400, 400));
-      await drag.moveBy(const Offset(30, 0));
-      await drag.moveBy(const Offset(200, 0));
+      await drag.moveBy(const Offset(30, 0), timeStamp: const Duration(milliseconds: 16));
+      await drag.moveBy(const Offset(100, 0), timeStamp: const Duration(milliseconds: 48));
+      await drag.moveBy(const Offset(200, 0), timeStamp: const Duration(milliseconds: 64));
       await tester.pump();
       expect(rig.chrome.hud.value, isA<SeekHud>());
       await drag.up();

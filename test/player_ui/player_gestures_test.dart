@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:bili_core/devlog.dart';
+import 'package:bili_core/logic.dart';
 import 'package:bilifast/app/swipe_back_route.dart';
 import 'package:bilifast/device/device_controls.dart';
 import 'package:bilifast/device/orientation.dart';
@@ -204,6 +205,11 @@ final class Rig {
 
 /// A thumb's speed: 1500 pt/s, as swipe back is tested.
 Duration thumb(double distance) => Duration(milliseconds: (distance / 1.5).round());
+
+/// Where a [thumb] drag of [distance] across the 800 pt player lands on the rig's 600 s video: claimed on its first
+/// 25 pt step, the seek counts from the third (20 ms on), so 75 pt of it move nothing.
+double thumbSeek(double distance, {double start = 0}) =>
+    start + (distance - 75 * distance.sign) / 800 * GestureMath.seekSecondsPerWidth(600);
 
 /// Lets the single tap's window run out.
 const _tapSettles = Duration(milliseconds: 300);
@@ -661,7 +667,7 @@ void main() {
     testWidgets('starting 40 pt in, the drag seeks and nothing goes back', (tester) async {
       await rig.mountVertical(tester);
       await tester.timedDragFrom(const Offset(40, 300), const Offset(300, 0), thumb(300));
-      expect(rig.calls.last, 'commitSeek 33.75');
+      expect(rig.calls.last, 'commitSeek ${thumbSeek(300)}');
       expect(rig.backs, 0);
     });
 
@@ -794,12 +800,12 @@ void main() {
   });
 
   group('seek', () {
-    testWidgets('a sideways drag at 1500 pt/s seeks 90 s per player width from where it started', (tester) async {
+    testWidgets('a sideways drag at 1500 pt/s seeks a share of the player width that grows with the video, from where it started', (tester) async {
       await rig.mountInline(tester);
       await rig.startAt(tester, 100);
       await tester.timedDragFrom(const Offset(600, 200), const Offset(-400, 0), thumb(400));
       expect(rig.callsStarting('scrub'), isNotEmpty);
-      expect(rig.calls.last, 'commitSeek 55.0');
+      expect(rig.calls.last, 'commitSeek ${thumbSeek(-400, start: 100)}');
       expect(rig.calls, isNot(contains('cancelScrub')));
       expect(rig.chrome.hud.value, isNull);
       expect(rig.chrome.visible, isTrue, reason: 'a seek is not a tap');
@@ -810,14 +816,17 @@ void main() {
       rig.session.duration.value = 30;
       await rig.mountInline(tester);
       final gesture = await tester.startGesture(const Offset(200, 200));
-      await gesture.moveBy(const Offset(80, 0));
-      await tester.pump();
-      expect(rig.calls.last, 'scrub 9.0');
-      expect(rig.chrome.hud.value, const SeekHud(target: 9, duration: 30));
+      // 20 pt a frame: claimed on the first step, the seek counts from the third (32 ms on), at 60 pt.
+      var stamp = await moveFrames(tester, gesture, const Offset(20, 0), 3);
+      expect(rig.calls.last, 'scrub 0.0');
+      stamp = await moveFrames(tester, gesture, const Offset(40, 0), 4, from: stamp);
+      final target = 160 / 800 * GestureMath.seekSecondsPerWidth(30);
+      expect(rig.calls.last, 'scrub $target');
+      expect(rig.chrome.hud.value, SeekHud(target: target, duration: 30));
       await tester.pump(const Duration(milliseconds: 300));
-      expect(find.text('00:09/00:30'), findsOneWidget);
+      expect(find.text('00:11/00:30'), findsOneWidget);
 
-      await gesture.moveBy(const Offset(500, 0));
+      await gesture.moveBy(const Offset(500, 0), timeStamp: stamp + _frame);
       await tester.pump();
       expect(rig.calls.last, 'scrub 30.0');
       await gesture.up();
@@ -835,11 +844,39 @@ void main() {
       expect(rig.calls, isEmpty);
       await gesture.moveBy(const Offset(3, 0));
       await tester.pump();
-      expect(rig.calls, hasLength(1));
-      expect(double.parse(rig.calls.single.split(' ').last), closeTo(12 / 800 * 90, 1e-9));
+      expect(rig.calls.single, 'scrub 0.0', reason: 'nothing counts until 20 ms after the claim');
       await gesture.up();
       await tester.pump(_tapSettles);
       expect(rig.chrome.visible, isTrue);
+    });
+
+    testWidgets('a flick lifted within 20 ms of the claim seeks nothing, as in the official app', (tester) async {
+      await rig.mountInline(tester);
+      final gesture = await tester.startGesture(const Offset(200, 200));
+      await moveFrames(tester, gesture, const Offset(20, 0), 2);
+      await gesture.up();
+      await tester.pump(_tapSettles);
+      expect(rig.calls.last, 'cancelScrub');
+      expect(rig.callsStarting('commitSeek'), isEmpty);
+      expect(rig.chrome.hud.value, isNull);
+    });
+
+    testWidgets('a slow drag loses only the stretch before the count; a fast one more', (tester) async {
+      await rig.mountInline(tester);
+      // 2 pt a frame (125 pt/s): claimed at 10 pt (80 ms), counting from the first step 20 ms on, at 14 pt.
+      var gesture = await tester.startGesture(const Offset(200, 200));
+      await moveFrames(tester, gesture, const Offset(2, 0), 57);
+      await gesture.up();
+      expect(rig.calls.last, 'commitSeek ${100 / 800 * GestureMath.seekSecondsPerWidth(600)}');
+      await tester.pump(_tapSettles);
+
+      // 25 pt a frame (1500 pt/s): claimed at 25 pt, counting from 75 pt.
+      rig.session.calls.clear();
+      gesture = await tester.startGesture(const Offset(200, 200));
+      await moveFrames(tester, gesture, const Offset(25, 0), 7);
+      await gesture.up();
+      expect(rig.calls.last, 'commitSeek ${100 / 800 * GestureMath.seekSecondsPerWidth(600)}');
+      await tester.pump(_tapSettles);
     });
 
     testWidgets('a short wobble is still a tap', (tester) async {
@@ -855,16 +892,15 @@ void main() {
     testWidgets('a finger resting mid-drag hints the target; a moving one does not', (tester) async {
       await rig.mountInline(tester);
       final gesture = await tester.startGesture(const Offset(200, 200));
-      for (var i = 0; i < 5; i++) {
-        await gesture.moveBy(const Offset(20, 0));
-        await tester.pump(const Duration(milliseconds: 16));
-      }
+      final stamp = await moveFrames(tester, gesture, const Offset(20, 0), 5);
       expect(rig.callsStarting('hint'), isEmpty);
-      await gesture.moveBy(const Offset(1, 0));
+      await gesture.moveBy(const Offset(1, 0), timeStamp: stamp + _frame);
       await tester.pump(const Duration(milliseconds: 160));
-      expect(rig.callsStarting('hint'), ['hint 11.3625']);
+      // Counted from the third step's 60 pt: 41 pt of the 800 pt player.
+      final target = 41 / 800 * GestureMath.seekSecondsPerWidth(600);
+      expect(rig.callsStarting('hint'), ['hint $target']);
       await gesture.up();
-      expect(rig.calls.last, 'commitSeek 11.3625');
+      expect(rig.calls.last, 'commitSeek $target');
     });
 
     testWidgets('a cancelled drag cancels the scrub', (tester) async {
@@ -978,7 +1014,7 @@ void main() {
     testWidgets('a horizontal drag still seeks', (tester) async {
       await rig.mountInline(tester);
       await tester.timedDragFrom(const Offset(200, 300), const Offset(300, 0), thumb(300));
-      expect(rig.calls.last, 'commitSeek 33.75');
+      expect(rig.calls.last, 'commitSeek ${thumbSeek(300)}');
       expect(rig.device.sets, isEmpty);
       expect(rig.device.views, isEmpty);
     });
@@ -1018,7 +1054,7 @@ void main() {
     testWidgets('without a back swipe to leave room for, a drag from the left edge seeks', (tester) async {
       await rig.mountInline(tester);
       await tester.timedDragFrom(const Offset(5, 200), const Offset(300, 0), thumb(300));
-      expect(rig.calls.last, 'commitSeek 33.75');
+      expect(rig.calls.last, 'commitSeek ${thumbSeek(300)}');
       expect(rig.backs, 0, reason: "竖屏's edge swipe only");
     });
   });
@@ -1086,7 +1122,7 @@ void main() {
       await tester.timedDragFrom(const Offset(200, 200), const Offset(300, 0), thumb(300));
       await tester.pumpAndSettle();
       expect(find.text('简介'), findsOneWidget);
-      expect(rig.calls.last, 'commitSeek 33.75');
+      expect(rig.calls.last, 'commitSeek ${thumbSeek(300)}');
     });
 
     testWidgets('just past the back swipe strip, the player seeks', (tester) async {
@@ -1094,7 +1130,7 @@ void main() {
       await tester.timedDragFrom(const Offset(24, 200), const Offset(300, 0), thumb(300));
       await tester.pumpAndSettle();
       expect(find.text('简介'), findsOneWidget);
-      expect(rig.calls.last, 'commitSeek 33.75');
+      expect(rig.calls.last, 'commitSeek ${thumbSeek(300)}');
     });
   });
 
@@ -1161,7 +1197,7 @@ void main() {
     testWidgets('sideways still seeks in full screen', (tester) async {
       await rig.mountFullScreen(tester);
       await tester.timedDragFrom(const Offset(200, 300), const Offset(400, 0), thumb(400));
-      expect(rig.calls.last, 'commitSeek 45.0');
+      expect(rig.calls.last, 'commitSeek ${thumbSeek(400)}');
       expect(rig.device.sets, isEmpty);
     });
 
@@ -1187,7 +1223,7 @@ void main() {
       }
 
       await tester.timedDragFrom(const Offset(30, 300), const Offset(300, 0), thumb(300));
-      expect(rig.calls.last, 'commitSeek 33.75');
+      expect(rig.calls.last, 'commitSeek ${thumbSeek(300)}');
     });
 
     testWidgets('the hardware volume buttons show the level for a second', (tester) async {

@@ -1,0 +1,20 @@
+name: PhoneDrive
+options:
+  deploymentTarget:
+    iOS: "26.0"
+targets:
+  PhoneDrive:
+    type: bundle.ui-testing
+    platform: iOS
+    sources: [DriveTests]
+    settings:
+      PRODUCT_BUNDLE_IDENTIFIER: com.kaichuan.phonedrive.tests
+      GENERATE_INFOPLIST_FILE: YES
+      SWIFT_VERSION: "5.0"
+schemes:
+  PhoneDrive:
+    build:
+      targets:
+        PhoneDrive: [test]
+    test:
+      targets: [PhoneDrive]

@@ -57,6 +57,9 @@ class _Seek {
   double target;
   double? anchor;
   Timer? rest;
+
+  /// The travel the seek counts from, taken [GestureMath.seekCountsAfter] into the drag; null before then.
+  double? fromDx;
 }
 
 class _Level {
@@ -407,15 +410,14 @@ class _PlayerGestureLayerState extends State<PlayerGestureLayer> {
     );
   }
 
-  void _dragUpdate(Offset delta, Offset local) {
+  void _dragUpdate(Offset delta, Offset local, Duration sinceStart) {
     if (_seek case final seek?) {
+      if (seek.fromDx == null && sinceStart >= GestureMath.seekCountsAfter) seek.fromDx = delta.dx;
       final duration = _ui.session.duration.value;
-      final target = seek.target = GestureMath.seekTarget(
-        start: seek.start,
-        dx: delta.dx,
-        width: seek.width,
-        duration: duration,
-      );
+      final from = seek.fromDx;
+      final target = seek.target = from == null
+          ? seek.start
+          : GestureMath.seekTarget(start: seek.start, dx: delta.dx - from, width: seek.width, duration: duration);
       _ui.session.scrub(target);
       _ui.chrome.showHud(SeekHud(target: target, duration: duration));
       _followRest(seek, local.dx);
@@ -441,13 +443,19 @@ class _PlayerGestureLayerState extends State<PlayerGestureLayer> {
     }
     _seek = null;
     seek.rest?.cancel();
+    _clearHud<SeekHud>(_ui.chrome);
+    final from = seek.fromDx;
+    // A flick lifted before the seek began counting moved nothing.
+    if (from == null) {
+      _ui.session.cancelScrub();
+      return;
+    }
     final target = GestureMath.seekTarget(
       start: seek.start,
-      dx: delta.dx,
+      dx: delta.dx - from,
       width: seek.width,
       duration: _ui.session.duration.value,
     );
-    _clearHud<SeekHud>(_ui.chrome);
     unawaited(_ui.session.commitSeek(target));
   }
 
@@ -634,8 +642,8 @@ class _DragRecognizer extends OneSequenceGestureRecognizer {
   bool Function(PointerDownEvent event) allow = _anyTouch;
   void Function(GestureAxis axis, Offset localDown)? onStart;
 
-  /// The travel since the finger landed, and where it is.
-  void Function(Offset delta, Offset local)? onUpdate;
+  /// The travel since the finger landed, where it is, and how long since the drag was claimed (by the events' stamps).
+  void Function(Offset delta, Offset local, Duration sinceStart)? onUpdate;
 
   /// The travel, and the finger's speed at the lift in points a second.
   void Function(Offset delta, Offset velocity)? onEnd;
@@ -644,6 +652,8 @@ class _DragRecognizer extends OneSequenceGestureRecognizer {
   int? _pointer;
   Offset _down = Offset.zero;
   Offset _local = Offset.zero;
+  Duration _stamp = Duration.zero;
+  Duration _startStamp = Duration.zero;
   GestureAxis? _axis;
   VelocityTracker? _tracker;
 
@@ -663,6 +673,7 @@ class _DragRecognizer extends OneSequenceGestureRecognizer {
     _pointer = event.pointer;
     _down = event.localPosition;
     _local = event.localPosition;
+    _stamp = event.timeStamp;
     _tracker = VelocityTracker.withKind(event.kind)..addPosition(event.timeStamp, event.localPosition);
   }
 
@@ -673,9 +684,10 @@ class _DragRecognizer extends OneSequenceGestureRecognizer {
     switch (event) {
       case PointerMoveEvent():
         _local = event.localPosition;
+        _stamp = event.timeStamp;
         if (!event.synthesized) _tracker?.addPosition(event.timeStamp, event.localPosition);
         if (_started) {
-          onUpdate?.call(_local - _down, _local);
+          onUpdate?.call(_local - _down, _local, _stamp - _startStamp);
           return;
         }
         final delta = _local - _down;
@@ -718,8 +730,9 @@ class _DragRecognizer extends OneSequenceGestureRecognizer {
 
   void _start() {
     _started = true;
+    _startStamp = _stamp;
     onStart?.call(_axis!, _down);
-    onUpdate?.call(_local - _down, _local);
+    onUpdate?.call(_local - _down, _local, Duration.zero);
   }
 
   @override

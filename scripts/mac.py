@@ -5,6 +5,8 @@
     python scripts/mac.py sim [--pad] [--wait 8] [--name shot]
                                                     # build HEAD for the simulator, launch it, screenshot
     python scripts/mac.py stop                      # shut the simulators down
+    python scripts/mac.py drive Measure/testDrags [--env VIDEOS=BV1bXsh6vE1m --env MODES=portrait]
+                                                    # run a tools/phone_drive UI test on the iPhone
 
 Everything runs headless: nothing opens on the Mac's screen. HEAD is pushed to the Mac's own repo
 (the `mac` remote), never through GitHub, so uncommitted changes are left out.
@@ -16,6 +18,11 @@ with FAKE_ACCOUNT and MUTE: no account traffic and no sound from the Mac's speak
 Everything signing needs stays on the Mac, outside the repo: the shared values in `~/.mac-dev/signing/signing.env`,
 the app's development profile in `~/.mac-dev/bilifast/profiles/`. The signing keychain is off the search list, so
 the app is built unsigned and signed afterwards with that keychain named.
+
+`drive` builds tools/phone_drive (XcodeGen, a UI-test bundle with no app of its own) and runs one of its tests on the
+iPhone, which drives the official app (or ours) with exact touches; its runner has its own development profile in
+`~/.mac-dev/bilifast/drive-profiles/`. The phone must be unlocked and left alone for the run. Each `--env K=V` reaches
+the test as DRIVE_K. The run's result bundle is deleted afterwards: only the printed `drive:` lines are kept.
 """
 
 from __future__ import annotations
@@ -120,6 +127,53 @@ fi
 echo "ran on $name"
 """
 
+DRIVE = r"""
+shopt -s nullglob
+WORK=$HERE/drive
+mkdir -p "$WORK"
+rm -rf "$WORK/DriveTests"
+cp -R tools/phone_drive/project.yml tools/phone_drive/DriveTests "$WORK/"
+cd "$WORK"
+~/.mac-dev/tools/xcodegen-2.46.0/bin/xcodegen generate --quiet > /dev/null
+rm -rf dd/Build/Products
+nice -n 10 xcodebuild build-for-testing -project PhoneDrive.xcodeproj -scheme PhoneDrive -destination generic/platform=iOS \
+  -derivedDataPath dd CODE_SIGNING_ALLOWED=NO DEVELOPMENT_TEAM= > build.log 2>&1 \
+  || { grep -E " error:" build.log | head; echo "build failed: $WORK/build.log on the Mac"; exit 1; }
+runner=dd/Build/Products/Debug-iphoneos/PhoneDrive-Runner.app
+profile=$(ls "$HERE"/drive-profiles/*.mobileprovision | head -1)
+rm -rf "$runner"/PlugIns/*.dSYM
+# Xcode names the runner <test bundle>.xctrunner; the profile is for the plain id.
+plutil -replace CFBundleIdentifier -string com.kaichuan.phonedrive "$runner/Info.plist"
+cp "$profile" "$runner/embedded.mobileprovision"
+security cms -D -i "$profile" > profile.plist
+plutil -extract Entitlements xml1 -o entitlements.plist profile.plist
+rm profile.plist
+security unlock-keychain -p "$(cat ~/.mac-dev/signing/keychain.pw)" "$KEYCHAIN"
+sign() { codesign --force --timestamp=none --keychain "$KEYCHAIN" --sign "$SIGN_SHA1" "$@" >> sign.log 2>&1; }
+: > sign.log
+for item in "$runner"/PlugIns/*.xctest/Frameworks/* "$runner"/PlugIns/*.xctest "$runner"/Frameworks/*; do
+  sign "$item" || { tail -5 sign.log; exit 1; }
+done
+sign --entitlements entitlements.plist "$runner" || { tail -5 sign.log; exit 1; }
+codesign --verify --strict --deep "$runner" >> sign.log 2>&1 || { tail -5 sign.log; exit 1; }
+echo "signed"
+xctestrun=$(ls dd/Build/Products/*.xctestrun | head -1)
+sed -i "" "s/com.kaichuan.phonedrive.tests.xctrunner/com.kaichuan.phonedrive/" "$xctestrun"
+rm -rf runs out
+{env}
+if timeout 2400 xcodebuild test-without-building -xctestrun "$xctestrun" -destination "id=$PHONE_UDID" \
+    -only-testing:"PhoneDrive/{test}" -resultBundlePath runs/last.xcresult > test.log 2>&1; then
+  result="passed"
+else
+  result="failed"
+fi
+grep -E "drive:" test.log || true
+grep -E " error:|Restarting after" test.log | head -5 || true
+# The result bundle can hold screenshots of the phone; nothing of it is kept.
+rm -rf runs
+echo "test $result"
+"""
+
 STOP = r"""
 xcrun simctl shutdown all
 echo "simulators shut down"
@@ -151,6 +205,9 @@ def main() -> None:
     sim.add_argument("--name", default="launch", help="the screenshot's file name, without .png")
     sim.add_argument("--dark", action="store_true", help="深色模式 for the run, as the PC's --dark")
     commands.add_parser("stop")
+    drive = commands.add_parser("drive")
+    drive.add_argument("test", help="Class/testMethod in tools/phone_drive, e.g. Measure/testDrags")
+    drive.add_argument("--env", action="append", default=[], metavar="K=V", help="reaches the test as DRIVE_K")
     args = parser.parse_args()
 
     if args.command == "stop":
@@ -159,6 +216,18 @@ def main() -> None:
     push_head()
     if args.command == "phone":
         on_mac(PREPARE + PHONE)
+        return
+    if args.command == "drive":
+        exports = []
+        for pair in args.env:
+            key, _, value = pair.partition("=")
+            if not key.isidentifier() or not all(c.isalnum() or c in ",._:-/" for c in value):
+                parser.error(f"--env {pair!r}: K=V with a plain name and value")
+            # xcodebuild hands TEST_RUNNER_-prefixed variables to the test, without the prefix.
+            exports.append(f"export TEST_RUNNER_DRIVE_{key}={value}")
+        if not all(c.isalnum() or c in "/_" for c in args.test):
+            parser.error("test: Class/testMethod")
+        on_mac(PREPARE + DRIVE.replace("{env}", "\n".join(exports)).replace("{test}", args.test))
         return
     name, device_type = SIMULATORS["pad" if args.pad else "phone"]
     on_mac(PREPARE + SIM.format(
