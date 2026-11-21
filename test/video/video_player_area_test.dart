@@ -25,6 +25,7 @@ import 'package:bilifast/shared/theme.dart';
 import 'package:bilifast/video/fake_page_api.dart';
 import 'package:bilifast/video/story/story_drag.dart';
 import 'package:bilifast/video/story/story_pager.dart';
+import 'package:bilifast/video/story/story_sheet.dart';
 import 'package:bilifast/video/video_player_area.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -81,6 +82,7 @@ void main() {
     StoryPager? storyPager,
     bool? moveTargets,
     VoidCallback? onRetry,
+    ValueListenable<Rect?>? room,
   }) async {
     tester.view.physicalSize = size;
     tester.view.devicePixelRatio = 1;
@@ -103,6 +105,7 @@ void main() {
           slide: slide,
           storyPager: storyPager,
           moveTargets: moveTargets,
+          room: room,
         ),
       ),
     );
@@ -1103,6 +1106,123 @@ void main() {
       expect(find.byKey(const ValueKey('video-failure-swipe')), findsNothing, reason: 'only in 竖屏');
     });
   });
+
+  group("竖屏's 简介/评论 sheet (264, 268, 269)", () {
+    late _HeldSheet sheet;
+    late ValueNotifier<Rect?> room;
+
+    setUp(() {
+      sheet = _HeldSheet();
+      room = ValueNotifier(null);
+      addTearDown(() {
+        sheet.dispose();
+        room.dispose();
+      });
+      ui = PlayerUi(
+        session: session,
+        chrome: ui.chrome,
+        panels: ui.panels,
+        orientation: ui.orientation,
+        device: NoDeviceControls(),
+        onBack: () {},
+        storySheet: sheet,
+      );
+    });
+
+    double chromeOpacity(WidgetTester tester) => tester
+        .widget<Opacity>(find.ancestor(of: find.byType(VerticalChrome), matching: find.byType(Opacity)).first)
+        .opacity;
+    bool chromeTouchable(WidgetTester tester) => !tester
+        .widgetList<IgnorePointer>(find.ancestor(of: find.byType(VerticalChrome), matching: find.byType(IgnorePointer)))
+        .any((widget) => widget.ignoring);
+    bool danmakuShown(WidgetTester tester) => tester
+        .widget<Visibility>(find.ancestor(of: find.byType(DanmakuLayer), matching: find.byType(Visibility)).first)
+        .visible;
+
+    Future<void> move(WidgetTester tester, double position, Rect? box, {SheetStop stop = SheetStop.half}) async {
+      sheet
+        ..resting = stop
+        ..at.value = position;
+      room.value = box;
+      await tester.pump();
+    }
+
+    testWidgets('the controls fade out as it rises, gone by the token, and come back as it closes', (tester) async {
+      await show(tester, Presentation.vertical, room: room);
+      expect(chromeOpacity(tester), 1);
+      expect(chromeTouchable(tester), isTrue);
+
+      await move(tester, 0.2, const Rect.fromLTRB(0, 54, 440, 828));
+      expect(chromeOpacity(tester), closeTo(1 - 0.2 / StorySheetRoomTheme.chromeGone, 1e-9));
+      expect(chromeTouchable(tester), isFalse, reason: 'from the first frame up');
+      await move(tester, StorySheetRoomTheme.chromeGone, const Rect.fromLTRB(0, 54, 440, 600));
+      expect(chromeOpacity(tester), 0);
+      await move(tester, 1, const Rect.fromLTRB(0, 54, 440, 946 / 3));
+      expect(chromeOpacity(tester), 0, reason: '268: gone at half');
+
+      await move(tester, 0.1, const Rect.fromLTRB(0, 54, 440, 872), stop: SheetStop.closed);
+      expect(chromeOpacity(tester), closeTo(1 - 0.1 / StorySheetRoomTheme.chromeGone, 1e-9));
+      await move(tester, 0, null, stop: SheetStop.closed);
+      expect(chromeOpacity(tester), 1);
+      expect(chromeTouchable(tester), isTrue);
+    });
+
+    testWidgets('the video takes the room each frame; its danmaku fly over all of it at rest and are away meanwhile', (
+      tester,
+    ) async {
+      session.videoShape = (width: 1920, height: 1080);
+      await show(tester, Presentation.vertical, room: room);
+      expect(danmakuShown(tester), isTrue);
+
+      const rising = Rect.fromLTRB(0, 273.5, 440, 521);
+      await move(tester, 0.5, rising);
+      expect(videoRect(tester), rising);
+      expect(danmakuShown(tester), isFalse, reason: 'laid out afresh each frame they would start over');
+
+      const half = Rect.fromLTRB(0, 946 / 3 - 247.5, 440, 946 / 3);
+      await move(tester, 1, half);
+      expect(videoRect(tester), half);
+      expect(danmakuShown(tester), isTrue);
+      expect(tester.getRect(find.byType(DanmakuLayer)), half, reason: "269: from the picture's top, no 竖屏 insets");
+
+      await move(tester, 1.4, const Rect.fromLTRB(0, 54, 440, 200), stop: SheetStop.half);
+      expect(danmakuShown(tester), isFalse, reason: 'dragged toward full');
+      await move(tester, 0, null, stop: SheetStop.closed);
+      expect(videoRect(tester), const Rect.fromLTWH(0, 0, 440, 956 * BiliMetrics.verticalVideoCentre * 2));
+      expect(danmakuShown(tester), isTrue);
+    });
+
+    testWidgets('a slide still goes before the room', (tester) async {
+      final slide = ValueNotifier<Rect?>(const Rect.fromLTWH(0, 100, 440, 200));
+      addTearDown(slide.dispose);
+      await show(tester, Presentation.vertical, room: room, slide: slide);
+      await move(tester, 1, const Rect.fromLTRB(0, 54, 440, 946 / 3));
+      expect(videoRect(tester), slide.value);
+    });
+  });
+}
+
+/// 竖屏's sheet held where the test puts it.
+class _HeldSheet extends StorySheetController {
+  _HeldSheet() : super(vsync: const TestVSync());
+
+  final at = ValueNotifier<double>(0);
+  SheetStop resting = SheetStop.closed;
+
+  @override
+  ValueListenable<double> get position => at;
+
+  @override
+  SheetStop get stop => resting;
+
+  @override
+  bool get isOpen => resting != SheetStop.closed || at.value > 0;
+
+  @override
+  void dispose() {
+    at.dispose();
+    super.dispose();
+  }
 }
 
 /// A feed counting the moves past its end.
