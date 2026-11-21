@@ -89,6 +89,7 @@ Glyphs of the app's icon font (`composeResources/.../font/iconfont.ttf`), drawn 
 | `images/message/chat_keyboard.png`, `chat_link.png` | `keyboard-line@500`, `chain-link-line@500` |
 | `images/message/chat_emote_search.png`, `chat_emote_recent.png` | `magnifier-search-line@500`, `clock-history-line@500` |
 | `images/message/chat_emote_star.png` | `star-favorite-fill@500` |
+| `images/player/story_sheet_expand.png`, `story_sheet_collapse.png` | `arrow-expand-vertical-double-line@700`, `arrow-collapse-vertical-double-line@700` |
 
 直播's art (`images/live/`), from the same APK: bitmaps taken unchanged, vectors and icon-font glyphs drawn white as
 PNGs by `tools/apk_asset.py` and cut to their ink:
