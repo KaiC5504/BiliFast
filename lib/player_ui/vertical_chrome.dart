@@ -642,18 +642,19 @@ class _Block extends StatelessWidget {
       ],
     );
     final room = this.room;
-    if (room == null) return column;
+    // Always a Stack, so turning 清屏 on and off keeps the column's state and its fades.
     return Stack(
       clipBehavior: Clip.none,
       children: [
         column,
-        Positioned(
-          left: 0,
-          right: 0,
-          bottom: _barRows + BiliMetrics.chromeButton + VerticalCleanTheme.rowAboveBar - BiliMetrics.chromeButton / 2,
-          height: BiliMetrics.chromeButton,
-          child: room,
-        ),
+        if (room != null)
+          Positioned(
+            left: 0,
+            right: 0,
+            bottom: _barRows + BiliMetrics.chromeButton + VerticalCleanTheme.rowAboveBar - BiliMetrics.chromeButton / 2,
+            height: BiliMetrics.chromeButton,
+            child: room,
+          ),
       ],
     );
   }

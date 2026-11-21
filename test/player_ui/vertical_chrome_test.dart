@@ -1345,6 +1345,27 @@ void main() {
       await tester.tap(find.byKey(const ValueKey('vertical-title')), warnIfMissed: false);
       expect(rig.introSheets, 0);
     });
+
+    testWidgets('清屏 fades the title out and back in, as it does the top bar', (tester) async {
+      // The fade's value as drawn this frame, not its target.
+      double fading() => tester
+          .widgetList<FadeTransition>(
+            find.ancestor(of: find.byKey(const ValueKey('vertical-title')), matching: find.byType(FadeTransition)),
+          )
+          .fold(1.0, (opacity, fade) => opacity * fade.opacity.value);
+      final rig = storyRig();
+      await rig.mount(tester);
+      await tester.pumpAndSettle();
+      rig.clean!.value = true;
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 60));
+      expect(fading(), inExclusiveRange(0, 1));
+      await tester.pumpAndSettle();
+      rig.clean!.value = false;
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 60));
+      expect(fading(), inExclusiveRange(0, 1));
+    });
   });
 
   group('a page opened from the sheet\'s 相关视频 (270)', () {
