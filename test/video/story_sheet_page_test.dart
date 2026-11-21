@@ -2,7 +2,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:bili_core/api.dart'
-    show Comment, CommentMember, TextRun, VideoCard, VideoDetail, VideoOwner, VideoStat;
+    show Comment, CommentMember, CommentPicture, PlaySource, TextRun, VideoCard, VideoDetail, VideoOwner, VideoStat;
 import 'package:bili_core/devlog.dart';
 import 'package:bili_core/shared.dart' show ManualClock;
 import 'package:bilifast/account/keychain_store.dart';
@@ -11,7 +11,9 @@ import 'package:bilifast/app/app_environment.dart';
 import 'package:bilifast/app/app_scope.dart';
 import 'package:bilifast/app/route_observer.dart';
 import 'package:bilifast/app/swipe_back_route.dart';
+import 'package:bilifast/comments/comment_overlays.dart';
 import 'package:bilifast/comments/composer.dart';
+import 'package:bilifast/comments/picture_viewer.dart';
 import 'package:bilifast/comments/thread_view.dart';
 import 'package:bilifast/danmaku/danmaku_layer.dart';
 import 'package:bilifast/device/device_controls.dart';
@@ -24,6 +26,11 @@ import 'package:bilifast/player_ui/panels/panel_layer.dart';
 import 'package:bilifast/player_ui/player_ui.dart';
 import 'package:bilifast/player_ui/vertical_chrome.dart';
 import 'package:bilifast/shared/theme.dart';
+import 'package:bilifast/space/fake_space_api.dart';
+import 'package:bilifast/space/space_api.dart';
+import 'package:bilifast/space/space_page.dart';
+import 'package:bilifast/space/space_route.dart';
+import 'package:bilifast/space/uploader_tap.dart' show UploaderRef;
 import 'package:bilifast/video/fake_page_api.dart';
 import 'package:bilifast/video/page_details.dart';
 import 'package:bilifast/video/page_playback.dart';
@@ -38,6 +45,7 @@ import 'package:bilifast/video/video_page.dart';
 import 'package:bilifast/video/video_player_area.dart';
 import 'package:bilifast/video/video_route.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import '../app/fake_keychain.dart';
@@ -157,6 +165,7 @@ void main() {
     ThemeData? theme,
     Widget Function(Widget app)? wrap,
     bool phone = false,
+    SpaceApi? spaceApi,
   }) async {
     if (!phone) {
       screen(tester, _portrait, _portraitInsets);
@@ -191,6 +200,7 @@ void main() {
       recents: await RecentStore.load(null, logger: logger),
       device: PlayerDevice(orientation: orientation, controls: NoDeviceControls()),
       pageApi: api,
+      spaceApi: spaceApi,
       loginGate: _Gate(),
     );
     nav = services.navigator;
@@ -223,9 +233,11 @@ void main() {
     ThemeData? theme,
     Widget Function(Widget app)? wrap,
     bool phone = false,
+    PlaySource source = PlaySource.unknown,
+    SpaceApi? spaceApi,
   }) async {
-    await host(tester, theme: theme, wrap: wrap, phone: phone);
-    const route = VideoRoute(bvid: _bv, cid: _p1, start: 0);
+    await host(tester, theme: theme, wrap: wrap, phone: phone, spaceApi: spaceApi);
+    final route = VideoRoute(bvid: _bv, cid: _p1, start: 0, source: source);
     unawaited(nav.currentState!.push(SwipeBackPageRoute<void>(builder: (_) => page(route))));
     await frames(tester, 20);
     sessions.single
@@ -506,6 +518,41 @@ void main() {
       expect(find.byType(VideoPage), findsNothing);
     });
 
+    testWidgets("the picture viewer opened from its 评论 goes with it: neither a turn to landscape and back nor 详情页 "
+        'finds it still up', (tester) async {
+      const pictures = [CommentPicture(url: '', width: 1080, height: 1920)];
+      await vertical(tester, shape: _wide269);
+      ui(tester).onComments!();
+      await frames(tester, 20);
+      final overlays = tester.widget<CommentOverlays>(find.byType(CommentOverlays)).controller;
+      overlays.viewPictures(pictures, 0);
+      await frames(tester);
+      expect(find.byType(PictureViewer), findsOneWidget);
+
+      screen(tester, _landscape, _landscapeInsets);
+      orientation.enterLandscape();
+      await frames(tester, 10);
+      expect(overlays.value, isNull, reason: 'the sheet closed for the turn, and the viewer with it');
+      screen(tester, _portrait, _portraitInsets);
+      orientation.enterVertical();
+      await frames(tester, 10);
+      await back(tester);
+      expect(orientation.presentation, Presentation.inline);
+      expect(find.byType(PictureViewer), findsNothing, reason: '详情页 bare');
+
+      orientation.enterVertical();
+      await frames(tester);
+      ui(tester).onComments!();
+      await frames(tester, 20);
+      overlays.viewPictures(pictures, 0);
+      await frames(tester);
+      orientation.exitToInline();
+      await frames(tester);
+      expect(overlays.value, isNull);
+      expect(find.byType(PictureViewer), findsNothing);
+      await back(tester);
+    });
+
     testWidgets("the left edge's swipe is back too, over the sheet and above it", (tester) async {
       await vertical(tester);
       ui(tester).onComments!();
@@ -596,6 +643,156 @@ void main() {
       await back(tester);
     });
 
+    testWidgets("back from its page, the old video's 竖屏 has its feed and its loop: a swipe moves on", (tester) async {
+      await vertical(tester, related: related);
+      final feed = feeds.single.feed;
+      final under = sessions.single;
+      expect(under.loopsAtEnd, isTrue);
+      ui(tester).onIntroSheet!();
+      await frames(tester);
+      tester.widget<StoryIntro>(find.byType(StoryIntro)).onOpenRelated(2);
+      await frames(tester, 20);
+      expect(ui(tester).story!.value, same(feeds.last.feed));
+      expect(sessions.last.loopsAtEnd, isTrue, reason: "its own first claim keeps 竖屏's loop");
+
+      ui(tester).onBack();
+      await frames(tester, 20);
+      expect(find.byType(VideoPage, skipOffstage: false), findsOneWidget);
+      expect(ui(tester).story!.value, same(feed), reason: 'the old feed is still up');
+      expect(feed.disposed, isFalse);
+      expect(under.loopsAtEnd, isTrue, reason: 'the video loops, no end screen over 竖屏');
+      await tester.timedDragFrom(const Offset(250, 650), const Offset(0, -300), const Duration(milliseconds: 150));
+      await frames(tester, 6);
+      expect(feed.moves, [1]);
+      orientation.exitToInline();
+      await frames(tester);
+      await back(tester);
+    });
+
+    testWidgets('‹ slides its page out still in 竖屏, as does a page a link in the sheet puts in its place', (
+      tester,
+    ) async {
+      Finder areaOf(String bvid) => find.descendant(
+        of: find.byWidgetPredicate((widget) => widget is VideoPage && widget.route.bvid == bvid),
+        matching: find.byType(VideoPlayerArea),
+      );
+      await vertical(tester, related: related);
+      ui(tester).onIntroSheet!();
+      await frames(tester);
+      tester.widget<StoryIntro>(find.byType(StoryIntro)).onOpenRelated(1);
+      await frames(tester, 20);
+      ui(tester).onBack();
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
+      expect(find.byType(VideoPage), findsNWidgets(2), reason: 'mid-slide');
+      expect(tester.widget<VideoPlayerArea>(areaOf(related[1].bvid)).presentation, Presentation.vertical);
+      expect(find.byType(PageTabRow), findsNothing, reason: 'no small player page slides out');
+      await frames(tester, 20);
+      expect(find.byType(VideoPage), findsOneWidget);
+
+      ui(tester).onIntroSheet!();
+      await frames(tester);
+      tester.widget<StoryIntro>(find.byType(StoryIntro)).onOpenVideo('BV1xx411c7mD');
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
+      expect(find.byType(VideoPage), findsNWidgets(2), reason: 'the new page slides in over it');
+      expect(tester.widget<VideoPlayerArea>(areaOf(_bv)).presentation, Presentation.vertical);
+      await frames(tester, 20);
+      expect(find.byType(VideoPage, skipOffstage: false), findsOneWidget, reason: 'replaced, not stacked');
+      await back(tester);
+    });
+
+    testWidgets("its page's reports name where this page's 竖屏 was entered from, without that video's track data", (
+      tester,
+    ) async {
+      const entered = PlaySource(fromSpmid: 'tm.recommend.0.0', from: '7', trackId: 'TRACK', flowData: '{"f":1}');
+      await vertical(tester, related: related, source: entered);
+      ui(tester).onIntroSheet!();
+      await frames(tester);
+      tester.widget<StoryIntro>(find.byType(StoryIntro)).onOpenRelated(3);
+      await frames(tester, 20);
+      final source = pushed.single.source;
+      expect((source.fromSpmid, source.from), ('tm.recommend.0.0', '7'));
+      expect((source.trackId, source.flowData), (null, null));
+
+      // And on from there: its own related page names the same place.
+      sessions.last
+        ..video = controller.video
+        ..videoShape = _upright264
+        ..detail = _detail(related[3].bvid)
+        ..related = related
+        ..changed();
+      await frames(tester, 4);
+      ui(tester).onIntroSheet!();
+      await frames(tester);
+      tester.widget<StoryIntro>(find.byType(StoryIntro).last).onOpenRelated(0);
+      await frames(tester, 20);
+      expect(pushed, hasLength(2));
+      expect((pushed.last.source.fromSpmid, pushed.last.source.trackId), ('tm.recommend.0.0', null));
+      nav.currentState!.pop();
+      await frames(tester, 20);
+      nav.currentState!.pop();
+      await frames(tester, 20);
+      orientation.exitToInline();
+      await frames(tester);
+      await back(tester);
+    });
+
+    testWidgets('a second tap before its page is up stacks no other', (tester) async {
+      await vertical(tester, related: related);
+      ui(tester).onIntroSheet!();
+      await frames(tester);
+      final intro = tester.widget<StoryIntro>(find.byType(StoryIntro));
+      intro
+        ..onOpenRelated(1)
+        ..onOpenRelated(2);
+      await tester.pump();
+      intro.onOpenRelated(3);
+      await frames(tester, 20);
+      expect(pushed.map((route) => route.bvid), [related[1].bvid]);
+      expect(find.byType(VideoPage, skipOffstage: false), findsNWidgets(2));
+      nav.currentState!.pop();
+      await frames(tester, 20);
+      orientation.exitToInline();
+      await frames(tester);
+      await back(tester);
+    });
+
+    testWidgets('brought back by the small window, its page is one again: 竖屏 on the related list, ‹ pops it', (
+      tester,
+    ) async {
+      await vertical(tester, related: related);
+      ui(tester).onIntroSheet!();
+      await frames(tester);
+      tester.widget<StoryIntro>(find.byType(StoryIntro)).onOpenRelated(4);
+      await frames(tester, 20);
+      final small = player;
+      small.emit(const PictureInPictureChanged(true));
+      await tester.pump();
+      ui(tester).onBack();
+      await frames(tester, 20);
+      expect(find.byType(VideoPage, skipOffstage: false), findsOneWidget);
+      expect(services.pipKeeper.kept, isNotNull, reason: 'the small window keeps it');
+
+      small.emit(const PictureInPictureRestore());
+      await frames(tester, 20);
+      final pages = tester.widgetList<VideoPage>(find.byType(VideoPage, skipOffstage: false)).toList();
+      expect(pages, hasLength(2));
+      expect(pages.last.route.relatedStory?.index, 4);
+      expect(orientation.presentation, Presentation.vertical);
+      expect(feeds.last.related?.index, 4, reason: 'its feed is the related list again');
+      expect(ui(tester).story!.value, same(feeds.last.feed));
+
+      small.emit(const PictureInPictureChanged(false));
+      await tester.pump();
+      ui(tester).onBack();
+      await frames(tester, 20);
+      expect(find.byType(VideoPage, skipOffstage: false), findsOneWidget, reason: '‹ popped it');
+      orientation.exitToInline();
+      await frames(tester);
+      await back(tester);
+    });
+
     testWidgets('its 详情页 keeps its own small player', (tester) async {
       await vertical(tester, related: related);
       ui(tester).onIntroSheet!();
@@ -610,6 +807,49 @@ void main() {
       expect(find.byType(VideoPage, skipOffstage: false), findsOneWidget);
       orientation.exitToInline();
       await frames(tester);
+      await back(tester);
+    });
+  });
+
+  group('a page pushed over it', () {
+    testWidgets("a commenter's space from its 评论: back in 竖屏 with the feed and the sheet as they were, the space "
+        'with bars of its own; pushed with the sheet down, the page comes back as before', (tester) async {
+      final calls = <MethodCall>[];
+      tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(SystemChannels.platform, (call) async {
+        if (call.method.startsWith('SystemChrome.setEnabledSystemUI')) calls.add(call);
+        return null;
+      });
+      addTearDown(() => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(SystemChannels.platform, null));
+      await vertical(tester, spaceApi: FakeSpaceApi());
+      final feed = feeds.single.feed;
+      ui(tester).onComments!();
+      await frames(tester, 20);
+      final inSheet = find.descendant(of: find.byType(StorySheetView), matching: find.byKey(const ValueKey(100)));
+      await tester.tap(find.descendant(of: inSheet, matching: find.byKey(const ValueKey('comment-avatar'))));
+      await frames(tester, 20);
+      expect(find.byType(SpacePage), findsOneWidget);
+      expect(calls.last.method, 'SystemChrome.setEnabledSystemUIMode');
+      expect(calls.last.arguments, 'SystemUiMode.edgeToEdge', reason: "the space's home indicator stays");
+
+      nav.currentState!.pop();
+      await frames(tester, 20);
+      expect(orientation.presentation, Presentation.vertical);
+      expect(ui(tester).story!.value, same(feed));
+      expect(feed.disposed, isFalse);
+      expect(sessions.single.loopsAtEnd, isTrue);
+      expect(sheet(tester).stop, SheetStop.half);
+      expect(sheet(tester).tab, PageTab.comments);
+      expect(find.byType(StorySheetView), findsOneWidget);
+      expect(calls.last.method, 'SystemChrome.setEnabledSystemUIOverlays');
+      expect(calls.last.arguments, ['SystemUiOverlay.top']);
+
+      sheet(tester).close();
+      await frames(tester);
+      unawaited(openSpace(tester.element(find.byType(VideoPlayerArea)), const UploaderRef(mid: 5)));
+      await frames(tester, 20);
+      nav.currentState!.pop();
+      await frames(tester, 20);
+      expect(orientation.presentation, Presentation.inline, reason: '竖屏 given up under it, as before');
       await back(tester);
     });
   });

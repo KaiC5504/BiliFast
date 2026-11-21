@@ -103,8 +103,9 @@ Future<void> openVideoPage(BuildContext context, VideoRoute route) {
 }
 
 /// A video opened on a video page (a related video, a link in 简介 or a comment, the uploader sheet's videos) takes
-/// that page's place, so back goes to what the first page was opened from: video pages never stack (KaiC). The page
-/// replaced leaves as a popped one does. [page] builds the new page; tests give theirs.
+/// that page's place, so back goes to what the first page was opened from: video pages never stack (KaiC), except a
+/// related video tapped in the 竖屏 sheet's 简介, which is pushed over the page ([openVideoPage]) as the official app
+/// does. The page replaced leaves as a popped one does. [page] builds the new page; tests give theirs.
 Future<void> replaceVideoPage(BuildContext context, VideoRoute route, {Widget Function(VideoRoute route)? page}) {
   if (route.cover case final cover? when cover.isNotEmpty) VideoPage.precacheCover(context, cover);
   final build = page ?? (route) => VideoPage(route: route);

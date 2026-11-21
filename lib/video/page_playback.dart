@@ -70,6 +70,7 @@ class PagePlayback extends ChangeNotifier implements KeptPlayback {
        _detail = route.detail,
        _title = route.title,
        _source = route.source,
+       _relatedStory = route.relatedStory,
        offline = route.offline;
 
   /// How far ahead AVPlayer buffers: a page's playback as the player's default, a muted card less, a covered page
@@ -109,6 +110,9 @@ class PagePlayback extends ChangeNotifier implements KeptPlayback {
   VideoDetail? _detail;
   final String? _title;
   PlaySource _source;
+
+  /// The route's list from the 竖屏 sheet's 相关视频, which the page brought back by the small window opens on again.
+  final RelatedStory? _relatedStory;
 
   /// The open under way followed the video before it on its own.
   bool _followed = false;
@@ -177,6 +181,9 @@ class PagePlayback extends ChangeNotifier implements KeptPlayback {
     return _story = _storyFeed(this);
   }
 
+  /// Where 竖屏 was entered from: the source the video it was entered on had before it; null outside 竖屏.
+  PlaySource? get storySource => _storyEntered?.source;
+
   /// 竖屏 ended: the feed goes, and the video swiped to stays on the page, its next plays reporting as the video
   /// page's (a part from 选集, the page brought back by [restartRoute]): the entered video's source as it was before
   /// 竖屏, a video swiped to keeping where 竖屏 was entered from and its own track data.
@@ -241,6 +248,7 @@ class PagePlayback extends ChangeNotifier implements KeptPlayback {
     detail: _detail,
     offline: offline,
     source: _source,
+    relatedStory: _relatedStory,
   );
 
   /// Gets a controller of its own and opens the video on it; again after a failed start.
@@ -584,7 +592,14 @@ class PagePlayback extends ChangeNotifier implements KeptPlayback {
   bool pushPage() {
     final navigator = _services.navigator.currentState;
     if (navigator == null || _closed) return false;
-    final route = VideoRoute(bvid: _bvid, cid: _cid, title: _title, playback: this, offline: offline);
+    final route = VideoRoute(
+      bvid: _bvid,
+      cid: _cid,
+      title: _title,
+      playback: this,
+      offline: offline,
+      relatedStory: _relatedStory,
+    );
     unawaited(
       navigator.push(RestoredPageRoute<void>(builder: (_) => restorePage(route), settings: VideoRoute.pageSettings)),
     );
