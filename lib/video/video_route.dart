@@ -1,4 +1,4 @@
-import 'package:bili_core/api.dart' show PlaySource, VideoDetail, VideoView;
+import 'package:bili_core/api.dart' show PlaySource, VideoCard, VideoDetail, VideoView;
 import 'package:flutter/widgets.dart';
 
 import '../app/form_factor.dart';
@@ -36,6 +36,7 @@ final class VideoRoute {
     this.offline = false,
     this.source = PlaySource.unknown,
     this.comment,
+    this.relatedStory,
   });
 
   final String bvid;
@@ -55,6 +56,10 @@ final class VideoRoute {
 
   final CommentFocus? comment;
 
+  /// A card tapped in the 竖屏 sheet's 相关视频 (270): the page opens straight into 竖屏, its feed that list from the
+  /// card tapped, and is pushed over the page it came from (KaiC: stacked, as the official app does).
+  final RelatedStory? relatedStory;
+
   /// The feed card's cover and the page's player box share it, so the cover flies into the player.
   static String coverTag(String bvid) => 'cover-$bvid';
 
@@ -66,6 +71,15 @@ final class VideoRoute {
 
 /// Whether [route] holds a video page, told by its settings: a route pushed this frame has built no page yet.
 bool isVideoPageRoute(Route<dynamic> route) => route.settings.name == VideoRoute.pageSettings.name;
+
+/// The related list a 竖屏 page opened from the sheet's 相关视频 swipes through (20 at most), and the card tapped.
+@immutable
+final class RelatedStory {
+  const RelatedStory({required this.cards, required this.index});
+
+  final List<VideoCard> cards;
+  final int index;
+}
 
 /// A comment thread to open with the page: its root, and the reply in it to show.
 @immutable

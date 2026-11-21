@@ -1703,6 +1703,35 @@ abstract final class VerticalSheetTheme {
   static const pictureBottom = 913 / 3;
 }
 
+/// 竖屏's 简介/评论 sheet (264-268): its stops, header and moves. First readings, to be measured on the references.
+abstract final class StorySheetTheme {
+  /// The half sheet's top edge (264, 265, 269: 946 px).
+  static const halfTop = 946 / 3;
+
+  /// The full sheet's top edge, under the status bar (266: 162 px).
+  static const fullTop = 162 / 3;
+
+  /// The grabber and the tab row, above the tab's content (264).
+  static const headerHeight = 60.0;
+}
+
+/// The 竖屏 sheet's 简介 (265, 269, 271).
+abstract final class StoryIntroTheme {
+  /// The official grid holds at most 20 related videos (KaiC).
+  static const relatedLimit = 20;
+}
+
+/// The picture above the 竖屏 sheet and 竖屏's controls standing aside for it (264, 268, 269).
+abstract final class StorySheetRoomTheme {
+  /// The room's top: the picture never goes above the status bar.
+  static const pictureTop = 162 / 3;
+}
+
+/// The `相关视频 (n/N)` capsule in 竖屏's top bar on a page opened from the sheet's 相关视频 (270).
+abstract final class StoryCounterTheme {
+  static const label = '相关视频';
+}
+
 /// 竖屏's held 2× and its lock (182, 183, 186).
 abstract final class SpeedLockTheme {
   /// The APK's `biligame_vector_lock_fill`, the filled lock 183 shows.

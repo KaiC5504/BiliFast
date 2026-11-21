@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart' show TargetPlatform, defaultTargetPlatf
 
 import '../../playback/playback_controller.dart';
 import '../page_playback.dart';
+import '../video_route.dart' show RelatedStory;
 import '../watch_reporter.dart';
 import 'story_feed.dart';
 import 'story_list.dart';
@@ -27,6 +28,10 @@ StoryFeed pageStoryFeed(PagePlayback playback) {
     warmsNext: defaultTargetPlatform == TargetPlatform.iOS,
   );
 }
+
+/// The feed of a page opened from the 竖屏 sheet's 相关视频: [story]'s cards from the one tapped, nothing more asked,
+/// with its [StoryFeed.counter].
+StoryFeed relatedStoryFeed(PagePlayback playback, RelatedStory story) => pageStoryFeed(playback);
 
 /// The page's playback as the feed sees it, notifying on the playback's changes and its controller's (the details
 /// arrive through the controller).

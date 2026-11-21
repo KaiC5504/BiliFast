@@ -167,6 +167,9 @@ abstract class StoryFeed extends ChangeNotifier {
   /// More videos are being asked for.
   bool get loading;
 
+  /// The place 竖屏's top bar shows as `相关视频 (n/N)` (270): n counts from 1; null for a feed without one.
+  ({int at, int of})? get counter => null;
+
   /// Null only while the entered video's details aren't in.
   StoryEntry? get current => index < entries.length ? entries[index] : null;
   StoryEntry? get next => index + 1 < entries.length ? entries[index + 1] : null;

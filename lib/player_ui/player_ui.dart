@@ -8,6 +8,7 @@ import '../video/page_details.dart';
 import '../video/player_session.dart';
 import '../video/story/story_drag.dart';
 import '../video/story/story_feed.dart';
+import '../video/story/story_sheet.dart';
 import 'chrome_state.dart';
 import 'panels/panel_controller.dart';
 import 'speed_lock.dart';
@@ -34,6 +35,8 @@ final class PlayerUi {
     this.storyDrag,
     this.clean,
     this.speedLock,
+    this.storySheet,
+    this.onIntroSheet,
   });
 
   final PlayerSession session;
@@ -85,6 +88,12 @@ final class PlayerUi {
 
   /// 竖屏's held 2× and its lock; null outside a video page.
   final SpeedLock? speedLock;
+
+  /// 竖屏's 简介/评论 sheet (264-271); null outside a video page.
+  final StorySheetController? storySheet;
+
+  /// 竖屏's title: the sheet on 简介 (265); null outside a video page.
+  final VoidCallback? onIntroSheet;
 
   /// The count beside 评论 in full screen.
   int? get replies => replyCount?.value ?? session.detail?.stat.reply;
