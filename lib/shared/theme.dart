@@ -1703,16 +1703,90 @@ abstract final class VerticalSheetTheme {
   static const pictureBottom = 913 / 3;
 }
 
-/// 竖屏's 简介/评论 sheet (264-268): its stops, header and moves. First readings, to be measured on the references.
+/// 竖屏's 简介/评论 sheet (264-268): its stops, header and moves, measured at 3 px per pt and 60 fps.
 abstract final class StorySheetTheme {
-  /// The half sheet's top edge (264, 265, 269: 946 px).
-  static const halfTop = 946 / 3;
+  /// The half sheet's top edge (264, 265, 269: 947 px, where 181's uploader sheet stops too).
+  static const halfTop = 947 / 3;
 
   /// The full sheet's top edge, under the status bar (266: 162 px).
   static const fullTop = 162 / 3;
 
-  /// The grabber and the tab row, above the tab's content (264).
-  static const headerHeight = 60.0;
+  /// The grabber and the tab row, above the tab's content: 267's 评论详情 header starts here (its 1 pt hairline ends
+  /// 41 pt lower, 1240.8 px on 267).
+  static const headerHeight = 57.0;
+
+  /// 评论's list starts this far under the header: 264's 热门评论 centres 77.33 pt under the sheet's top, where the
+  /// page's list puts it 16.5 under its own.
+  static const commentsGap = 23 / 6;
+
+  static Color get fill => BiliColors.card;
+  static const radius = 12.0;
+
+  /// 30 × 3, 8 under the top edge, #C9CCD0 (264).
+  static const grabberTop = 8.0;
+  static const grabberWidth = 30.0;
+  static const grabberHeight = 3.0;
+  static Color get grabber => BiliColors.sheetGrabber;
+
+  /// The touch box 关闭 takes for VoiceOver and the Windows test driver, around the grabber; a finger there drags.
+  static const grabberBoxHeight = 18.0;
+
+  /// 简介 and 评论 16 pt semibold on a baseline 40 under the top edge (264, 265: their ink 77-168 and 250-343 px
+  /// across, 80-124 px down), the chosen one #18191C, the other #9499A0. 评论's count 13 pt #9499A0 on the same
+  /// baseline, its digits 381-421 px across.
+  static const tabText = 16.0;
+  static const tabWeight = FontWeight.w600;
+  static const tabBaseline = 40.0;
+  static const introLeft = 25.0;
+  static const commentsLeft = 83.0;
+  static const countText = 13.0;
+  static const countGap = 20 / 3;
+  static Color get tabChosen => BiliColors.text;
+  static Color get tabOther => BiliColors.secondaryText;
+  static Color get countInk => BiliColors.secondaryText;
+
+  /// Each tab's touch box reaches this far beyond its words on either side, from under the grabber to the header's end.
+  static const tabTouchPad = 12.0;
+
+  /// The pink bar under the chosen tab's words (with 评论's count): 16 × 4, round, 49 under the top edge.
+  static const underlineTop = 49.0;
+  static const underlineWidth = 16.0;
+  static const underlineHeight = 4.0;
+  static Color get underline => BiliColors.pink;
+
+  /// The round button: a 24 pt #F1F2F3 disc 12 from the right edge, centred 35 under the top edge, holding the icon
+  /// font's `arrow-expand-vertical-double-line` (⌃⌄, half, 8 pt of ink across) or
+  /// `arrow-collapse-vertical-double-line` (chevrons in, full, 8.33) in #61666D.
+  static const button = 24.0;
+  static const buttonRight = 12.0;
+  static const buttonCentre = 35.0;
+  static const buttonTouch = 44.0;
+  static Color get buttonFill => BiliColors.sheetCloseFill;
+  static Color get buttonInk => BiliColors.sheetCloseGlyph;
+  static const expandAsset = 'assets/images/player/story_sheet_expand.png';
+  static const expandWidth = 8.0;
+  static const collapseAsset = 'assets/images/player/story_sheet_collapse.png';
+  static const collapseWidth = 25 / 3;
+
+  /// Opening, closing and the button's moves: 100 ms ease-in-out (268 at 2.6 s and 12.1 s fit Curves.easeInOut within
+  /// 0.8% of the way per frame), no overshoot.
+  static const move = Duration(milliseconds: 100);
+  static const moveCurve = Curves.easeInOut;
+
+  /// Let go on a stop, the sheet jumps there on a stiff spring that overshoots a few points and settles within about
+  /// 100 ms (268's let-go's from 4.8 to 10.6 s fit 93 rad/s at 0.69 of critical damping to 2-4 px), starting at the
+  /// finger's speed.
+  static const snapFrequency = 93.0;
+  static const snapDampingRatio = 0.69;
+
+  /// Let go faster than this (points a second), the sheet moves to the next stop that way. Slower, it goes back to the
+  /// stop the drag left unless it was carried past another (268: the full sheet let go 44-76% of the way to half at
+  /// 0-260 pt/s jumps back; past half it lands there; half dragged up at 450 pt/s and down at 440 moved on).
+  static const flingVelocity = 350.0;
+
+  /// Let go slowly with less than this share of the half sheet showing, it closes: no reference has a slow drag down
+  /// from half, and a drag can't carry the sheet past the screen's bottom.
+  static const closeShare = 0.5;
 }
 
 /// The 竖屏 sheet's 简介 (265, 269, 271), measured at 3 px per pt. Places are read from the sheet's top (946 px on 265
