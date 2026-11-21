@@ -1715,10 +1715,89 @@ abstract final class StorySheetTheme {
   static const headerHeight = 60.0;
 }
 
-/// The 竖屏 sheet's 简介 (265, 269, 271).
+/// The 竖屏 sheet's 简介 (265, 269, 271), measured at 3 px per pt. Places are read from the sheet's top (946 px on 265
+/// and 269), so they hold wherever the sheet's header ends.
 abstract final class StoryIntroTheme {
   /// The official grid holds at most 20 related videos (KaiC).
   static const relatedLimit = 20;
+
+  /// The title: 18 pt medium at PingFang's own 1.4 em pitch (269's two lines 75 px apart), its first line's glyphs
+  /// centred 244.5 px below the sheet's top. 269 wraps a 但 that would have ended 424.5 pt in, so the lines stop at
+  /// least 15.5 short of the right edge.
+  static const titleText = 18.0;
+  static const titleLine = 25.2;
+  static const titleWeight = FontWeight.w500;
+  static const titleTop = 244.5 / 3 - StorySheetTheme.headerHeight - titleLine / 2;
+  static const titleTrailing = 16.0;
+
+  /// The stats line centres 91.5 px under the title's last line (265, 269); it is set a pixel lower, as the stand-in
+  /// fonts draw its digits a pixel high. ☰ sits further from the views than the date from the danmaku; the BV id
+  /// further still.
+  static const statsGap = 92.5 / 3 - titleLine / 2 - IntroTheme.metaLine / 2;
+  static const statsIconGap = 9.0;
+  static const statsDateGap = 7.0;
+  static const statsBvGap = 13.5;
+
+  /// The description's first line ("-" on 265) 63 px under the stats line's centre; a description puts 84 px more
+  /// above 相关视频 than none does (265 against 269).
+  static const descTop = 3.5;
+  static const descBottom = 22 / 3;
+
+  /// 相关视频 (14 pt semibold) and the room under it to the first cover: pinned (271), its glyphs centre 203 px and the
+  /// grid is cut 280 px below the sheet's top; unpinned (265, 269) the first cover is that 77 px under its centre.
+  static const headingText = 14.0;
+  static const headingWeight = FontWeight.w600;
+  static const headingCentre = 203 / 3 - StorySheetTheme.headerHeight;
+  static const headingExtent = 280 / 3 - StorySheetTheme.headerHeight;
+
+  /// From the stats line's centre to the heading's (269, no description: 128 px).
+  static const headingGap = 128 / 3 - IntroTheme.metaLine / 2 - headingCentre;
+
+  /// Two columns, 12 in from the left and 9 apart, each a whole number of points wide (203 on 265, so the right column
+  /// ends 13 from the edge); 16:9 covers with 3.5 pt corners, 190 pt from one row's covers to the next's.
+  static const gridInset = 12.0;
+  static const gridGap = 9.0;
+  static const coverAspect = 16 / 9;
+  static const coverRadius = 3.5;
+  static const cardBelowCover = 227 / 3;
+
+  /// The cover's shade: black rising to 57% at the bottom over its last 100 px, darkening faster near the bottom (265's
+  /// flat purple and grey under it).
+  static const shadeHeight = 100 / 3;
+  static const shade = [Color(0x00000000), Color(0x09000000), Color(0x24000000), Color(0x51000000), Color(0x90000000)];
+
+  /// ▷ 15.1万  ☰ 5 over the cover's foot and the duration (00:41, with its zero) at the right: the play icon 19 px in,
+  /// everything centred 12 pt above the bottom (a line centred there draws its digits [statTextDrop] high), the
+  /// duration's ink ending 6 pt before the right edge.
+  static const statText = 29 / 3;
+  static const statLead = 19 / 3;
+  static const statCentre = 12.0;
+  static const statTextDrop = 0.5;
+  static const statIconWidth = 40 / 3;
+  static const statIconHeight = 34 / 3;
+  static const statIconGap = 14 / 3;
+  static const statGap = 14.0;
+  static const statTrail = 5.0;
+
+  /// The title (13 pt, two lines at 1.4 em, 5 pt in), its line box 5.57 under the cover, which centres its first
+  /// line's glyphs 15.33 under it; the UP icon (the APK's, as 推荐's) and the name (12 pt) centred 55.67 under the
+  /// cover, the icon 19 px in.
+  static const cardTitleText = 13.0;
+  static const cardTitleLine = 18.2;
+  static const cardTitleTop = 44 / 3 - cardTitleLine / 2;
+  static const cardTitleInset = 5.0;
+  static const upCentre = 167 / 3;
+  static const upLead = 19 / 3;
+  static const upIconWidth = 40 / 3;
+  static const upIconHeight = 34 / 3;
+  static const upGap = 3.5;
+  static const upText = 12.0;
+  static const upLine = 16.0;
+
+  /// 已经到底了… (12 pt) centred 36.33 pt under the last UP line, 15.67 over the home indicator's inset (271).
+  static const endHeight = 32.0;
+  static const endCentre = 49 / 3;
+  static const endText = 12.0;
 }
 
 /// The picture above the 竖屏 sheet and 竖屏's controls standing aside for it (264, 268, 269).

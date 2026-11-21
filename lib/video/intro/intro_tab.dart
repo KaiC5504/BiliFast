@@ -132,7 +132,7 @@ class IntroTab extends StatelessWidget {
           ] else if (content.detailFailed && content.onRetryDetail != null)
             SliverFillRemaining(
               hasScrollBody: false,
-              child: Center(child: _RetryLine(onRetry: content.onRetryDetail!)),
+              child: Center(child: IntroRetryLine(onRetry: content.onRetryDetail!)),
             ),
           SliverToBoxAdapter(child: SizedBox(height: bottom)),
           const ReserveRoom(),
@@ -157,8 +157,9 @@ class IntroTab extends StatelessWidget {
   }
 }
 
-class _RetryLine extends StatelessWidget {
-  const _RetryLine({required this.onRetry});
+/// 加载失败，点击重试 where 简介 would be, for a detail that never came; the 竖屏 sheet's 简介 shows it too.
+class IntroRetryLine extends StatelessWidget {
+  const IntroRetryLine({super.key, required this.onRetry});
 
   final VoidCallback onRetry;
 

@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'dart:math' as math;
 
-import 'package:bili_core/api.dart' show VideoDetail, VideoTag, VideoTagKind;
+import 'package:bili_core/api.dart' show RichRun, VideoDetail, VideoTag, VideoTagKind;
 import 'package:bili_core/devlog.dart';
 import 'package:bili_core/logic.dart';
 import 'package:flutter/foundation.dart';
@@ -87,15 +87,7 @@ class _TitleBlockState extends State<TitleBlock> with SingleTickerProviderStateM
     }
   }
 
-  Future<void> _openLink(Uri link) async {
-    var opened = false;
-    try {
-      opened = await widget.openLink(link);
-    } catch (error) {
-      Logger.shared.warn(LogCategory.ui, 'description link failed', {'error': '$error'});
-    }
-    if (!opened && mounted) showToast(context, '无法打开链接');
-  }
+  Future<void> _openLink(Uri link) => openDescriptionLink(context, link, widget.openLink);
 
   @override
   Widget build(BuildContext context) {
@@ -429,7 +421,7 @@ class _Details extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final meta = _style(IntroTheme.metaText, BiliColors.secondaryText, line: IntroTheme.metaLine);
+    final meta =_style(IntroTheme.metaText, BiliColors.secondaryText, line: IntroTheme.metaLine);
     final runs = descriptionRuns(detail.descParts);
     final plain = [
       for (final tag in tags)
@@ -463,13 +455,7 @@ class _Details extends StatelessWidget {
         ),
         if (runs.isNotEmpty) ...[
           const SizedBox(height: IntroTheme.descGap),
-          DescriptionText(
-            runs: runs,
-            style: _style(IntroTheme.descText, BiliColors.secondaryText, line: IntroTheme.descLine),
-            onSeek: onSeek,
-            onOpenVideo: onOpenVideo,
-            onOpenLink: openLink,
-          ),
+          IntroDescription(runs: runs, onSeek: onSeek, onOpenVideo: onOpenVideo, onOpenLink: openLink),
         ],
         if (plain.isNotEmpty) ...[
           const SizedBox(height: IntroTheme.tagsGap),
@@ -483,6 +469,46 @@ class _Details extends StatelessWidget {
       ],
     );
   }
+}
+
+/// Opens a web address from the description with [open], the browser by default; a toast says so when nothing could.
+Future<void> openDescriptionLink(
+  BuildContext context,
+  Uri link, [
+  Future<bool> Function(Uri link) open = TitleBlock._openInBrowser,
+]) async {
+  var opened = false;
+  try {
+    opened = await open(link);
+  } catch (error) {
+    Logger.shared.warn(LogCategory.ui, 'description link failed', {'error': '$error'});
+  }
+  if (!opened && context.mounted) showToast(context, '无法打开链接');
+}
+
+/// The description in the expanded 简介's style (18), which the 竖屏 sheet's 简介 shares.
+class IntroDescription extends StatelessWidget {
+  const IntroDescription({
+    super.key,
+    required this.runs,
+    required this.onSeek,
+    required this.onOpenVideo,
+    required this.onOpenLink,
+  });
+
+  final List<RichRun> runs;
+  final ValueChanged<double> onSeek;
+  final ValueChanged<String> onOpenVideo;
+  final ValueChanged<Uri> onOpenLink;
+
+  @override
+  Widget build(BuildContext context) => DescriptionText(
+    runs: runs,
+    style: _style(IntroTheme.descText, BiliColors.secondaryText, line: IntroTheme.descLine),
+    onSeek: onSeek,
+    onOpenVideo: onOpenVideo,
+    onOpenLink: onOpenLink,
+  );
 }
 
 /// A plain tag leads nowhere until there is a search page, so it is not a button (as in Swift).
