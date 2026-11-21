@@ -68,7 +68,7 @@ class StorySheetController extends ChangeNotifier {
 
   void close() => _settle(SheetStop.closed);
 
-  /// The ⌃⌄ / ✕ button: half and full.
+  /// The round expand / collapse button: half and full.
   void toggle() => _settle(_stop == SheetStop.full ? SheetStop.half : SheetStop.full);
 
   /// Up to full (the accessibility action 展开).

@@ -12,8 +12,8 @@ import '../../support/look_alike.dart';
 import '../../support/stand_in_fonts.dart';
 import '../mixed_lines.dart' show appTheme;
 
-/// The 竖屏 sheet's 简介 under the system font, on the sheet's white where 265, 269 and 271 put it (the half sheet's
-/// top less its header), with their titles, counts and related cards; covers are the loading grey. With
+/// The 竖屏 sheet's 简介 under the system font, on the sheet's white where 265, 269 and 271 put it (under the half
+/// sheet's header), with their titles, counts and related cards; covers are the loading grey. With
 /// BILIFAST_SHOTS naming a folder outside the repo, the 3× shots are saved there for tools/screen_diff.py.
 const _top = StorySheetTheme.halfTop + StorySheetTheme.headerHeight;
 

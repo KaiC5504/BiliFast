@@ -11,7 +11,7 @@ import '../page_details.dart' show PageTab;
 import 'story_sheet.dart';
 
 /// 竖屏's 简介/评论 sheet, placed over the whole page and drawn from [controller]'s position: the grabber, the tab
-/// row with 评论's count and the ⌃⌄ / ✕ button, then [intro] or [comments].
+/// row with 评论's count and the expand / collapse button, then [intro] or [comments].
 ///
 /// The header strip drags the sheet both ways. A tab's list, pulled down at its top, hands the drag to the sheet,
 /// which follows the finger and snaps on release; pushed up, the list only scrolls. Each tab scrolls with its own
@@ -271,7 +271,7 @@ class _SheetListPhysics extends ScrollPhysics {
 }
 
 /// The strip over the tabs (264, 266): the grabber, 简介 and 评论 (N) with the pink bar under the chosen one, and the
-/// round ⌃⌄ / ✕ button. A vertical drag anywhere on it moves the sheet.
+/// round expand / collapse button. A vertical drag anywhere on it moves the sheet.
 class _SheetHeader extends StatelessWidget {
   const _SheetHeader({
     required this.controller,

@@ -106,7 +106,7 @@ void main() {
       expect(sheet.stop, SheetStop.closed);
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 50));
-      // Half way in time and in points: 505 pt down, which is 70% of the way down from half.
+      // Half way in time and in points: 505 pt down, 30% of the way from half to closed.
       expect(topOf(sheet), moreOrLessEquals((StorySheetTheme.fullTop + screen) / 2, epsilon: 0.5));
       await tester.pump(const Duration(milliseconds: 50));
       expect(sheet.position.value, 0);

@@ -6,6 +6,7 @@ import 'package:bili_core/api.dart'
 import 'package:bili_core/devlog.dart';
 import 'package:flutter/foundation.dart';
 
+import '../../shared/theme.dart' show StoryIntroTheme;
 import 'story_feed.dart';
 
 /// A page of the official feed (`BiliClient.storyFeed`).
@@ -104,8 +105,8 @@ class StoryList extends StoryFeed {
   /// The official app asks for the next page once the user is within three videos of the end.
   static const ahead = 3;
 
-  /// The 竖屏 sheet's 相关视频 shows 20 at most (KaiC).
-  static const listedMost = 20;
+  /// The 竖屏 sheet's 相关视频 shows no more.
+  static const listedMost = StoryIntroTheme.relatedLimit;
 
   final StoryHost _host;
   StoryPageCall? _official;

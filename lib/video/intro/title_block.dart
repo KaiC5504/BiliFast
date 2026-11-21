@@ -421,7 +421,7 @@ class _Details extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final meta =_style(IntroTheme.metaText, BiliColors.secondaryText, line: IntroTheme.metaLine);
+    final meta = _style(IntroTheme.metaText, BiliColors.secondaryText, line: IntroTheme.metaLine);
     final runs = descriptionRuns(detail.descParts);
     final plain = [
       for (final tag in tags)

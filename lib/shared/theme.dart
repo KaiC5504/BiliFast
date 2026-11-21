@@ -1789,7 +1789,7 @@ abstract final class StorySheetTheme {
   static const closeShare = 0.5;
 }
 
-/// The 竖屏 sheet's 简介 (265, 269, 271), measured at 3 px per pt. Places are read from the sheet's top (946 px on 265
+/// The 竖屏 sheet's 简介 (265, 269, 271), measured at 3 px per pt. Places are read from the sheet's top (947 px on 265
 /// and 269), so they hold wherever the sheet's header ends.
 abstract final class StoryIntroTheme {
   /// The official grid holds at most 20 related videos (KaiC).
@@ -1882,7 +1882,7 @@ abstract final class StorySheetRoomTheme {
   static const pictureTop = 162 / 3;
 
   /// How far toward half the sheet has risen when 竖屏's controls are gone, fading from closed (268: the top bar half
-  /// faded at 0.19 of the way, gone by 0.45; back by 0.14 on the way down).
+  /// faded at 0.19 of the way, gone by 0.45); a straight fade, the same both ways, stands in for it.
   static const chromeGone = 0.45;
 }
 
