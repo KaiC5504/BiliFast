@@ -257,12 +257,10 @@ final class Measure: XCTestCase {
 
     // MARK: - Touches
 
-    /// The official app keeps an empty 0x0 window first; the largest one is the screen's.
+    /// The app itself, not one of its windows: the official app keeps an empty one first, and windows come and go
+    /// (the keyboard's), which fails a lookup made while listing them.
     @MainActor
-    private var mainWindow: XCUIElement {
-        app.windows.allElementsBoundByIndex.max { $0.frame.width * $0.frame.height < $1.frame.width * $1.frame.height }
-            ?? app.windows.firstMatch
-    }
+    private var mainWindow: XCUIElement { app }
 
     @MainActor
     private var center: CGPoint {
