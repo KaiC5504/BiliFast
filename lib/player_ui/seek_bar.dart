@@ -22,8 +22,9 @@ enum SeekBarStyle {
   /// [dot].
   pausedDot;
 
-  /// How much of the bar the thumb keeps from its travel.
-  double get thumbWidth => this == tv ? BiliMetrics.thumbWidth : BiliMetrics.verticalDot;
+  /// How much of the bar the thumb keeps from its travel. 竖屏's keeps none: at 0:00 its dot is centred on the bar's
+  /// start (270 at 2.0 s, 185 at 10.5 s).
+  double get thumbWidth => this == tv ? BiliMetrics.thumbWidth : 0;
 
   /// Draws the TV for its thumb at rest; every style draws it while held.
   bool get face => this != dot;

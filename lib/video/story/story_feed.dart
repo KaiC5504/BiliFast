@@ -35,6 +35,7 @@ final class StoryEntry {
     this.seasonTitle,
     this.seasonIndex,
     this.seasonTotal,
+    this.searchRow = false,
   });
 
   factory StoryEntry.fromItem(StoryItem item, {required PlaySource source}) => StoryEntry(
@@ -63,6 +64,7 @@ final class StoryEntry {
     seasonTitle: item.seasonTitle,
     seasonIndex: item.seasonIndex,
     seasonTotal: item.seasonTotal,
+    searchRow: item.searchKeyword != null,
     source: source,
   );
 
@@ -110,6 +112,7 @@ final class StoryEntry {
     favourites: detail.stat.favorite,
     shares: detail.stat.share,
     danmaku: detail.stat.danmaku,
+    searchRow: true,
     source: source,
   );
 
@@ -144,6 +147,11 @@ final class StoryEntry {
   final String? seasonTitle;
   final int? seasonIndex;
   final int? seasonTotal;
+
+  /// 竖屏 keeps room for the 搜索 row under the title (ours doesn't draw it yet): for the video an ordinary page entered
+  /// 竖屏 on (09, 118) and a feed item whose `top_search_bar` has a keyword; never a related card, nor the card a page
+  /// opened from the sheet's 相关视频 (270).
+  final bool searchRow;
 
   /// What this video's plays report.
   final PlaySource source;

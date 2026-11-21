@@ -635,5 +635,7 @@ StoryEntry _withSource(StoryEntry entry, PlaySource source, {StoryEntry? fallbac
   seasonTitle: entry.seasonTitle,
   seasonIndex: entry.seasonIndex,
   seasonTotal: entry.seasonTotal,
+  // The entry the feed already holds keeps its row: a given card has none, whatever the page's details say.
+  searchRow: fallback?.searchRow ?? entry.searchRow,
   source: source,
 );

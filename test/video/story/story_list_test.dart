@@ -9,7 +9,7 @@ import 'package:flutter_test/flutter_test.dart';
 const entered = 'BV1entered00';
 const recommended = PlaySource(fromSpmid: 'tm.recommend.0.0', from: '7', trackId: 'TRACK.E', flowData: '{"e":1}');
 
-StoryEntry enteredEntry({int? cid = 11}) => StoryEntry(
+StoryEntry enteredEntry({int? cid = 11, bool searchRow = false}) => StoryEntry(
   bvid: entered,
   aid: 100,
   cid: cid,
@@ -17,10 +17,11 @@ StoryEntry enteredEntry({int? cid = 11}) => StoryEntry(
   cover: 'cover',
   ownerMid: 1,
   ownerName: 'UP',
+  searchRow: searchRow,
   source: recommended,
 );
 
-StoryItem item(String bvid, {String? track, String? flow}) => StoryItem(
+StoryItem item(String bvid, {String? track, String? flow, String? keyword}) => StoryItem(
   aid: bvid.hashCode,
   bvid: bvid,
   cid: 7,
@@ -33,6 +34,7 @@ StoryItem item(String bvid, {String? track, String? flow}) => StoryItem(
   ownerName: 'O',
   trackId: track ?? 'T.$bvid',
   flowData: flow,
+  searchKeyword: keyword,
 );
 
 VideoCard card(String bvid, {int cid = 0}) => VideoCard(
@@ -292,6 +294,36 @@ void main() {
         ..changed();
       expect(bvids(feed), [entered]);
       expect(feed.current!.cid, 11);
+    });
+  });
+
+  group("the search row's room", () {
+    test("the page's own details keep it; a feed item goes by its keyword, a related card has none", () {
+      final detail = VideoDetail.fromJson({'bvid': entered, 'aid': 100, 'title': '进入的视频'});
+      expect(StoryEntry.fromDetail(detail, source: recommended).searchRow, isTrue);
+      expect(StoryEntry.fromItem(item('BV1a', keyword: '搜索词'), source: recommended).searchRow, isTrue);
+      expect(StoryEntry.fromItem(item('BV1b'), source: recommended).searchRow, isFalse);
+      expect(StoryEntry.fromCard(card('BV1c'), source: recommended).searchRow, isFalse);
+    });
+
+    test("the entered video keeps it through the feed's own copy without one and a new part: it never moves; the "
+        'items after it go by their own', () async {
+      host.playing = enteredEntry(searchRow: true);
+      final feed = make();
+      expect(feed.current!.searchRow, isTrue);
+      await answerOfficial([item(entered), item('BV1a', keyword: '搜索词'), item('BV1b')]);
+      expect([for (final entry in feed.entries) entry.searchRow], [true, true, false]);
+      host
+        ..playing = enteredEntry(cid: 12, searchRow: true)
+        ..changed();
+      expect((feed.current!.cid, feed.current!.searchRow), (12, true));
+    });
+
+    test('the related lists have none', () async {
+      host.playing = enteredEntry(searchRow: true);
+      final feed = make(useOfficial: false);
+      await answerRelated([card('BV1r1'), card('BV1r2')]);
+      expect([for (final entry in feed.entries) entry.searchRow], [true, false, false]);
     });
   });
 

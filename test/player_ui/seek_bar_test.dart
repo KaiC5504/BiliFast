@@ -262,12 +262,15 @@ void main() {
     );
   });
 
-  testWidgets('the 竖屏 style drags the whole video across the bar less the dot, and stops at the ends', (tester) async {
+  testWidgets('the 竖屏 style drags the whole video across the whole bar, and stops at the ends', (tester) async {
     final rig = Rig();
     await rig.mount(tester, style: SeekBarStyle.dot);
     final rect = rig.rect(tester);
-    final travel = rect.width - BiliMetrics.verticalDot;
+    final travel = rect.width;
 
+    await tester.dragFrom(rect.center, Offset(travel / 4, 0));
+    await tester.pumpAndSettle();
+    expect(rig.commits.last, closeTo(25, 0.01), reason: 'a quarter of the bar is a quarter of the video');
     await tester.dragFrom(rect.center, Offset(travel, 0));
     await tester.pumpAndSettle();
     expect(rig.commits.last, closeTo(100, 0.01));
@@ -277,6 +280,41 @@ void main() {
     await tester.dragFrom(rect.center, Offset(-travel * 3, 0));
     await tester.pumpAndSettle();
     expect(rig.commits.last, 0);
+  });
+
+  testWidgets("竖屏's dot is centred on the bar's start at 0:00 and on its end at the end (270, 185)", (tester) async {
+    final rig = Rig();
+    await rig.mount(tester, style: SeekBarStyle.dot);
+    const y = BiliMetrics.barTouchHeight / 2;
+    expect(rig.painter(tester), paints..circle(x: 0, y: y, radius: BiliMetrics.verticalDot / 2));
+
+    rig.position = 100;
+    rig.repaint.value++;
+    await tester.pump();
+    expect(rig.painter(tester), paints..circle(x: 218, y: y, radius: BiliMetrics.verticalDot / 2));
+  });
+
+  testWidgets("paused, 竖屏's TV is centred on the bar's ends too, and a drag from there maps the finger the same", (
+    tester,
+  ) async {
+    final rig = Rig();
+    await rig.mount(tester, style: SeekBarStyle.pausedDot);
+    Rect tv(double x) => Rect.fromCenter(
+      center: Offset(x, BiliMetrics.barTouchHeight / 2),
+      width: BiliMetrics.thumbWidth,
+      height: BiliMetrics.thumbWidth,
+    );
+    expect(rig.painter(tester), paints..translate(x: tv(0).left, y: tv(0).top));
+
+    final rect = rig.rect(tester);
+    await tester.dragFrom(rect.centerLeft + const Offset(1, 0), Offset(rect.width / 2, 0));
+    await tester.pumpAndSettle();
+    expect(rig.commits.last, closeTo(50, 0.01));
+
+    rig.position = 100;
+    rig.repaint.value++;
+    await tester.pump();
+    expect(rig.painter(tester), paints..translate(x: tv(218).left, y: tv(218).top));
   });
 
   testWidgets('VoiceOver reads the time and steps it by ten seconds through the commit', (tester) async {
@@ -362,8 +400,8 @@ void main() {
   ) async {
     final rig = Rig()..position = 50;
     await rig.mount(tester, style: SeekBarStyle.dot);
-    // The dot's travel: 214 for 100 s, from 2.
-    const centre = 2 + 214 * 0.5;
+    // The dot's travel: the whole 218 for 100 s.
+    const centre = 218 * 0.5;
     expect(
       rig.painter(tester),
       paints
@@ -410,7 +448,7 @@ void main() {
   ) async {
     final rig = Rig()..position = 50;
     await rig.mount(tester, style: SeekBarStyle.pausedDot);
-    const centre = 2 + 214 * 0.5;
+    const centre = 218 * 0.5;
     Rect box(double side, double y) => Rect.fromCenter(center: Offset(centre, y), width: side, height: side);
     final rest = box(BiliMetrics.thumbWidth, BiliMetrics.barTouchHeight / 2);
     expect(

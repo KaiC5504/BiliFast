@@ -521,8 +521,11 @@ abstract final class BiliMetrics {
   static const verticalNameText = 15.0;
   static const verticalUploaderGap = 9.7;
 
-  /// The search suggestion row between the title and the bar.
-  static const verticalSearchRoom = 37.0;
+  /// The search suggestion row between the title and the bar: a video with one (118) has its uploader and title this
+  /// much higher than one without (270, 185 at 10.5 s: 114 px), whose title then reaches [verticalTitleOverBar] into
+  /// the bar's touch area.
+  static const verticalSearchRoom = 38.0;
+  static const verticalTitleOverBar = 1.0;
 
   /// 09's bottom row reaches this far into the home indicator's inset.
   static const verticalBottomDrop = 1.0;
@@ -1887,22 +1890,24 @@ abstract final class StorySheetRoomTheme {
 }
 
 /// The `相关视频 (n/N)` capsule in 竖屏's top bar on a page opened from the sheet's 相关视频 (270 at 1.0-3.0 s, still
-/// throughout): centred on the screen and on ‹'s line, 32 pt high, 14 pt grey text 16 pt in from either end.
+/// throughout): centred on the screen and on ‹'s line, 32 pt high, 14 pt text 16 pt in from either end in ‹ and ⋮'s
+/// half white. 270 is a recording, which reads a screenshot's greys about 0.9 as bright (‹ 116 against 128, the
+/// 发弹幕 field 34 against 38): the fill and edge are lifted by that.
 abstract final class StoryCounterTheme {
   static const label = '相关视频';
   static const height = 32.0;
   static const padding = 16.0;
   static const text = 14.0;
-  static const ink = Color(0xFF747375);
+  static const ink = BiliColors.chromeFaint;
 
   /// 270 centres the text's ink in the capsule, 1 pt under where its line box would put it.
   static const textDrop = 1.0;
 
   /// Only ever seen over black, so whether the picture would show through it is unknown.
-  static const fill = Color(0xFF0D0C0E);
+  static const fill = Color(0xFF0F0D10);
 
   /// A hairline a shade lighter than the fill, one pixel at 3×.
-  static const edge = Color(0xFF181818);
+  static const edge = Color(0xFF1B1B1B);
   static const edgeWidth = 1 / 3;
 }
 

@@ -29,8 +29,9 @@ import 'speed_lock.dart';
 /// the top (a page opened from the sheet's 相关视频 has 相关视频 (n/N) instead of N人正在看, 270), the action column
 /// down the right, the uploader with 粉丝 and 关注, the title and its plays over the bar (a tap opens the sheet on 简介,
 /// 265), then the 发弹幕 field with the 弹 toggle, 详情页 and the last button by the video's shape: 横屏全屏 for a wide video
-/// (09, 184), 清屏 for an upright or square one (16, 180). The search button and the search row have their room kept
-/// so nothing else moves when they come; so does whatever the page details haven't brought yet. As in the official app
+/// (09, 184), 清屏 for an upright or square one (16, 180). The search button has its room kept so nothing else moves
+/// when it comes, as the search row has for a video with one ([StoryEntry.searchRow]); so does whatever the page
+/// details haven't brought yet. As in the official app
 /// they stay up, hiding only for a panel or an action overlay; paused, the bar carries the TV and 118's ▶ and the time
 /// sit over the video. While the bar is dragged everything but the bar fades for the seek preview (19, 20), and while
 /// 2× is held everything but the progress line gives way to the lock's hint (182, 183). 清屏 keeps only 人正在看, the
@@ -108,6 +109,8 @@ class VerticalChrome extends StatelessWidget {
                                 clean: clean,
                                 pending: pending,
                                 upright: pending?.upright ?? uprightShape(ui.session),
+                                // Before the feed has the page's video, it is the video the page entered 竖屏 on.
+                                searchRow: feed?.current?.searchRow ?? true,
                                 openUploader: openUploader,
                               ),
                             ),
@@ -243,12 +246,14 @@ class VerticalChrome extends StatelessWidget {
     required bool clean,
     required StoryEntry? pending,
     required bool upright,
+    required bool searchRow,
     required void Function(UploaderRef)? openUploader,
   }) {
     final session = ui.session;
     final detail = session.detail;
     final info = !barOnly && !clean;
     return _Block(
+      searchRow: searchRow,
       uploader: _GiveWay(
         shown: info,
         child: switch (pending) {
@@ -377,6 +382,7 @@ class VerticalChromePreview extends StatelessWidget {
         style: fullScreenText,
         child: _PageLayout(
           block: _Block(
+            searchRow: entry.searchRow,
             uploader: _entryUploader(entry, _prefix),
             title: _entryTitle(entry, const ValueKey('$_prefix-title')),
             bar: SeekBar(
@@ -570,65 +576,87 @@ class _PageLayout extends StatelessWidget {
   }
 }
 
-/// The rows from the uploader down: the uploader, the title, the search row's room (清屏's play and time sit in it),
-/// the bar and the bottom row.
+/// The rows from the uploader down: the uploader, the title, the search row's room when the video has one
+/// ([StoryEntry.searchRow]), the bar and the bottom row. 清屏's play and time ([room]) sit over the bar's rows by their
+/// own measure, the room or not.
 class _Block extends StatelessWidget {
-  const _Block({required this.uploader, required this.title, required this.bar, required this.row, this.room});
+  const _Block({
+    required this.uploader,
+    required this.title,
+    required this.bar,
+    required this.row,
+    required this.searchRow,
+    this.room,
+  });
 
   final Widget uploader;
   final Widget title;
   final Widget bar;
   final Widget row;
+  final bool searchRow;
   final Widget? room;
 
+  static const _barRows = BiliMetrics.barTouchHeight - BiliMetrics.verticalRowLift;
+
   @override
-  Widget build(BuildContext context) => Column(
-    mainAxisSize: MainAxisSize.min,
-    crossAxisAlignment: CrossAxisAlignment.stretch,
-    children: [
-      SizedBox(height: BiliMetrics.verticalAvatar, child: uploader),
-      const SizedBox(height: BiliMetrics.verticalUploaderGap),
-      Padding(
-        padding: const EdgeInsets.only(left: BiliMetrics.verticalInfoInset, right: BiliMetrics.verticalColumnRoom),
-        child: title,
-      ),
-      // Kept for the search row; 清屏's play and time sit in it.
-      SizedBox(
-        height: BiliMetrics.verticalSearchRoom,
-        child: switch (room) {
-          final room? => Stack(
-            clipBehavior: Clip.none,
+  Widget build(BuildContext context) {
+    final column = Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Transform.translate(
+          offset: const Offset(0, BiliMetrics.verticalTitleOverBar),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Positioned(
-                left: 0,
-                right: 0,
-                bottom: VerticalCleanTheme.rowAboveBar - BiliMetrics.chromeButton / 2,
-                height: BiliMetrics.chromeButton,
-                child: room,
+              SizedBox(height: BiliMetrics.verticalAvatar, child: uploader),
+              const SizedBox(height: BiliMetrics.verticalUploaderGap),
+              Padding(
+                padding: const EdgeInsets.only(
+                  left: BiliMetrics.verticalInfoInset,
+                  right: BiliMetrics.verticalColumnRoom,
+                ),
+                child: title,
               ),
             ],
           ),
-          null => null,
-        },
-      ),
-      // The row overlaps the bar's touch area by [verticalRowLift], as on 09.
-      SizedBox(
-        height: BiliMetrics.barTouchHeight - BiliMetrics.verticalRowLift,
-        child: OverflowBox(
-          alignment: Alignment.topCenter,
-          maxHeight: BiliMetrics.barTouchHeight,
-          child: Transform.translate(
-            offset: const Offset(0, -BiliMetrics.verticalBarLift),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: BiliMetrics.verticalInfoInset),
-              child: bar,
+        ),
+        if (searchRow) const SizedBox(height: BiliMetrics.verticalSearchRoom),
+        // The row overlaps the bar's touch area by [verticalRowLift], as on 09.
+        SizedBox(
+          height: _barRows,
+          child: OverflowBox(
+            alignment: Alignment.topCenter,
+            maxHeight: BiliMetrics.barTouchHeight,
+            child: Transform.translate(
+              offset: const Offset(0, -BiliMetrics.verticalBarLift),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: BiliMetrics.verticalInfoInset),
+                child: bar,
+              ),
             ),
           ),
         ),
-      ),
-      SizedBox(height: BiliMetrics.chromeButton, child: row),
-    ],
-  );
+        SizedBox(height: BiliMetrics.chromeButton, child: row),
+      ],
+    );
+    final room = this.room;
+    if (room == null) return column;
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        column,
+        Positioned(
+          left: 0,
+          right: 0,
+          bottom: _barRows + BiliMetrics.chromeButton + VerticalCleanTheme.rowAboveBar - BiliMetrics.chromeButton / 2,
+          height: BiliMetrics.chromeButton,
+          child: room,
+        ),
+      ],
+    );
+  }
 }
 
 /// 发弹幕 with 弹, then 详情页 and the last button.

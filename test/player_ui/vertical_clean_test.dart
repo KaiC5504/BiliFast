@@ -41,7 +41,14 @@ final class FakeFeed extends StoryFeed {
   }
 }
 
-StoryEntry entry(String bvid, {int width = 1080, int height = 1920, bool following = false, bool? vip}) => StoryEntry(
+StoryEntry entry(
+  String bvid, {
+  int width = 1080,
+  int height = 1920,
+  bool following = false,
+  bool? vip,
+  bool searchRow = false,
+}) => StoryEntry(
   bvid: bvid,
   title: '下一个视频的标题',
   cover: '',
@@ -59,6 +66,7 @@ StoryEntry entry(String bvid, {int width = 1080, int height = 1920, bool followi
   coins: 2230,
   favourites: 3146,
   shares: 1652,
+  searchRow: searchRow,
   source: PlaySource.unknown,
 );
 
