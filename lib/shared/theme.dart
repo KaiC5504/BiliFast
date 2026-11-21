@@ -1727,9 +1727,24 @@ abstract final class StorySheetRoomTheme {
   static const pictureTop = 162 / 3;
 }
 
-/// The `相关视频 (n/N)` capsule in 竖屏's top bar on a page opened from the sheet's 相关视频 (270).
+/// The `相关视频 (n/N)` capsule in 竖屏's top bar on a page opened from the sheet's 相关视频 (270 at 1.0-3.0 s, still
+/// throughout): centred on the screen and on ‹'s line, 32 pt high, 14 pt grey text 16 pt in from either end.
 abstract final class StoryCounterTheme {
   static const label = '相关视频';
+  static const height = 32.0;
+  static const padding = 16.0;
+  static const text = 14.0;
+  static const ink = Color(0xFF747375);
+
+  /// 270 centres the text's ink in the capsule, 1 pt under where its line box would put it.
+  static const textDrop = 1.0;
+
+  /// Only ever seen over black, so whether the picture would show through it is unknown.
+  static const fill = Color(0xFF0D0C0E);
+
+  /// A hairline a shade lighter than the fill, one pixel at 3×.
+  static const edge = Color(0xFF181818);
+  static const edgeWidth = 1 / 3;
 }
 
 /// 竖屏's held 2× and its lock (182, 183, 186).

@@ -29,6 +29,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 import '../support/fake_player_session.dart';
 import '../support/fake_video_actions.dart';
+import 'vertical_clean_test.dart' show FakeFeed, drawnOpacity, entry, storyRig;
 
 class CountingChrome extends ChromeState {
   int shows = 0;
@@ -70,6 +71,10 @@ final class Rig {
   /// Set before [mount]: the page's uploader tap, keeping each uploader it is asked to open.
   List<UploaderRef>? uploaders;
 
+  /// Set before [mount]: the page opens the 竖屏 sheet, counting each time it is asked for it on 简介.
+  bool introSheet = false;
+  int introSheets = 0;
+
   late final ui = PlayerUi(
     session: session,
     chrome: chrome,
@@ -86,6 +91,7 @@ final class Rig {
     storyDrag: storyDrag,
     clean: clean,
     speedLock: speedLock,
+    onIntroSheet: introSheet ? () => introSheets += 1 : null,
   );
 
   /// [gestures] puts the player's gesture layer under the chrome, as the page does.
@@ -128,6 +134,50 @@ final class Rig {
       ),
     );
   }
+}
+
+/// The feed of a page opened from the 竖屏 sheet's 相关视频: its place counted out of [of].
+final class RelatedFeed extends StoryFeed {
+  RelatedFeed(this.entries, {this.of = 20});
+
+  @override
+  final List<StoryEntry> entries;
+
+  final int of;
+
+  @override
+  int index = 0;
+
+  @override
+  bool get loading => false;
+
+  @override
+  ({int at, int of})? get counter => (at: index + 1, of: of);
+
+  @override
+  bool moveNext() {
+    if (index + 1 >= entries.length) return false;
+    index += 1;
+    notifyListeners();
+    return true;
+  }
+
+  @override
+  bool movePrevious() {
+    if (index == 0) return false;
+    index -= 1;
+    notifyListeners();
+    return true;
+  }
+}
+
+/// [storyRig]'s page opened from the sheet's 相关视频, 479 watching.
+Rig relatedRig() {
+  final rig = storyRig();
+  rig.story!.value!.dispose();
+  rig.story!.value = RelatedFeed([entry('BV1'), entry('BV2'), entry('BV3')]);
+  rig.details!.online.value = '479';
+  return rig;
 }
 
 VideoDetail detail({int reply = 239}) => VideoDetail.fromJson({
@@ -1221,6 +1271,176 @@ void main() {
       final title = find.byKey(const ValueKey('vertical-title'));
       final text = tester.renderObject<RenderParagraph>(title).text.toPlainText();
       expect(text, isNot(contains('合集')));
+    });
+  });
+
+  group('the title opens the sheet on 简介 (265)', () {
+    testWidgets('a tap on the title opens it and keeps the controls up, playing on; so does an accessibility press', (
+      tester,
+    ) async {
+      final rig = rig09()..introSheet = true;
+      rig.session.duration.value = 100;
+      await rig.mount(tester, gestures: true);
+      await tester.pumpAndSettle();
+
+      await tester.tapAt(Offset(60, centre(tester, 'vertical-title').dy));
+      await tester.pump(const Duration(milliseconds: 400));
+      expect(rig.introSheets, 1);
+      expect(rig.chrome.shows, 1);
+      expect(rig.session.calls, isEmpty, reason: 'the tap is the title\'s, not the picture\'s');
+
+      final title = find.bySemanticsLabel('【VIT赛后】我们接受了LOUD的回溯！！ 5.6万播放');
+      expect(tester.getSemantics(title), isSemantics(isButton: true, hasTapAction: true));
+      tester.semantics.tap(find.semantics.byLabel('【VIT赛后】我们接受了LOUD的回溯！！ 5.6万播放'));
+      expect(rig.introSheets, 2);
+    });
+
+    testWidgets('a 合集 video names its episode to VoiceOver too', (tester) async {
+      final rig = rig09()
+        ..introSheet = true
+        ..session.detail = VideoDetail.fromJson({
+          'bvid': 'BV1',
+          'title': '“没错，你触发保底了”',
+          'owner': {'mid': 1, 'name': '小小小小小小小流萤', 'face': ''},
+          'stat': {'view': 34000, 'reply': 108, 'like': 5064, 'coin': 813, 'favorite': 1946, 'share': 122},
+          'ugc_season': {'id': 1, 'title': '合集', 'sections': <Object>[]},
+        })
+        ..session.title = '“没错，你触发保底了”'
+        ..session.episodesAreParts = false
+        ..session.episodes = [for (var i = 1; i <= 3; i++) Episode(bvid: 'BV$i', cid: i, title: '$i', current: i == 2)];
+      await rig.mount(tester);
+      expect(find.bySemanticsLabel('合集 第2集 “没错，你触发保底了” 3.4万播放'), findsOneWidget);
+    });
+
+    testWidgets('outside a video page the title opens nothing and is no button, as before', (tester) async {
+      final rig = rig09();
+      rig.session.duration.value = 100;
+      await rig.mount(tester, gestures: true);
+      await tester.pumpAndSettle();
+      await tester.tapAt(Offset(60, centre(tester, 'vertical-title').dy));
+      await tester.pump(const Duration(milliseconds: 400));
+      expect(rig.session.calls, isEmpty);
+      expect(rig.chrome.shows, 0);
+      final title = find.bySemanticsLabel(RegExp('回溯'));
+      expect(title, findsOneWidget);
+      expect(tester.getSemantics(title), isSemantics(isButton: false, hasTapAction: false));
+    });
+
+    testWidgets("just swiped, the arriving video's title opens nothing until its page is in", (tester) async {
+      final rig = storyRig()..introSheet = true;
+      await rig.mount(tester);
+      await tester.pumpAndSettle();
+      (rig.story!.value! as FakeFeed).moveNext();
+      await tester.pumpAndSettle();
+      expect(find.textContaining('下一个视频的标题', findRichText: true), findsOneWidget);
+      await tester.tap(find.byKey(const ValueKey('vertical-title')), warnIfMissed: false);
+      expect(rig.introSheets, 0);
+    });
+
+    testWidgets('清屏 takes the title and its tap with it', (tester) async {
+      final rig = storyRig()..introSheet = true;
+      rig.clean!.value = true;
+      await rig.mount(tester);
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('vertical-title')), warnIfMissed: false);
+      expect(rig.introSheets, 0);
+    });
+  });
+
+  group('a page opened from the sheet\'s 相关视频 (270)', () {
+    Finder counter() => find.byKey(const ValueKey('vertical-counter'));
+
+    testWidgets('相关视频 (n/N) centred on ‹\'s line in N人正在看\'s stead; ‹ and ⋮ where they were, no search', (
+      tester,
+    ) async {
+      final rig = relatedRig();
+      await rig.mount(tester);
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+      expect(find.text('相关视频 (1/20)'), findsOneWidget);
+      // 270 at 2.0 s: 467-853 × 180-276 px.
+      expect(tester.getCenter(counter()), within(distance: 0.01, from: const Offset(220, 76)));
+      expect(tester.getSize(counter()).height, 32);
+      expect(centre(tester, 'vertical-back'), within(distance: 1, from: const Offset(22, 76)));
+      expect(centre(tester, 'vertical-more'), within(distance: 1, from: const Offset(418, 76)));
+      expect(drawnOpacity(tester, 'vertical-counter'), 1);
+      expect(drawnOpacity(tester, 'vertical-online'), 0);
+      expect(find.bySemanticsLabel(RegExp('人正在看')), findsNothing);
+      expect(find.bySemanticsLabel('相关视频 (1/20)'), findsOneWidget);
+      expect(find.bySemanticsLabel(RegExp('搜索')), findsNothing);
+    });
+
+    testWidgets('n follows the feed as it moves; the bar stays still while the page moves under the finger', (
+      tester,
+    ) async {
+      final rig = relatedRig();
+      final feed = rig.story!.value! as RelatedFeed;
+      await rig.mount(tester);
+      await tester.pumpAndSettle();
+      final place = tester.getRect(counter());
+
+      rig.storyDrag!
+        ..start()
+        ..update(-300);
+      await tester.pump();
+      expect(tester.getRect(counter()), place);
+      expect(drawnOpacity(tester, 'vertical-counter'), 1);
+
+      feed.moveNext();
+      rig.storyDrag!.land();
+      await tester.pumpAndSettle();
+      expect(find.text('相关视频 (2/20)'), findsOneWidget);
+      expect(tester.getCenter(counter()), within(distance: 0.01, from: place.center));
+
+      feed.moveNext();
+      await tester.pumpAndSettle();
+      expect(find.text('相关视频 (3/20)'), findsOneWidget);
+      feed
+        ..movePrevious()
+        ..movePrevious();
+      await tester.pumpAndSettle();
+      expect(find.text('相关视频 (1/20)'), findsOneWidget);
+    });
+
+    testWidgets('清屏 takes it with ‹ and ⋮ and leaves 180\'s dimmed N人正在看; back out, it returns', (tester) async {
+      final rig = relatedRig();
+      await rig.mount(tester);
+      await tester.pumpAndSettle();
+
+      rig.clean!.value = true;
+      await tester.pumpAndSettle();
+      expect(drawnOpacity(tester, 'vertical-counter'), 0);
+      expect(
+        tester.widget<IgnorePointer>(find.ancestor(of: counter(), matching: find.byType(IgnorePointer)).first).ignoring,
+        isTrue,
+      );
+      expect(drawnOpacity(tester, 'vertical-online'), VerticalCleanTheme.onlineOpacity);
+      expect(find.text('479人正在看'), findsOneWidget);
+
+      rig.clean!.value = false;
+      await tester.pumpAndSettle();
+      expect(drawnOpacity(tester, 'vertical-counter'), 1);
+      expect(drawnOpacity(tester, 'vertical-online'), 0);
+    });
+
+    testWidgets('a plain feed keeps N人正在看 and no capsule, everything where it was', (tester) async {
+      Future<Map<String, Rect>> places(Rig rig) async {
+        await rig.mount(tester);
+        await tester.pumpAndSettle();
+        return {
+          for (final key in ['vertical-back', 'vertical-more', 'vertical-title', 'vertical-bar', 'vertical-like'])
+            key: tester.getRect(find.byKey(ValueKey(key))),
+        };
+      }
+
+      final related = await places(relatedRig());
+      final rig = storyRig();
+      rig.details!.online.value = '479';
+      expect(await places(rig), related);
+      expect(counter(), findsNothing);
+      expect(find.textContaining('相关视频'), findsNothing);
+      expect(drawnOpacity(tester, 'vertical-online'), 1);
+      expect(find.text('479人正在看'), findsOneWidget);
     });
   });
 }

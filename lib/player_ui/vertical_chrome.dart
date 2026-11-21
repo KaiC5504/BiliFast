@@ -26,8 +26,9 @@ import 'seek_preview.dart';
 import 'speed_lock.dart';
 
 /// 竖屏's controls, filling the screen (BiliNative `VerticalChrome.swift`, measured on 09): back, N人正在看 and ⋮ at
-/// the top, the action column down the right, the uploader with 粉丝 and 关注, the title and its plays over the bar,
-/// then the 发弹幕 field with the 弹 toggle, 详情页 and the last button by the video's shape: 横屏全屏 for a wide video
+/// the top (a page opened from the sheet's 相关视频 has 相关视频 (n/N) instead of N人正在看, 270), the action column
+/// down the right, the uploader with 粉丝 and 关注, the title and its plays over the bar (a tap opens the sheet on 简介,
+/// 265), then the 发弹幕 field with the 弹 toggle, 详情页 and the last button by the video's shape: 横屏全屏 for a wide video
 /// (09, 184), 清屏 for an upright or square one (16, 180). The search button and the search row have their room kept
 /// so nothing else moves when they come; so does whatever the page details haven't brought yet. As in the official app
 /// they stay up, hiding only for a panel or an action overlay; paused, the bar carries the TV and 118's ▶ and the time
@@ -133,7 +134,7 @@ class VerticalChrome extends StatelessWidget {
                   child: _GiveWay(
                     shown: aside,
                     from: const Offset(0, -BiliMetrics.chromeSlide),
-                    child: _topRow(context, clean: clean),
+                    child: _topRow(context, clean: clean, counter: feed?.counter),
                   ),
                 ),
                 Positioned.fill(child: SeekPreview(session: ui.session, shown: shown && held, upright: true)),
@@ -167,10 +168,11 @@ class VerticalChrome extends StatelessWidget {
   VoidCallback? _uploaderTap(void Function(UploaderRef)? open, UploaderRef uploader) =>
       open == null || uploader.mid <= 0 ? null : _touch(() => open(uploader));
 
-  /// In 清屏 only N人正在看 stays, dimmed and moved to the left edge (180).
-  Widget _topRow(BuildContext context, {required bool clean}) {
+  /// In 清屏 only N人正在看 stays, dimmed and moved to the left edge (180). A page opened from the sheet's 相关视频 shows
+  /// its [counter] in N人正在看's stead, centred (270); its 清屏 stays 180's, which no reference shows otherwise.
+  Widget _topRow(BuildContext context, {required bool clean, ({int at, int of})? counter}) {
     final motion = MediaQuery.disableAnimationsOf(context) ? Duration.zero : const Duration(milliseconds: 220);
-    return Row(
+    final row = Row(
       children: [
         AnimatedContainer(
           duration: motion,
@@ -202,7 +204,7 @@ class VerticalChrome extends StatelessWidget {
             alignment: Alignment.centerLeft,
             child: switch (ui.details) {
               final details? => AnimatedOpacity(
-                opacity: clean ? VerticalCleanTheme.onlineOpacity : 1,
+                opacity: counter != null && !clean ? 0 : (clean ? VerticalCleanTheme.onlineOpacity : 1),
                 duration: motion,
                 child: _Online(online: details.online, clean: clean),
               ),
@@ -219,6 +221,17 @@ class VerticalChrome extends StatelessWidget {
             child: const MoreDots(color: BiliColors.chromeFaint, shadow: false),
           ),
         ),
+      ],
+    );
+    return Stack(
+      alignment: Alignment.center,
+      children: [
+        row,
+        if (counter != null)
+          _GiveWay(
+            shown: !clean,
+            child: _Counter(at: counter.at, of: counter.of),
+          ),
       ],
     );
   }
@@ -272,6 +285,10 @@ class VerticalChrome extends StatelessWidget {
             title: session.title,
             views: detail?.stat.view,
             episode: _collectionEpisode(),
+            onTap: switch (ui.onIntroSheet) {
+              final open? => _touch(open),
+              null => null,
+            },
           ),
         },
       ),
@@ -433,8 +450,21 @@ const _titleStyle = TextStyle(
   height: BiliMetrics.verticalTitleLeading,
 );
 
-/// The title with its plays and ⌄ once [views] is known, after 118's 合集 · 第N集 when [episode] is.
-Widget _titleText({required Key key, required String title, int? views, int? episode}) => Text.rich(
+/// The title with its plays and ⌄ once [views] is known, after 118's 合集 · 第N集 when [episode] is. [onTap], the
+/// sheet on 简介 (265), makes the whole line one target.
+Widget _titleText({required Key key, required String title, int? views, int? episode, VoidCallback? onTap}) {
+  final text = _titleLine(key: key, title: title, views: views, episode: episode);
+  if (onTap == null) return text;
+  return Semantics(
+    button: true,
+    label: [if (episode != null) '合集 第$episode集', title, if (views != null) '${CountFormat.short(views)}播放'].join(' '),
+    onTap: onTap,
+    excludeSemantics: true,
+    child: GestureDetector(behavior: HitTestBehavior.opaque, onTap: onTap, child: text),
+  );
+}
+
+Widget _titleLine({required Key key, required String title, int? views, int? episode}) => Text.rich(
   TextSpan(
     children: [
       if (episode != null) ..._collection(episode),
@@ -1226,6 +1256,43 @@ class _Online extends StatelessWidget {
                 ],
               ),
             ),
+    ),
+  );
+}
+
+/// 270's dark capsule reading 相关视频 (n/N).
+class _Counter extends StatelessWidget {
+  const _Counter({required this.at, required this.of});
+
+  final int at;
+  final int of;
+
+  static const _style = TextStyle(color: StoryCounterTheme.ink, fontSize: StoryCounterTheme.text, height: 1);
+
+  @override
+  Widget build(BuildContext context) => Container(
+    key: const ValueKey('vertical-counter'),
+    height: StoryCounterTheme.height,
+    padding: const EdgeInsets.only(
+      left: StoryCounterTheme.padding,
+      right: StoryCounterTheme.padding,
+      top: StoryCounterTheme.textDrop * 2,
+    ),
+    decoration: const ShapeDecoration(
+      color: StoryCounterTheme.fill,
+      shape: StadiumBorder(
+        side: BorderSide(color: StoryCounterTheme.edge, width: StoryCounterTheme.edgeWidth),
+      ),
+    ),
+    child: Center(
+      widthFactor: 1,
+      child: Text(
+        '${StoryCounterTheme.label} ($at/$of)',
+        maxLines: 1,
+        softWrap: false,
+        style: _style,
+        strutStyle: fullScreenStrut(_style),
+      ),
     ),
   );
 }
