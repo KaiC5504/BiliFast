@@ -808,10 +808,15 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
     if (_covered) return;
     _covered = true;
     // A page pushed over the open sheet (a commenter's space) finds 竖屏 and the sheet as they were on its return, and
-    // has the screen's bars as its own meanwhile. A related video's page was held for already, and is in 竖屏 itself.
-    if (!_holdVertical && !_pad && _storySheet.stop != SheetStop.closed && _presentation == Presentation.vertical) {
+    // has the screen's bars as its own meanwhile. A related video's page was held for already, and is in 竖屏 itself;
+    // so is one the small window brings back on its related list, held for here (270).
+    final related = PagePlayback.pushing?.relatedStory != null;
+    if (!_holdVertical &&
+        !_pad &&
+        (related || _storySheet.stop != SheetStop.closed) &&
+        _presentation == Presentation.vertical) {
       _holdVertical = true;
-      _heldUnder = true;
+      _heldUnder = !related;
       _applySystemUi();
     }
     _dataWait?.active = false;
@@ -1260,7 +1265,7 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
       _commentOverlays.close();
     }
     if (_uploaderSheet.isOpen && _presentation != _sheetIn) _uploaderSheet.close();
-    if (_presentation != Presentation.vertical) _closeStorySheet();
+    if (_presentation != Presentation.vertical && !_left) _closeStorySheet();
     if (_presentation.fullScreen) _offlineSheet.value = null;
     // A finger on 竖屏's page as it turns to landscape moves nothing: the page is back where it was.
     if (_presentation != Presentation.vertical && _storyDrag.moving) _storyDrag.land();
@@ -1813,7 +1818,8 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
     _left = true;
     // Disposal runs while the tree is locked, where nothing may notify; the pager and the sheet go with the page.
     if (!fromDispose && _story.value != null) _endStory();
-    if (!fromDispose) _closeStorySheet();
+    // Replaced from the sheet (a link in 简介 or a comment), the page slides out with it as it was.
+    if (!fromDispose && !_replaced) _closeStorySheet();
     _owning = false;
     _details?.active = false;
     _controller?.removeListener(_follow);
@@ -1827,7 +1833,7 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
     if (playback != null) {
       playback
         ..removeListener(_playbackChanged)
-        ..detach(this);
+        ..detach(this, inStory: _leftVertical);
       _services!.pipKeeper.pageRemoved(playback);
     }
     if (_watchingNetwork) {
@@ -2117,8 +2123,9 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
                     _ => null,
                   };
                   final actionOverlays = pad ? null : actionOverlaysFor(null);
-                  final storySheet = layout == Presentation.vertical && ui != null && !pad && !_offline
-                      ? _storySheetLayer(ui)
+                  final sheetUi = ui ?? (_left && _storyOpen ? _ui : null);
+                  final storySheet = layout == Presentation.vertical && sheetUi != null && !pad && !_offline
+                      ? _storySheetLayer(sheetUi)
                       : null;
                   // Built once per page build, so scrolling and the shrink rebuild none of it.
                   final padBody = pad
@@ -2793,27 +2800,30 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
 
   /// 竖屏's 简介/评论 sheet over the player, and the picture above it, which plays or pauses on a tap (KaiC) and moves
   /// nothing on a drag: the player under both takes no touches while the sheet is up. The left edge of both is the back
-  /// swipe.
+  /// swipe. A page sliding out still draws it, untouchable: a second link there would push another page.
   Widget _storySheetLayer(PlayerUi ui) {
     final session = ui.session;
-    return Listener(
-      onPointerDown: _sheetEdgeDown,
-      child: Stack(
-        fit: StackFit.expand,
-        children: [
-          _AboveSheet(sheet: _storySheet, onTap: _sheetTap),
-          StorySheetView(
-            controller: _storySheet,
-            intro: StoryIntro(
-              content: _intro,
-              onOpenRelated: _openRelatedStory,
-              onSeek: (seconds) => unawaited(session.seekAndPlay(seconds)),
-              onOpenVideo: (id) => unawaited(_openVideoId(id)),
+    return IgnorePointer(
+      ignoring: _left,
+      child: Listener(
+        onPointerDown: _sheetEdgeDown,
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            _AboveSheet(sheet: _storySheet, onTap: _sheetTap),
+            StorySheetView(
+              controller: _storySheet,
+              intro: StoryIntro(
+                content: _intro,
+                onOpenRelated: _openRelatedStory,
+                onSeek: (seconds) => unawaited(session.seekAndPlay(seconds)),
+                onOpenVideo: (id) => unawaited(_openVideoId(id)),
+              ),
+              comments: _commentsTab(),
+              replies: _sheetReplies,
             ),
-            comments: _commentsTab(),
-            replies: _sheetReplies,
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

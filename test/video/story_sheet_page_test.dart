@@ -702,6 +702,36 @@ void main() {
       await back(tester);
     });
 
+    testWidgets('a page a link in the sheet puts in its place slides in over it with the sheet still up, the picture '
+        'left in its room, and nothing there taking a touch', (tester) async {
+      Finder inOld(Finder finder) => find.descendant(
+        of: find.byWidgetPredicate((widget) => widget is VideoPage && widget.route.bvid == _bv),
+        matching: finder,
+      );
+      await vertical(tester, related: related);
+      ui(tester).onIntroSheet!();
+      await frames(tester);
+      final open = sheet(tester);
+      final room = tester.widget<VideoPlayerArea>(find.byType(VideoPlayerArea)).room!;
+      final box = room.value;
+      expect(box, isNotNull);
+
+      tester.widget<StoryIntro>(find.byType(StoryIntro)).onOpenVideo('BV1xx411c7mD');
+      await tester.pump();
+      for (var i = 0; i < 6; i++) {
+        await tester.pump(const Duration(milliseconds: 40));
+        expect(find.byType(VideoPage), findsNWidgets(2), reason: 'mid-slide');
+        expect(inOld(find.byType(StorySheetView)), findsOneWidget, reason: 'still drawn at ${40 * (i + 1)} ms');
+        expect(open.stop, SheetStop.half);
+        expect(room.value, box, reason: 'the picture stays above the sheet');
+      }
+      final layer = find.ancestor(of: inOld(find.byType(StorySheetView)), matching: find.byType(IgnorePointer)).first;
+      expect(tester.widget<IgnorePointer>(layer).ignoring, isTrue);
+      await frames(tester, 20);
+      expect(find.byType(VideoPage, skipOffstage: false), findsOneWidget, reason: 'replaced, not stacked');
+      await back(tester);
+    });
+
     testWidgets("its page's reports name where this page's 竖屏 was entered from, without that video's track data", (
       tester,
     ) async {
@@ -758,10 +788,10 @@ void main() {
       await back(tester);
     });
 
-    testWidgets('brought back by the small window, its page is one again: 竖屏 on the related list, ‹ pops it', (
-      tester,
-    ) async {
+    testWidgets('brought back by the small window, its page is one again: 竖屏 on the related list, ‹ pops it onto '
+        "this one's 竖屏", (tester) async {
       await vertical(tester, related: related);
+      final feed = feeds.single.feed;
       ui(tester).onIntroSheet!();
       await frames(tester);
       tester.widget<StoryIntro>(find.byType(StoryIntro)).onOpenRelated(4);
@@ -788,8 +818,48 @@ void main() {
       ui(tester).onBack();
       await frames(tester, 20);
       expect(find.byType(VideoPage, skipOffstage: false), findsOneWidget, reason: '‹ popped it');
+      expect(orientation.presentation, Presentation.vertical, reason: '270: held in 竖屏 under it, as under its first');
+      expect(ui(tester).story!.value, same(feed));
+      expect(feed.disposed, isFalse);
+      expect(feeds.where((made) => made.related == null), hasLength(1), reason: 'the old feed carried on');
+      expect(find.byType(VerticalChrome), findsOneWidget);
       orientation.exitToInline();
       await frames(tester);
+      await back(tester);
+    });
+
+    testWidgets('left from its 详情页, the small window brings it back as an ordinary page in its small player', (
+      tester,
+    ) async {
+      await vertical(tester, related: related);
+      ui(tester).onIntroSheet!();
+      await frames(tester);
+      tester.widget<StoryIntro>(find.byType(StoryIntro)).onOpenRelated(4);
+      await frames(tester, 20);
+      orientation.exitToInline();
+      await frames(tester);
+      expect(find.byType(PageTabRow), findsOneWidget);
+      final small = player;
+      small.emit(const PictureInPictureChanged(true));
+      await tester.pump();
+      await back(tester);
+      expect(find.byType(VideoPage, skipOffstage: false), findsOneWidget);
+      expect(services.pipKeeper.kept, isNotNull);
+
+      small.emit(const PictureInPictureRestore());
+      await frames(tester, 20);
+      final pages = tester.widgetList<VideoPage>(find.byType(VideoPage, skipOffstage: false)).toList();
+      expect(pages, hasLength(2));
+      expect(pages.last.route.bvid, related[4].bvid);
+      expect(pages.last.route.relatedStory, isNull);
+      expect(orientation.presentation, Presentation.inline);
+      expect(find.byType(PageTabRow), findsOneWidget, reason: 'its small player and tabs, as it was left');
+      expect(feeds.where((made) => made.related != null), hasLength(1), reason: 'no related feed again');
+
+      small.emit(const PictureInPictureChanged(false));
+      await tester.pump();
+      await back(tester);
+      expect(find.byType(VideoPage, skipOffstage: false), findsOneWidget);
       await back(tester);
     });
 
