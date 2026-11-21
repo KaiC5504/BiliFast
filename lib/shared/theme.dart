@@ -1796,12 +1796,12 @@ abstract final class StoryIntroTheme {
   static const relatedLimit = 20;
 
   /// The title: 18 pt medium at PingFang's own 1.4 em pitch (269's two lines 75 px apart), its first line's glyphs
-  /// centred 244.5 px below the sheet's top. 269 wraps a 但 that would have ended 424.5 pt in, so the lines stop at
+  /// centred 243.5 px below the sheet's top (947 px). 269 wraps a 但 that would have ended 424.5 pt in, so the lines stop at
   /// least 15.5 short of the right edge.
   static const titleText = 18.0;
   static const titleLine = 25.2;
   static const titleWeight = FontWeight.w500;
-  static const titleTop = 244.5 / 3 - StorySheetTheme.headerHeight - titleLine / 2;
+  static const titleTop = 243.5 / 3 - StorySheetTheme.headerHeight - titleLine / 2;
   static const titleTrailing = 16.0;
 
   /// The stats line centres 91.5 px under the title's last line (265, 269); it is set a pixel lower, as the stand-in
@@ -1817,12 +1817,12 @@ abstract final class StoryIntroTheme {
   static const descTop = 3.5;
   static const descBottom = 22 / 3;
 
-  /// 相关视频 (14 pt semibold) and the room under it to the first cover: pinned (271), its glyphs centre 203 px and the
-  /// grid is cut 280 px below the sheet's top; unpinned (265, 269) the first cover is that 77 px under its centre.
+  /// 相关视频 (14 pt semibold) and the room under it to the first cover: pinned (271), its glyphs centre 202 px and the
+  /// grid is cut 279 px below the sheet's top; unpinned (265, 269) the first cover is that 77 px under its centre.
   static const headingText = 14.0;
   static const headingWeight = FontWeight.w600;
-  static const headingCentre = 203 / 3 - StorySheetTheme.headerHeight;
-  static const headingExtent = 280 / 3 - StorySheetTheme.headerHeight;
+  static const headingCentre = 202 / 3 - StorySheetTheme.headerHeight;
+  static const headingExtent = 279 / 3 - StorySheetTheme.headerHeight;
 
   /// From the stats line's centre to the heading's (269, no description: 128 px).
   static const headingGap = 128 / 3 - IntroTheme.metaLine / 2 - headingCentre;

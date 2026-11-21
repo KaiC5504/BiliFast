@@ -202,7 +202,8 @@ void main() {
     expect(title.overflow, TextOverflow.ellipsis);
     final cover = tester.getRect(find.descendant(of: card, matching: find.byType(ClipRRect)));
     // 203 × 9/16 to the whole pixel, at this view's 1 px per pt.
-    expect(cover.size, const Size(203, 114));
+    expect(cover.width, moreOrLessEquals(203));
+    expect(cover.height, moreOrLessEquals(114));
   });
 
   testWidgets('a tap on a card opens it by its index in the related list', (tester) async {
