@@ -1721,10 +1721,16 @@ abstract final class StoryIntroTheme {
   static const relatedLimit = 20;
 }
 
-/// The picture above the 竖屏 sheet and 竖屏's controls standing aside for it (264, 268, 269).
+/// The picture above the 竖屏 sheet and 竖屏's controls standing aside for it (264, 268, 269). The picture fits the room
+/// from [pictureTop] down to the sheet's top edge and sits on that edge: 264's upright frame fills it, 449-870 ×
+/// 162-946 px, 269's wide one spans the width, 204-946 px. 268 follows it frame by frame as the sheet is dragged.
 abstract final class StorySheetRoomTheme {
   /// The room's top: the picture never goes above the status bar.
   static const pictureTop = 162 / 3;
+
+  /// How far toward half the sheet has risen when 竖屏's controls are gone, fading from closed (268: the top bar half
+  /// faded at 0.19 of the way, gone by 0.45; back by 0.14 on the way down).
+  static const chromeGone = 0.45;
 }
 
 /// The `相关视频 (n/N)` capsule in 竖屏's top bar on a page opened from the sheet's 相关视频 (270).

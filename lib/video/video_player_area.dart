@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io' show Platform;
 import 'dart:math' as math;
+import 'dart:ui' show lerpDouble;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -29,6 +30,7 @@ import '../shared/theme.dart';
 import 'player_session.dart';
 import 'story/story_drag.dart';
 import 'story/story_pager.dart';
+import 'story/story_sheet.dart';
 
 /// The player as the video page shows it, in every presentation (BiliNative `PlayerBox` and `ChromeLayer.swift`): the
 /// video with danmaku over it, the stats overlay, the gesture layer, the chrome for [presentation] or the end screen,
@@ -59,6 +61,7 @@ class VideoPlayerArea extends StatelessWidget {
     this.slide,
     this.storyPager,
     this.moveTargets,
+    this.room,
   });
 
   final Presentation presentation;
@@ -125,6 +128,11 @@ class VideoPlayerArea extends StatelessWidget {
   /// The page's swipe between 竖屏's videos; it takes part only in 竖屏 on the iPhone, while its feed is up.
   final StoryPager? storyPager;
 
+  /// With 竖屏's 简介/评论 sheet up, where the video is in this area's box: the room above the sheet ([storySheetRoom]),
+  /// every frame the sheet moves. The danmaku fly over the picture there once the sheet rests (269), and are put away
+  /// while it moves, as through a slide.
+  final ValueListenable<Rect?>? room;
+
   /// 下一个视频 and 上一个视频 as buttons as well as custom actions, for Windows' accessibility bridge, which leaves
   /// custom actions out; null puts them in on Windows only.
   final bool? moveTargets;
@@ -182,73 +190,82 @@ class VideoPlayerArea extends StatelessWidget {
     final slid = slide?.value;
     return [
       if (video case final video?)
-        Align(
+        _inRoom(
           key: const ValueKey('video-surface'),
-          alignment: Alignment.topCenter,
-          child: StoryShift(
-            drag: story?.drag,
-            child: CustomSingleChildLayout(
-              delegate: VideoSurfaceLayout(heightFactor: heightFactor, slid: slid),
-              child: Stack(
-                fit: StackFit.expand,
-                children: [
-                  KeyedSubtree(key: const ValueKey('video-view'), child: video),
-                  if (session != null)
-                    _unseen(
-                      turn != null || slid != null,
-                      _MovingDim(
-                        drag: story?.drag,
-                        child: _DanmakuArea(
-                          key: const ValueKey('video-danmaku-area'),
-                          pad: pad,
-                          vertical: presentation == Presentation.vertical,
-                          videoIsVertical: VerticalChrome.uprightShape(session),
-                          fit: session.fit,
-                          video: switch (session.videoShape) {
-                            (:final width, :final height) => Size(width.toDouble(), height.toDouble()),
-                            null => null,
-                          },
-                          builder: (picture, area) => ClipRect(
-                            // A playing upright box held at 16:9 by the scroll isn't shrunk, but its danmaku still run
-                            // the full height.
-                            clipBehavior: shrunk || danmakuHeight != null ? Clip.hardEdge : Clip.none,
-                            child: _Pinned(
-                              size: pin?.value,
-                              child: OverflowBox(
-                                alignment: Alignment.topCenter,
-                                minHeight: danmakuHeight,
-                                maxHeight: danmakuHeight,
-                                child: DanmakuLayer(
-                                  key: const ValueKey('video-danmaku'),
-                                  clock: session.clock,
-                                  timeline: danmaku?.timeline,
-                                  // The end screens show no danmaku over the last frame.
-                                  enabled: session.danmakuOn && !ended && played,
-                                  wake: session.readout.any,
-                                  settings: ui?.danmaku?.settings,
-                                  presentation: presentation,
-                                  formFactor: pad ? FormFactor.pad : FormFactor.phone,
-                                  mask: ui?.danmaku?.mask,
-                                  picture: _Pinned.unscale(picture, area: area, pinned: pin?.value),
-                                  mirrored: session.mirrored,
+          slid: slid,
+          (key, room, settling) => Align(
+            key: key,
+            alignment: Alignment.topCenter,
+            child: StoryShift(
+              drag: story?.drag,
+              child: CustomSingleChildLayout(
+                delegate: VideoSurfaceLayout(heightFactor: heightFactor, slid: slid ?? room),
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    KeyedSubtree(key: const ValueKey('video-view'), child: video),
+                    if (session != null)
+                      _unseen(
+                        turn != null || slid != null || settling,
+                        _MovingDim(
+                          drag: story?.drag,
+                          child: _DanmakuArea(
+                            key: const ValueKey('video-danmaku-area'),
+                            pad: pad,
+                            vertical: presentation == Presentation.vertical,
+                            room: room != null,
+                            videoIsVertical: VerticalChrome.uprightShape(session),
+                            fit: session.fit,
+                            video: switch (session.videoShape) {
+                              (:final width, :final height) => Size(width.toDouble(), height.toDouble()),
+                              null => null,
+                            },
+                            builder: (picture, area) => ClipRect(
+                              // A playing upright box held at 16:9 by the scroll isn't shrunk, but its danmaku still
+                              // run the full height.
+                              clipBehavior: shrunk || danmakuHeight != null ? Clip.hardEdge : Clip.none,
+                              child: _Pinned(
+                                size: pin?.value,
+                                child: OverflowBox(
+                                  alignment: Alignment.topCenter,
+                                  minHeight: danmakuHeight,
+                                  maxHeight: danmakuHeight,
+                                  child: DanmakuLayer(
+                                    key: const ValueKey('video-danmaku'),
+                                    clock: session.clock,
+                                    timeline: danmaku?.timeline,
+                                    // The end screens show no danmaku over the last frame.
+                                    enabled: session.danmakuOn && !ended && played,
+                                    wake: session.readout.any,
+                                    settings: ui?.danmaku?.settings,
+                                    presentation: presentation,
+                                    formFactor: pad ? FormFactor.pad : FormFactor.phone,
+                                    mask: ui?.danmaku?.mask,
+                                    picture: _Pinned.unscale(picture, area: area, pinned: pin?.value),
+                                    mirrored: session.mirrored,
+                                  ),
                                 ),
                               ),
                             ),
                           ),
                         ),
                       ),
-                    ),
-                ],
+                  ],
+                ),
               ),
             ),
           ),
         ),
       if (story != null)
-        StoryNeighbours(
+        _inRoom(
           key: const ValueKey('story-neighbours'),
-          pager: story,
-          danmakuOn: session?.danmakuOn ?? true,
-          slide: slid,
+          slid: slid,
+          (key, room, _) => StoryNeighbours(
+            key: key,
+            pager: story,
+            danmakuOn: session?.danmakuOn ?? true,
+            slide: slid ?? room,
+          ),
         ),
       if (session != null && session.showStats)
         SafeArea(
@@ -268,6 +285,29 @@ class VideoPlayerArea extends StatelessWidget {
         child: Stack(fit: StackFit.expand, children: _controls(pad: pad, story: story)),
       ),
     ];
+  }
+
+  /// [build] with the room above 竖屏's sheet when the page gives one, where nothing slides, and whether the sheet is
+  /// moving: followed on its own every frame the sheet moves, so only the video and the held still are built again,
+  /// not the controls. [key] goes on whichever is outermost.
+  Widget _inRoom(
+    Widget Function(Key? key, Rect? room, bool settling) build, {
+    required Key key,
+    required Rect? slid,
+  }) {
+    final room = this.room;
+    if (room == null) return build(key, null, false);
+    return ValueListenableBuilder<Rect?>(
+      key: key,
+      valueListenable: room,
+      builder: (context, box, _) {
+        final inRoom = slid == null ? box : null;
+        final sheet = ui?.storySheet;
+        // The last frame of a move lands the sheet on its stop, which moves the room too.
+        final settling = inRoom != null && sheet != null && sheet.position.value != sheet.stop.index;
+        return build(null, inRoom, settling);
+      },
+    );
   }
 
   /// A video swiped to that fails to open has no gesture layer, only 重试: in 竖屏 the swipe still goes past it.
@@ -367,7 +407,10 @@ class VideoPlayerArea extends StatelessWidget {
   Widget _chrome(PlayerUi ui) => switch (presentation) {
     Presentation.inline => PortraitControls(key: const ValueKey('chrome-inline'), ui: ui),
     Presentation.landscape => LandscapeChrome(key: const ValueKey('chrome-landscape'), ui: ui),
-    Presentation.vertical => VerticalChrome(key: const ValueKey('chrome-vertical'), ui: ui),
+    Presentation.vertical => _SheetAside(
+      sheet: ui.storySheet,
+      child: VerticalChrome(key: const ValueKey('chrome-vertical'), ui: ui),
+    ),
   };
 
   // The iPad has no 竖屏 (its full screen takes upright videos too), so only a stray one falls to full screen's.
@@ -416,10 +459,37 @@ class VideoPlayerArea extends StatelessWidget {
 double verticalBand({required bool upright}) =>
     (upright ? BiliMetrics.verticalUprightCentre : BiliMetrics.verticalVideoCentre) * 2;
 
+/// With 竖屏's sheet at [position] (0 closed, 1 half, 2 full), the video's box on a [screen] of that size: the picture
+/// fitted into the room from [StorySheetRoomTheme.pictureTop] down to the sheet's top edge, sitting on that edge, in a
+/// box the screen's width so the player centres it across (264: an upright one fills the room's height; 269: a wide one
+/// spans the width, its bottom on the sheet). The room starts as the picture's own place in 竖屏's band, so rising, the
+/// picture stays put until the sheet reaches it, and its top comes down to the room's as the sheet nears half.
+Rect storySheetRoom({
+  required Size screen,
+  required double position,
+  required bool upright,
+  required FitMode fit,
+  Size? video,
+}) {
+  Rect fitted(Size box) =>
+      videoPicture(box, fit: fit, video: video) ??
+      (upright ? Offset.zero & box : videoPicture(box, fit: FitMode.ratio16x9)!);
+  final band = Size(screen.width, screen.height * verticalBand(upright: upright));
+  final picture = fitted(band);
+  final place = Rect.fromLTRB(0, math.max(picture.top, 0), screen.width, math.min(picture.bottom, band.height));
+  const top = StorySheetRoomTheme.pictureTop;
+  final roomTop = lerpDouble(math.min(place.top, top), top, position.clamp(0.0, 1.0))!;
+  final bottom = math.max(roomTop, math.min(StorySheetController.topFor(position, screen.height), place.bottom));
+  final room = Size(screen.width, bottom - roomTop);
+  final height = room.isEmpty ? 0.0 : math.min(fitted(room).height, room.height);
+  return Rect.fromLTRB(0, bottom - height, screen.width, bottom);
+}
+
 /// Where the danmaku fly: below the status bar, and in 竖屏 from under the top row to the video's bottom, over the
 /// black above a landscape video as 118 shows, clear of the uploader and the title below it. On the iPad they fly over
 /// the whole box: the page's player sits below the status bar, and full screen runs them from the screen's top edge
-/// (ipad/09, 25), where the status bar shows only with the controls. [padDanmakuInsets] is the iPad's.
+/// (ipad/09, 25), where the status bar shows only with the controls. [padDanmakuInsets] is the iPad's. In the [room]
+/// above 竖屏's sheet the box is the picture's own height, below the status bar, and they fly over all of it (269).
 ///
 /// The video fills the box this area is in, so [builder] is also told where its picture sits, in the area's own
 /// coordinates, for 人像防挡.
@@ -428,6 +498,7 @@ class _DanmakuArea extends StatelessWidget {
     super.key,
     required this.pad,
     required this.vertical,
+    this.room = false,
     required this.videoIsVertical,
     required this.fit,
     required this.video,
@@ -436,6 +507,7 @@ class _DanmakuArea extends StatelessWidget {
 
   final bool pad;
   final bool vertical;
+  final bool room;
   final bool videoIsVertical;
   final FitMode fit;
 
@@ -460,6 +532,7 @@ class _DanmakuArea extends StatelessWidget {
 
   EdgeInsets _padding(Size box, double inset) {
     if (pad) return padDanmakuInsets;
+    if (room) return EdgeInsets.zero;
     if (!vertical) return EdgeInsets.only(top: inset);
     final top =
         math.max(inset - BiliMetrics.verticalTopLift, 0.0) + BiliMetrics.chromeButton + BiliMetrics.verticalDanmakuDrop;
@@ -584,6 +657,34 @@ class _MovingDim extends StatelessWidget {
       builder: (context, child) => Opacity(
         opacity: drag?.moving ?? false ? VerticalCleanTheme.movingOpacity : 1,
         child: child,
+      ),
+      child: child,
+    );
+  }
+}
+
+/// 竖屏's controls as its sheet rises: fading out by [StorySheetRoomTheme.chromeGone] of the way to half and back as it
+/// closes (268), deaf to touches and silent to VoiceOver while the sheet is up at all. Only the fade follows the
+/// sheet's frames; the controls themselves aren't rebuilt.
+class _SheetAside extends StatelessWidget {
+  const _SheetAside({required this.sheet, required this.child});
+
+  final StorySheetController? sheet;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final sheet = this.sheet;
+    if (sheet == null) return child;
+    return ValueListenableBuilder<double>(
+      key: const ValueKey('vertical-sheet-aside'),
+      valueListenable: sheet.position,
+      builder: (context, position, child) => IgnorePointer(
+        ignoring: position > 0,
+        child: ExcludeSemantics(
+          excluding: position > 0,
+          child: Opacity(opacity: (1 - position / StorySheetRoomTheme.chromeGone).clamp(0.0, 1.0), child: child),
+        ),
       ),
       child: child,
     );

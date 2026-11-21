@@ -4,6 +4,7 @@ import 'dart:math' show max, min, pi;
 import 'package:bili_core/api.dart' as bili
     show AidLink, BiliClientDanmaku, BvidLink, LinkParser, VideoCard, VideoView;
 import 'package:bili_core/devlog.dart';
+import 'package:flutter/gestures.dart' show HorizontalDragGestureRecognizer;
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
@@ -32,6 +33,7 @@ import '../player/bili_player.dart' show FitMode, PlayerStatus;
 import '../player_ui/chrome_state.dart';
 import '../player_ui/panels/panel_controller.dart';
 import '../player_ui/panels/panel_layer.dart';
+import '../player_ui/player_gestures.dart' show PlayerGestureLayer;
 import '../player_ui/player_loading.dart';
 import '../player_ui/player_ui.dart';
 import '../player_ui/speed_lock.dart';
@@ -59,7 +61,10 @@ import 'player_session.dart';
 import 'story/page_story_feed.dart';
 import 'story/story_drag.dart';
 import 'story/story_feed.dart';
+import 'story/story_intro.dart';
 import 'story/story_pager.dart';
+import 'story/story_sheet.dart';
+import 'story/story_sheet_view.dart';
 import 'turn_recorder.dart';
 import 'video_player_area.dart';
 import 'video_route.dart';
@@ -103,6 +108,9 @@ PageDetails pageDetails({
 
 typedef VideoPageOpener = Future<void> Function(BuildContext context, VideoRoute route);
 
+/// The feed of a page opened from the 竖屏 sheet's 相关视频: [story]'s list from the card tapped.
+typedef RelatedStoryFeedFactory = StoryFeed Function(PagePlayback playback, RelatedStory story);
+
 /// The video page: the player at 16:9 under a black status bar with the tab row and 简介 | 评论 below it, or the
 /// player alone over the whole screen in full screen, which is this page laid out again rather than a route of its
 /// own. Paused, the small player shrinks to the 继续播放 bar as the shown tab scrolls, the tab row riding under it.
@@ -111,7 +119,9 @@ typedef VideoPageOpener = Future<void> Function(BuildContext context, VideoRoute
 /// video opened from the page replaces it ([replaceVideoPage]). Covered by another page (a video from a space opened on
 /// it) it pauses, and shown again it resumes where it was, without a reload. An offline route's page (158) plays a
 /// 离线缓存 part from the phone with the cached videos under the player in place of the tabs, and has no details or
-/// comments.
+/// comments. In 竖屏, 评论 and the title raise the 简介/评论 sheet (264-271) with the picture in the room above it; a
+/// related video there is pushed over the page in 竖屏 of its own ([VideoRoute.relatedStory]), the one exception to
+/// replacing it, and this page is back in 竖屏 under it when that one pops (270).
 class VideoPage extends StatefulWidget {
   const VideoPage({
     super.key,
@@ -120,6 +130,8 @@ class VideoPage extends StatefulWidget {
     this.createDetails = pageDetails,
     this.openPage = replaceVideoPage,
     this.createStory = pageStoryFeed,
+    this.pushRelated = openVideoPage,
+    this.createRelatedStory = relatedStoryFeed,
   });
 
   final VideoRoute route;
@@ -132,6 +144,13 @@ class VideoPage extends StatefulWidget {
   /// A related video, a video id in the description or a comment, or the uploader sheet's video, opens through this:
   /// in this page's place.
   final VideoPageOpener openPage;
+
+  /// A related video tapped in the 竖屏 sheet's 简介 opens through this, pushed over the page (KaiC: stacked, as the
+  /// official app does).
+  final VideoPageOpener pushRelated;
+
+  /// 竖屏's feed on a page whose route carries [VideoRoute.relatedStory], in place of [createStory].
+  final RelatedStoryFeedFactory createRelatedStory;
 
   /// Asks for [cover] as the page's own does (the player box's size, [CoverPreset.player]) the moment a page is
   /// opened: the card's smaller (for 推荐, 4:3) picture flies in under it and would otherwise sit stretched in the box
@@ -325,6 +344,30 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
   final _speedLock = SpeedLock();
   late final _storyPager = StoryPager(drag: _storyDrag, clean: _clean, vsync: this);
 
+  /// 竖屏's 简介/评论 sheet (264-271), and whether it was up (open, moving or under the finger) when last followed.
+  late final _storySheet = StorySheetController(vsync: this);
+  bool _storyOpen = false;
+
+  /// With the sheet up, the video's box in the room above it, followed every frame the sheet moves, and the screen it
+  /// was worked out for.
+  final _room = ValueNotifier<Rect?>(null);
+  Size? _roomScreen;
+
+  /// 评论's count beside the sheet's tab, as [PlayerUi.replies] reads it.
+  final _sheetReplies = ValueNotifier<int?>(null);
+
+  /// The left-edge swipe over the sheet and the picture above it, which keep the player's own edge swipe from the
+  /// finger while the sheet is up.
+  late final _sheetEdge = HorizontalDragGestureRecognizer(debugOwner: this)
+    ..onStart = ((_) => _sheetEdgeTravel = 0)
+    ..onUpdate = ((details) => _sheetEdgeTravel += details.primaryDelta ?? 0)
+    ..onEnd = _sheetEdgeEnded;
+  double _sheetEdgeTravel = 0;
+
+  /// Drawn in 竖屏 while the page doesn't own the orientation: a page pushed from the sheet's 相关视频 opens in it, and
+  /// the page under it stays in it, back in 竖屏 when shown again (270).
+  bool _holdVertical = false;
+
   /// The list's count once its first page is in, for 评论 N to follow a post or a delete; null before.
   final _listCount = ValueNotifier<int?>(null);
   late final _commentCallbacks = CommentCallbacks(
@@ -373,7 +416,11 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
 
   OrientationController get _orientation => _services!.device.orientation;
 
-  Presentation get _presentation => _owning && !_left ? _orientation.presentation : Presentation.inline;
+  Presentation get _presentation {
+    if (_left) return Presentation.inline;
+    if (_owning) return _orientation.presentation;
+    return _holdVertical ? Presentation.vertical : Presentation.inline;
+  }
 
   /// Landscape full screen is laid out once the screen is landscape, and stays until it is upright again; 竖屏 stays
   /// until the screen is landscape.
@@ -505,6 +552,22 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
     final band = Offset.zero & Size(screen.width, screen.height * verticalBand(upright: upright));
     final room = Rect.fromLTRB(0, VerticalSheetTheme.pictureTop, screen.width, VerticalSheetTheme.pictureBottom);
     return Rect.lerp(band, room, _sheetCurve.value);
+  }
+
+  /// With 竖屏's 简介/评论 sheet up, the video's box on the [screen] in the room above it ([storySheetRoom]); null with
+  /// the sheet closed and out of 竖屏.
+  Rect? _storyRoom(Size screen) {
+    final position = _storySheet.position.value;
+    if (position <= 0 || _pad || _laidOut.value != Presentation.vertical) return null;
+    final session = _session;
+    final shape = session?.videoShape;
+    return storySheetRoom(
+      screen: screen,
+      position: position,
+      upright: session != null && VerticalChrome.uprightShape(session),
+      fit: session?.fit ?? FitMode.fit,
+      video: shape == null ? null : Size(shape.width.toDouble(), shape.height.toDouble()),
+    );
   }
 
   /// The turned size is already in (or about to be). The turn being waited for is drawn from the first build at its
@@ -696,6 +759,10 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
     _uploaderSheet.addListener(_sheetChanged);
     _collapse.addListener(_collapseChanged);
     _spin.addStatusListener(_spinStatus);
+    _holdVertical = widget.route.relatedStory != null && !_offline;
+    _storySheet.addListener(_storySheetChanged);
+    _storySheet.position.addListener(_storySheetMoved);
+    _listCount.addListener(_syncReplies);
   }
 
   @override
@@ -710,6 +777,13 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
         _services!.device.status.watch(true);
       }
       _takePlayback();
+      // Pushed from the sheet's 相关视频, the page takes the orientation into 竖屏 at once rather than once its video is
+      // known: the page under it gave it up, and the screen would be left out of full screen meanwhile.
+      if (_holdVertical) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted && !_owning) _claimOrientation();
+        });
+      }
     }
     // Only another page covers this one. A popup on top (the ⋮ menu, a dialog) makes the route not current as well,
     // so ModalRoute.isCurrentOf would stop the end rules and the background pause under a menu.
@@ -768,6 +842,8 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
     final createDetails = widget.createDetails;
     final openPage = widget.openPage;
     final createStory = widget.createStory;
+    final pushRelated = widget.pushRelated;
+    final createRelatedStory = widget.createRelatedStory;
     final brought = route.playback;
     // 推荐's big card hands its inline playback over to a page it opens; anything else brought is a restore.
     final restored = brought != null && !brought.inline;
@@ -783,11 +859,17 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
               createDetails: createDetails,
               openPage: openPage,
               createStory: createStory,
+              pushRelated: pushRelated,
+              createRelatedStory: createRelatedStory,
             ),
             autoplay: brought != null || _opensPlaying(route),
-            storyFeed: createStory,
+            storyFeed: switch (route.relatedStory) {
+              final story? => (playback) => createRelatedStory(playback, story),
+              null => createStory,
+            },
           );
-    _fullScreenOnOpen = !restored && route.comment == null && PlayerPrefs.shared.detailFullScreen;
+    _fullScreenOnOpen =
+        !restored && route.comment == null && route.relatedStory == null && PlayerPrefs.shared.detailFullScreen;
     _playback = playback;
     // A card that was playing when tapped plays on; one its rule had paused opens as a page opened afresh would.
     final resumeHeld = !playback.heldOnCard || _opensPlaying(route);
@@ -892,6 +974,8 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
       onBack: _back,
       details: details,
       onComments: _offline ? null : _showComments,
+      storySheet: _offline ? null : _storySheet,
+      onIntroSheet: _offline ? null : () => _openStorySheet(PageTab.intro),
       overlay: _overlays,
       edgeTaken: _threadEdge,
       danmaku: danmaku,
@@ -932,6 +1016,7 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
     });
     _storyPager.framed(controller.hasPlayed ? controller.video?.bvid : null);
     _syncComments();
+    _syncReplies();
     _syncAutoHide();
     _syncCollapse();
   }
@@ -943,6 +1028,7 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
     final intro = IntroContent.of(session);
     if (intro != _intro && mounted) setState(() => _intro = intro);
     _syncComments();
+    _syncReplies();
     if (session.video == null) return;
     final vertical = session.layoutVertical;
     final changed = vertical != _vertical;
@@ -1059,6 +1145,8 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
     }
   }
 
+  void _syncReplies() => _sheetReplies.value = _listCount.value ?? _session?.detail?.stat.reply;
+
   void _setThreadOpen(bool open) {
     _threadOpen = open;
     _threadEdge.value = open || _uploaderSheet.isOpen;
@@ -1124,12 +1212,25 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
     return false;
   }
 
-  /// Once the video is known, and again each time the page is shown after one above it: the latest begin wins.
+  /// Once the video is known, and again each time the page is shown after one above it: the latest begin wins. A page
+  /// held in 竖屏 takes it back into 竖屏, still drawn there through the begin's exit to the small player.
   void _claimOrientation() {
     final vertical = _vertical;
-    if (_left || vertical == null || _covered) return;
-    _owning = true;
-    _orientation.begin(this, videoIsVertical: vertical);
+    final held = _holdVertical && !_pad;
+    if (_left || _covered || (vertical == null && !held)) return;
+    _holdVertical = false;
+    if (held) {
+      _orientation
+        ..begin(this, videoIsVertical: vertical ?? false)
+        ..enterVertical();
+      _owning = true;
+      // The page above left full screen on its way out, which the cache didn't see.
+      _immersive = null;
+      _applySystemUi();
+    } else {
+      _owning = true;
+      _orientation.begin(this, videoIsVertical: vertical!);
+    }
     _enterFullScreenOnOpen();
   }
 
@@ -1141,6 +1242,7 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
       _commentOverlays.close();
     }
     if (_uploaderSheet.isOpen && _presentation != _sheetIn) _uploaderSheet.close();
+    if (_presentation != Presentation.vertical) _closeStorySheet();
     if (_presentation.fullScreen) _offlineSheet.value = null;
     // A finger on 竖屏's page as it turns to landscape moves nothing: the page is back where it was.
     if (_presentation != Presentation.vertical && _storyDrag.moving) _storyDrag.land();
@@ -1274,18 +1376,22 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
     if (mounted) setState(() {});
   }
 
-  /// Back closes the comments' overlays and thread first on the small player, then an action overlay, then a panel,
-  /// then the uploader sheet's confirm and the sheet.
+  /// Back closes the comments' overlays and thread first on the small player and in 竖屏's sheet, then an action
+  /// overlay, then a panel, then the uploader sheet's confirm and the sheet, then 竖屏's sheet.
   void _back() {
     if (_closeOfflineSheet()) return;
     if (_closeDanmakuSend()) return;
-    if (!_presentation.fullScreen && _closeComments()) return;
+    if ((!_presentation.fullScreen || _storyOpen) && _closeComments()) return;
     if (_overlays.value != null) {
       _overlays.close();
     } else if (_panels.value != null) {
       _panels.close();
     } else if (_uploaderSheet.back()) {
       return;
+    } else if (_closeStorySheet()) {
+      return;
+    } else if (_popsFromStory) {
+      Navigator.of(context).pop();
     } else if (_presentation.fullScreen) {
       _orientation.exitToInline();
     } else if (!_laidOut.value.fullScreen) {
@@ -1332,6 +1438,7 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
       _overlays.close();
       await _inlineFirst();
       if (!mounted || _left || _covered) return;
+      _holdVertical = false;
       _owning = false;
       _orientation.end(this);
       final before = environment.account;
@@ -1495,10 +1602,98 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
     return true;
   }
 
-  /// 评论 in full screen: back to the small player on the 评论 tab.
+  /// 评论 in full screen: in 竖屏 the sheet on 评论 (264), from landscape back to the small player on the 评论 tab.
   void _showComments() {
+    if (_inStory) {
+      _openStorySheet(PageTab.comments);
+      return;
+    }
     _tabs.select(PageTab.comments, animate: false);
     _orientation.exitToInline();
+  }
+
+  bool get _inStory => !_pad && _presentation == Presentation.vertical && _laidOut.value == Presentation.vertical;
+
+  /// 竖屏's 评论 and title: the sheet up on [tab]. Not while the page moves between videos, where the tap may have been
+  /// on the one it is leaving.
+  void _openStorySheet(PageTab tab) {
+    if (_left || !mounted || !_inStory || _storyDrag.moving) return;
+    _storySheet.open(tab);
+  }
+
+  /// False when the sheet is closed or already closing.
+  bool _closeStorySheet() {
+    if (_storySheet.stop == SheetStop.closed) return false;
+    _storySheet.close();
+    return true;
+  }
+
+  /// A page pushed from the sheet's 相关视频 goes back to the one under it from 竖屏, sliding off it (270).
+  bool get _popsFromStory => widget.route.relatedStory != null && _presentation == Presentation.vertical;
+
+  /// The sheet's stop or tab changed, or it moved: the page builds again when it goes up or comes down, and 评论详情
+  /// inside it goes with it once it closes.
+  void _storySheetChanged() {
+    if (_storySheet.stop == SheetStop.closed && _storyOpen && _threadOpen) _comments?.closeThread();
+    final open = _storySheet.isOpen;
+    if (open == _storyOpen || !mounted) return;
+    setState(() => _storyOpen = open);
+  }
+
+  /// Each frame the sheet moves, only the player's picture follows it into the room.
+  void _storySheetMoved() {
+    if (_roomScreen case final screen?) _room.value = _storyRoom(screen);
+    _storySheetChanged();
+  }
+
+  /// A tap on the picture above the sheet plays or pauses, as 竖屏's own tap does (KaiC).
+  void _sheetTap() {
+    final session = _session;
+    if (session == null || _left) return;
+    session.togglePlay();
+    _chrome.show();
+  }
+
+  void _sheetEdgeDown(PointerDownEvent event) {
+    if (!_storyOpen || event.position.dx >= PlayerGestureLayer.backEdge(MediaQuery.paddingOf(context))) return;
+    _sheetEdge.addPointer(event);
+  }
+
+  /// Judged as 竖屏's own edge swipe is: let go past half the screen's width, or flung rightward.
+  void _sheetEdgeEnded(DragEndDetails details) {
+    if (!mounted) return;
+    final width = MediaQuery.sizeOf(context).width;
+    if (!(width > 0)) return;
+    final speed = (details.primaryVelocity ?? 0) / width;
+    final back = speed.abs() >= PlayerGestureLayer.edgeFlingWidths
+        ? speed > 0
+        : _sheetEdgeTravel / width > PlayerGestureLayer.edgeBackShare;
+    if (back) _back();
+  }
+
+  /// A card in the sheet's 相关视频 (270): the sheet drops away and the card's video is pushed over the page in 竖屏 of
+  /// its own, its feed the list from that card; this page stays in 竖屏 under it.
+  void _openRelatedStory(int index) {
+    if (_left || !mounted || !_inStory) return;
+    final cards = _intro.related.take(StoryIntroTheme.relatedLimit).toList();
+    if (index < 0 || index >= cards.length) return;
+    final card = cards[index];
+    _closeStorySheet();
+    // Its Heroes go off before the push: the page's hidden 简介 holds the same card, whose cover would fly in from out
+    // of sight.
+    setState(() => _holdVertical = true);
+    unawaited(
+      widget.pushRelated(
+        context,
+        VideoRoute(
+          bvid: card.bvid,
+          cidHint: card.cid > 0 ? card.cid : null,
+          title: card.title,
+          cover: card.cover,
+          relatedStory: RelatedStory(cards: cards, index: index),
+        ),
+      ),
+    );
   }
 
   /// 查看N条评论 sideways: the column scrolled so 热门评论 sits under the bar and the strip, or under the player while it
@@ -1580,8 +1775,9 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
   void _leave({bool fromDispose = false}) {
     if (_left) return;
     _left = true;
-    // Disposal runs while the tree is locked, where nothing may notify; the pager goes with the page.
+    // Disposal runs while the tree is locked, where nothing may notify; the pager and the sheet go with the page.
     if (!fromDispose && _story.value != null) _endStory();
+    if (!fromDispose) _closeStorySheet();
     _owning = false;
     _details?.active = false;
     _controller?.removeListener(_follow);
@@ -1639,7 +1835,9 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
     _sheetCurve.dispose();
     _sheetShrink.dispose();
     _threadEdge.dispose();
-    _listCount.dispose();
+    _listCount
+      ..removeListener(_syncReplies)
+      ..dispose();
     _comments
       ?..removeListener(_commentsChanged)
       ..dispose();
@@ -1669,6 +1867,13 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
       ..dispose();
     _chrome.dispose();
     _storyPager.dispose();
+    _storySheet.position.removeListener(_storySheetMoved);
+    _storySheet
+      ..removeListener(_storySheetChanged)
+      ..dispose();
+    _sheetEdge.dispose();
+    _room.dispose();
+    _sheetReplies.dispose();
     // Disposed without leaving, a playback the small window keeps would hold the feed on.
     if (_story.value != null) _playback?.endStory();
     _story.dispose();
@@ -1735,7 +1940,7 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
           return;
         } else if (_closeDanmakuSend()) {
           return;
-        } else if (!presentation.fullScreen && _closeComments()) {
+        } else if ((!presentation.fullScreen || _storyOpen) && _closeComments()) {
           return;
         } else if (_overlays.value != null) {
           _overlays.close();
@@ -1743,6 +1948,10 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
           _panels.close();
         } else if (_uploaderSheet.back()) {
           return;
+        } else if (_closeStorySheet()) {
+          return;
+        } else if (_popsFromStory) {
+          Navigator.of(context).pop();
         } else if (_presentation.fullScreen) {
           _orientation.exitToInline();
         }
@@ -1812,19 +2021,21 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
                   );
                   final tabRow = belowPlayer(_offline ? _offlineHeader() : _tabRow(context));
                   final sheetOver = layout == Presentation.vertical && _uploaderSheet.isOpen;
+                  final storyUp = layout == Presentation.vertical && _storyOpen;
                   // Full screen runs under the notch and the home indicator, so its chrome keeps clear of them itself;
                   // the small player sits below the status bar with no insets of its own.
                   final area = _WithoutPadding(
                     top: !fullScreen,
                     bottom: !fullScreen,
-                    // An open panel covers the player for VoiceOver too, as landscape's panel does, and so does the
-                    // uploader sheet over 竖屏, whose controls are gone.
+                    // An open panel covers the player for VoiceOver too, as landscape's panel does, and so do the
+                    // uploader sheet and the 简介/评论 sheet over 竖屏, whose controls are gone; the picture above the
+                    // latter answers for it.
                     child: ExcludeSemantics(
-                      excluding: _panels.value != null || sheetOver,
+                      excluding: _panels.value != null || sheetOver || storyUp,
                       // Rising, or springing back from an edge swipe, the sheet is still below its top, and the
                       // strip above it would reach the player's gestures (a drag would swipe the feed under it).
                       child: IgnorePointer(
-                        ignoring: sheetOver,
+                        ignoring: sheetOver || storyUp,
                         // The danmaku's height follows where an upright video's box is heading, once per reshape.
                         child: ValueListenableBuilder<double>(
                           valueListenable: _collapse.shape,
@@ -1835,7 +2046,7 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
                             ui: ui,
                             video: mine ? _videoView : null,
                             danmaku: mine ? controller.danmaku : null,
-                            cover: _cover(context),
+                            cover: _cover(context, vertical: layout == Presentation.vertical),
                             played: _played || (controller?.hasPlayed ?? false),
                             loading: _loading(controller, mine),
                             waiting: mine ? _dataWait : null,
@@ -1850,6 +2061,7 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
                             verticalTurn: _verticalTurn,
                             slide: _slid,
                             storyPager: _storyPager,
+                            room: _room,
                           ),
                         ),
                       ),
@@ -1869,6 +2081,9 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
                     _ => null,
                   };
                   final actionOverlays = pad ? null : actionOverlaysFor(null);
+                  final storySheet = layout == Presentation.vertical && ui != null && !pad && !_offline
+                      ? _storySheetLayer(ui)
+                      : null;
                   // Built once per page build, so scrolling and the shrink rebuild none of it.
                   final padBody = pad
                       ? _padBody(
@@ -1910,6 +2125,8 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
                       final spinning = _spinning;
                       final waiting = _turnFrom != null || _pendingTurn != null;
                       final hidden = fullScreen && turn?.body == null;
+                      // 竖屏 shows 评论详情 and the composer only from its sheet.
+                      final commentsHidden = hidden && !storyUp;
                       // The uploader sheet over 竖屏 moves the picture as the slide does, and puts the controls away.
                       final slid = turn == null && !spinning
                           ? _sliding(constraints.biggest, upright.top) ??
@@ -1923,6 +2140,8 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
                       _pin.value = turn == null ? null : Size(constraints.maxWidth, height);
                       _verticalTurn.value = turn != null && _upright == Presentation.vertical ? turn.t : null;
                       _slid.value = slid;
+                      _roomScreen = constraints.biggest;
+                      _room.value = _storyRoom(constraints.biggest);
                       // The chrome goes from the change of presentation, so the host's still picture has none either;
                       // in a slide it comes with the landing.
                       _turningPlayer.value = turn != null || spinning || waiting || slid != null;
@@ -1988,6 +2207,8 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
                               ),
                             ),
                           ),
+                          if (storySheet != null)
+                            Positioned.fill(key: const ValueKey('story-sheet-layer'), child: storySheet),
                           if (progress > 0 && turn == null)
                             Positioned(
                               key: const ValueKey('collapse-bar'),
@@ -2014,16 +2235,23 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
                             child: windowed(
                               body,
                               Offstage(
-                                offstage: hidden,
+                                offstage: commentsHidden,
                                 child: TickerMode(
-                                  enabled: !hidden,
+                                  enabled: !commentsHidden,
                                   child: ExcludeFocus(
-                                    excluding: hidden,
-                                    child: CommentOverlays(
-                                      model: _comments,
-                                      controller: _commentOverlays,
-                                      callbacks: _commentCallbacks,
-                                      threadTop: uprightBox,
+                                    excluding: commentsHidden,
+                                    // In 竖屏's sheet 评论详情 opens under the tab row, following it as it moves (267).
+                                    child: ValueListenableBuilder<double>(
+                                      valueListenable: _storySheet.position,
+                                      builder: (context, position, _) => CommentOverlays(
+                                        model: _comments,
+                                        controller: _commentOverlays,
+                                        callbacks: _commentCallbacks,
+                                        threadTop: storyUp
+                                            ? StorySheetController.topFor(position, constraints.maxHeight) +
+                                                  StorySheetTheme.headerHeight
+                                            : uprightBox,
+                                      ),
                                     ),
                                   ),
                                 ),
@@ -2496,9 +2724,10 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
   Widget _pager(BuildContext context) {
     final session = _session;
     final details = _details;
-    // Leaving, a related row's cover would otherwise fly back to a feed card showing the same video.
+    // Leaving, a related row's cover would otherwise fly back to a feed card showing the same video; held in 竖屏, a
+    // video pushed from the sheet comes in as a page, with nothing flying from these rows out of sight.
     return HeroMode(
-      enabled: !_left || _replaced,
+      enabled: (!_left || _replaced) && !_holdVertical,
       child: PageTabs(
         controller: _tabs,
         intro: session == null || details == null
@@ -2513,18 +2742,47 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
                 onOpenRelated: _openRelated,
                 onWatchLater: (card) => unawaited(_watchLater(card)),
               ),
-        comments: switch (_comments) {
-          final comments? => CommentsTab(
-            key: ObjectKey(comments),
-            model: comments,
-            callbacks: _commentCallbacks,
+        comments: _commentsTab(),
+      ),
+    );
+  }
+
+  Widget _commentsTab() => switch (_comments) {
+    final comments? => CommentsTab(key: ObjectKey(comments), model: comments, callbacks: _commentCallbacks),
+    // A video that failed to load never brings the aid 评论 waits for.
+    null => switch ((_failure(_controller, _controller != null && _attached), _retry)) {
+      (final error?, final retry?) => CommentsSlot.failed(error: error, onRetry: retry),
+      _ => const CommentsSlot(),
+    },
+  };
+
+  /// 竖屏's 简介/评论 sheet over the player, and the picture above it, which plays or pauses on a tap (KaiC) and moves
+  /// nothing on a drag: the player under both takes no touches while the sheet is up. The left edge of both is the back
+  /// swipe.
+  Widget _storySheetLayer(PlayerUi ui) {
+    final session = ui.session;
+    return Listener(
+      onPointerDown: _sheetEdgeDown,
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          _AboveSheet(sheet: _storySheet, onTap: _sheetTap),
+          StorySheetView(
+            controller: _storySheet,
+            // A related video comes in as a pushed page (270), not as a cover flying out of the grid.
+            intro: HeroMode(
+              enabled: false,
+              child: StoryIntro(
+                content: _intro,
+                onOpenRelated: _openRelatedStory,
+                onSeek: (seconds) => unawaited(session.seekAndPlay(seconds)),
+                onOpenVideo: (id) => unawaited(_openVideoId(id)),
+              ),
+            ),
+            comments: _commentsTab(),
+            replies: _sheetReplies,
           ),
-          // A video that failed to load never brings the aid 评论 waits for.
-          null => switch ((_failure(_controller, _controller != null && _attached), _retry)) {
-            (final error?, final retry?) => CommentsSlot.failed(error: error, onRetry: retry),
-            _ => const CommentsSlot(),
-          },
-        },
+        ],
       ),
     );
   }
@@ -2544,27 +2802,32 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
 
   /// The card's cover flies in and stays until this page's video first plays, then goes for good, as the official
   /// app's page opens.
-  Widget? _cover(BuildContext context) {
+  /// A page pushed from 竖屏's sheet opens in 竖屏, where the card's cover sits where a wide picture will, not over the
+  /// whole screen.
+  Widget? _cover(BuildContext context, {required bool vertical}) {
     final route = widget.route;
     final cover = route.cover;
     if (cover == null) return null;
     // Two Heroes with one tag in a page throw at the next push or pop, and after another video opened on the page its
     // related videos can hold this one. HeroMode rather than no Hero, so the cover keeps its element.
     final flies = !_played && !_intro.related.any((card) => card.bvid == route.bvid);
-    return IgnorePointer(
-      key: const ValueKey('video-cover'),
-      child: AnimatedOpacity(
-        opacity: _played ? 0 : 1,
-        duration: const Duration(milliseconds: 200),
-        child: HeroMode(
-          enabled: flies,
-          child: Hero(
-            tag: route.heroTag,
-            flightShuttleBuilder: _coverInFlight,
-            child: RemoteImage(cover, size: _coverSize(context), cover: true, preset: CoverPreset.player),
-          ),
+    final image = AnimatedOpacity(
+      opacity: _played ? 0 : 1,
+      duration: const Duration(milliseconds: 200),
+      child: HeroMode(
+        enabled: flies,
+        child: Hero(
+          tag: route.heroTag,
+          flightShuttleBuilder: _coverInFlight,
+          child: RemoteImage(cover, size: _coverSize(context), cover: true, preset: CoverPreset.player),
         ),
       ),
+    );
+    return IgnorePointer(
+      key: const ValueKey('video-cover'),
+      child: route.relatedStory == null
+          ? image
+          : CustomSingleChildLayout(delegate: _StoryCoverLayout(vertical: vertical), child: image),
     );
   }
 
@@ -2624,6 +2887,66 @@ class _WithoutPadding extends StatelessWidget {
   @override
   Widget build(BuildContext context) =>
       MediaQuery.removePadding(context: context, removeTop: top, removeBottom: bottom, child: child);
+}
+
+/// The picture above 竖屏's sheet, from the screen's top down to the sheet as it moves: a tap there plays or pauses,
+/// and nothing else is taken. Nothing while the sheet is closed.
+class _AboveSheet extends StatelessWidget {
+  const _AboveSheet({required this.sheet, required this.onTap});
+
+  final StorySheetController sheet;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) => LayoutBuilder(
+    builder: (context, constraints) => ValueListenableBuilder<double>(
+      valueListenable: sheet.position,
+      builder: (context, position, child) => position > 0
+          ? Align(
+              alignment: Alignment.topCenter,
+              child: SizedBox(
+                width: constraints.maxWidth,
+                height: StorySheetController.topFor(position, constraints.maxHeight),
+                child: child,
+              ),
+            )
+          : const SizedBox.shrink(),
+      child: Semantics(
+        key: const ValueKey('story-sheet-above'),
+        container: true,
+        button: true,
+        label: '视频画面',
+        onTap: onTap,
+        child: GestureDetector(behavior: HitTestBehavior.opaque, excludeFromSemantics: true, onTap: onTap),
+      ),
+    ),
+  );
+}
+
+/// The cover of a page pushed from 竖屏's sheet: in 竖屏 a 16:9 box across the screen on the band's centre line, where
+/// a wide picture lands; otherwise the whole player.
+class _StoryCoverLayout extends SingleChildLayoutDelegate {
+  const _StoryCoverLayout({required this.vertical});
+
+  final bool vertical;
+
+  Rect _place(Size size) => vertical
+      ? Rect.fromCenter(
+          center: Offset(size.width / 2, size.height * BiliMetrics.verticalVideoCentre),
+          width: size.width,
+          height: size.width / BiliMetrics.videoAspect,
+        )
+      : Offset.zero & size;
+
+  @override
+  BoxConstraints getConstraintsForChild(BoxConstraints constraints) =>
+      BoxConstraints.tight(_place(constraints.biggest).size);
+
+  @override
+  Offset getPositionForChild(Size size, Size childSize) => _place(size).topLeft;
+
+  @override
+  bool shouldRelayout(_StoryCoverLayout oldDelegate) => oldDelegate.vertical != vertical;
 }
 
 /// The turning window, in the clipped child's coordinates.
