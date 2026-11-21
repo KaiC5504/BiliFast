@@ -153,6 +153,11 @@ void main() {
     expect(lanes.toSet(), hasLength(3));
     expect(lanes.last - lanes.first, closeTo(2 * BiliMetrics.danmakuLaneVertical, 0.01));
     expect(lanes.first * 3, closeTo(331.5, 3), reason: '118: the first lane centred about 331.5 px down');
+
+    // 118 has a search row: its room keeps the avatar's ring at 2265-2372 px.
+    final avatar = tester.getRect(find.byKey(const ValueKey('vertical-avatar')));
+    expect(avatar.top * 3, closeTo(2265, 1.5));
+    expect(avatar.bottom * 3, closeTo(2373, 1.5));
   });
 
   testWidgets('16: a 3:4 video paused sits on the uploader row, with the ▶ and the time where 118 has them', (

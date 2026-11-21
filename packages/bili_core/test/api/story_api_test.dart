@@ -11,9 +11,10 @@ import 'report_api_test.dart' show tokenOf;
 
 const storyPath = '/x/v2/feed/index/story';
 
-// Every id, name, link and track value is made up. The shape follows docs/reference/official-iphone-calls.md: the
-// entered video first, a live room, an ad, a video with ad_info, a video stored rotated, one without a bvid, one
-// without a cid, and a 合集 episode whose ids are only at the top level.
+// Every id, name, link, keyword and track value is made up. The shape follows docs/reference/official-iphone-calls.md
+// (top_search_bar the APK's `StoryDetail`): the entered video first with a search row, a live room, an ad, a video
+// with ad_info, a video stored rotated with an empty search row, one without a bvid, one without a cid, and a 合集
+// episode whose ids are only at the top level.
 const storyAnswer = r'''
 {"code":0,"message":"0","ttl":1,"data":{"config":{"swipe_opacity":{"other_ui_alpha_percent":10}},"items":[
 {"goto":"vertical_av","bvid":"BV1Te411a1aA","title":"进来的视频",
@@ -24,6 +25,7 @@ const storyAnswer = r'''
   "relation":{"status":2,"is_follow":1,"is_followed":0}},
  "stat":{"view":104000,"like":5123,"reply":88,"coin":77,"favorite":66,"share":55,"danmaku":44},
  "track_id":"track-story-0001","report_flow_data":"{\"flow_card_type\":\"story\"}","idx":1763100001,
+ "top_search_bar":{"bar_type":0,"keyword":"搜索词","uri":"bilibili://search/story-0001","search_uri":""},
  "desc":"简介","pubdate":1763000000},
 {"goto":"vertical_live","title":"直播间","room_id":5001},
 {"goto":"vertical_ad_av","bvid":"BV1Te411b2bB","player_args":{"aid":90000002,"cid":190000002}},
@@ -32,7 +34,8 @@ const storyAnswer = r'''
  "duration":"61","dimension":{"width":1920,"height":1080,"rotate":1},
  "player_args":{"aid":90000004,"cid":190000004},
  "owner":{"mid":"602","name":"UP主乙","relation":{"status":1}},
- "stat":{"view":"--","like":3},"track_id":"","report_flow_data":"","idx":"1763100002"},
+ "stat":{"view":"--","like":3},"track_id":"","report_flow_data":"","idx":"1763100002",
+ "top_search_bar":{"bar_type":0,"keyword":""}},
 {"goto":"vertical_av","player_args":{"aid":90000005,"cid":190000005},"title":"没有BV号"},
 {"goto":"vertical_av","bvid":"BV1Te411f6fF","player_args":{"aid":90000006},"title":"没有cid"},
 {"goto":"vertical_av","bvid":"BV1Te411g7gG","aid":90000007,"cid":190000007,"title":"合集里的",
@@ -192,7 +195,7 @@ void main() {
       expect(items.map((item) => item.bvid), ['BV1Te411a1aA', 'BV1Te411d4dD', 'BV1Te411g7gG']);
     });
 
-    test('an item decodes its video, shape, uploader, counts and track data', () async {
+    test("an item decodes its video, shape, uploader, counts, track data and search row's keyword", () async {
       final [entered, ...] = await client.storyFeed(aid: 90000001, cid: 190000001, page: 1, entry: entry);
       expect(entered.aid, 90000001);
       expect(entered.cid, 190000001);
@@ -218,6 +221,7 @@ void main() {
       expect(entered.seasonTitle, isNull);
       expect(entered.seasonIndex, isNull);
       expect(entered.seasonTotal, isNull);
+      expect(entered.searchKeyword, '搜索词');
     });
 
     test('a file stored rotated is shown with width and height swapped; numbers sent as text still read', () async {
@@ -234,6 +238,7 @@ void main() {
       expect(rotated.flowData, isNull, reason: 'empty');
       expect(rotated.firstFrame, isNull);
       expect(rotated.ownerFace, '');
+      expect(rotated.searchKeyword, isNull, reason: 'a search row with no keyword');
     });
 
     test("a 合集 episode names its season; ids at the top level are read; 互相关注 is following", () async {
@@ -247,6 +252,7 @@ void main() {
       expect(episode.following, isTrue);
       expect(episode.trackId, isNull, reason: 'missing');
       expect(episode.idx, isNull);
+      expect(episode.searchKeyword, isNull, reason: 'no search row');
     });
 
     test('an item without a bvid or a cid throws DecodeError; one that is not an object too', () {

@@ -313,6 +313,24 @@ void main() {
       expectNothingAsked();
     });
 
+    test("no card keeps the search row's room, nor the one tapped once its details stand in (270)", () {
+      final feed = make();
+      host
+        ..playing = StoryEntry(
+          bvid: bvOf(tapped),
+          cid: 902,
+          title: '详情',
+          cover: 'cover',
+          ownerMid: 3,
+          ownerName: 'UP',
+          searchRow: true,
+          source: fromRoute,
+        )
+        ..changed();
+      expect(feed.current!.title, '详情');
+      expect([for (final entry in feed.entries) entry.searchRow], everyElement(isFalse));
+    });
+
     test('a move before the details are in opens with what the cards had', () {
       final feed = make();
       feed.moveNext();

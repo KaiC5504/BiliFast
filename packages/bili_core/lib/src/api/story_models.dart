@@ -32,6 +32,7 @@ final class StoryItem {
     this.seasonTitle,
     this.seasonIndex,
     this.seasonTotal,
+    this.searchKeyword,
   });
 
   /// A `vertical_av` item; throws [DecodeError] without a bvid or a cid.
@@ -83,6 +84,7 @@ final class StoryItem {
       seasonTitle: _filled(season?.text('title')),
       seasonIndex: _int(season?.map['current_index']),
       seasonTotal: _int(season?.map['total']),
+      searchKeyword: _filled(object.nested('top_search_bar')?.text('keyword')),
     );
   }
 
@@ -129,6 +131,9 @@ final class StoryItem {
   final String? seasonTitle;
   final int? seasonIndex;
   final int? seasonTotal;
+
+  /// `top_search_bar`'s keyword, the 搜索 row under the title (118); null without one.
+  final String? searchKeyword;
 
   /// Taller than wide; a square video counts too, as the official app's 清屏 button shows for it.
   bool get upright => height >= width && width > 0;
