@@ -624,6 +624,7 @@ StoryEntry _withSource(StoryEntry entry, PlaySource source, {StoryEntry? fallbac
   ownerName: entry.ownerName,
   ownerFace: entry.ownerFace,
   ownerFans: entry.ownerFans,
+  ownerVip: entry.ownerVip ?? fallback?.ownerVip,
   following: entry.following,
   views: entry.views,
   likes: entry.likes,
