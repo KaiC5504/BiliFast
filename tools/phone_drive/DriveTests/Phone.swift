@@ -7,7 +7,7 @@ enum Phone {
     static let official = "tv.danmaku.bilianime"
     static let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
 
-    static func env(_ key: String) -> String? {
+    nonisolated static func env(_ key: String) -> String? {
         ProcessInfo.processInfo.environment[key].flatMap { $0.isEmpty ? nil : $0 }
     }
 
