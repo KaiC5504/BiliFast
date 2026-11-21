@@ -540,6 +540,23 @@ void main() {
       expect(host.openedEntered, [false, false, false]);
     });
 
+    test('shows no counter, from the official feed or the related lists, however it moves', () async {
+      final feed = make();
+      expect(feed.counter, isNull);
+      await answerOfficial([item(entered), item('BV1a')]);
+      feed.moveNext();
+      expect(feed.counter, isNull);
+      expect(feed.listGiven, isFalse);
+
+      host = FakeHost(playing: enteredEntry());
+      final related = make(useOfficial: false);
+      await answerRelated([card('BV1r1')]);
+      related
+        ..moveNext()
+        ..movePrevious();
+      expect(related.counter, isNull);
+    });
+
     test('swiped back to the first entry, it keeps its 竖屏 source as its details come in again', () async {
       final feed = make(useOfficial: false);
       await answerRelated([card('BV1r1')]);

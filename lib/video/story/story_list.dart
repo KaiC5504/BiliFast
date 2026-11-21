@@ -68,6 +68,12 @@ abstract class StoryHost extends ChangeNotifier {
 /// stops asking for the page's life ([StoryHost.halt]). A video the page opens that the feed didn't (自动连播 or 选集
 /// while the feed is kept through landscape) starts the feed over from it.
 ///
+/// Given a [list] (the 竖屏 sheet's 相关视频, [listedMost] at most), the feed is that list alone, from the card the
+/// page has open: nothing is asked, its ends are the feed's, and [counter] shows the place. Its videos report as the
+/// related lists' do, the card the page has open as the entered video. A video the page opens that the feed didn't
+/// starts the feed over as above, the list given up (it no longer holds what plays), as does a page whose video
+/// isn't in the list.
+///
 /// With [detail], each video the page settles on has the next one's details asked once, kept in memory while it is a
 /// neighbour, and handed to its open. With [warmsNext] too, the next video is then loaded ahead on the page's player
 /// ([StoryHost.warm]) once the video settled on has shown its first frame and holds enough ahead: once for each video
@@ -84,16 +90,22 @@ class StoryList extends StoryFeed {
     required this._related,
     this._detail,
     this._warmsNext = false,
+    ({List<VideoCard> cards, int index})? list,
     Logger? logger,
   }) : _host = host,
        _logger = logger ?? Logger.shared,
        _enteredBvid = host.bvid {
+    if (list != null) _take(list);
     host.addListener(_hostChanged);
     _hostChanged();
+    if (_listGiven) _askDetail();
   }
 
   /// The official app asks for the next page once the user is within three videos of the end.
   static const ahead = 3;
+
+  /// The 竖屏 sheet's 相关视频 shows 20 at most (KaiC).
+  static const listedMost = 20;
 
   final StoryHost _host;
   StoryPageCall? _official;
@@ -129,6 +141,12 @@ class StoryList extends StoryFeed {
   final List<StoryEntry> _entries = [];
   final Set<String> _listed = {};
   final Set<String> _relatedAsked = {};
+
+  /// The given list is the feed, until a start over.
+  bool _listGiven = false;
+
+  /// The entered video's place: 0, or the given list's card the page opened.
+  int _enteredAt = 0;
   int _index = 0;
   bool _loading = false;
   bool _stalled = false;
@@ -150,8 +168,40 @@ class StoryList extends StoryFeed {
   @override
   bool get loading => _loading;
 
+  @override
+  ({int at, int of})? get counter => _listGiven ? (at: _index + 1, of: _entries.length) : null;
+
   /// Whether the official feed still supplies the entries.
-  bool get official => _official != null;
+  bool get official => _official != null && !_listGiven;
+
+  /// Whether the given list is still the feed.
+  bool get listGiven => _listGiven;
+
+  /// The given list's cards up to [listedMost], placed on the page's video: the card given when it is that one, else
+  /// where the page's video is among them (竖屏 entered again after 详情页 on a video swiped to).
+  void _take(({List<VideoCard> cards, int index}) list) {
+    final cards = list.cards.take(listedMost).toList();
+    final bvid = _enteredBvid;
+    var at = list.index;
+    if (at < 0 || at >= cards.length || cards[at].bvid != bvid) at = cards.indexWhere((card) => card.bvid == bvid);
+    if (at < 0) {
+      _logger.info(LogCategory.api, 'story feed', {'source': 'list', 'kept': 0, 'dropped': list.cards.length});
+      return;
+    }
+    _listGiven = true;
+    _enteredAt = _index = at;
+    // Where 竖屏 was entered from comes with the entered video's details, which then label the rest.
+    for (final (place, card) in cards.indexed) {
+      final source = PlaySource.story(entry: PlaySource.unknown, entered: place == at);
+      _entries.add(StoryEntry.fromCard(card, source: source));
+      _listed.add(card.bvid);
+    }
+    _logger.info(LogCategory.api, 'story feed', {
+      'source': 'list',
+      'kept': cards.length,
+      'dropped': list.cards.length - cards.length,
+    });
+  }
 
   /// The details of the entered video arrive, or its part changes while it plays as the first entry, or the page
   /// opened a video of its own.
@@ -168,24 +218,28 @@ class StoryList extends StoryFeed {
       });
     }
     _askWarm();
-    if (_index != 0 || bvid != _enteredBvid) return;
+    if (_index != _enteredAt || bvid != _enteredBvid) return;
     final playing = _host.playing;
     if (playing == null || playing.bvid != _enteredBvid) return;
-    final known = _entries.firstOrNull;
-    if (known != null && (known.cid == playing.cid || playing.cid == null)) return;
+    final known = _entries.elementAtOrNull(_enteredAt);
+    final labelled = _entrySource != null;
+    if (labelled && known != null && (known.cid == playing.cid || playing.cid == null)) return;
     final own = playing.source;
-    final source = PlaySource.story(
-      entry: _entrySource ??= own,
-      entered: true,
-      trackId: own.trackId,
-      flowData: own.flowData,
-    );
-    final entered = _withSource(playing, source);
+    final entry = _entrySource ??= own;
+    final source = PlaySource.story(entry: entry, entered: true, trackId: own.trackId, flowData: own.flowData);
+    // A given card's part and first frame stay where the page's details have none.
+    final entered = _withSource(playing, source, fallback: known);
     if (known == null) {
       _entries.add(entered);
       _listed.add(entered.bvid);
     } else {
-      _entries[0] = entered;
+      _entries[_enteredAt] = entered;
+    }
+    if (!labelled && _listGiven) {
+      final swiped = PlaySource.story(entry: entry, entered: false);
+      for (var place = 0; place < _entries.length; place++) {
+        if (place != _enteredAt) _entries[place] = _withSource(_entries[place], swiped);
+      }
     }
     notifyListeners();
     _askIfNear();
@@ -195,6 +249,8 @@ class StoryList extends StoryFeed {
   void _restart(String bvid) {
     _round++;
     _enteredBvid = bvid;
+    _listGiven = false;
+    _enteredAt = 0;
     _entries.clear();
     _listed.clear();
     _relatedAsked.clear();
@@ -219,7 +275,7 @@ class StoryList extends StoryFeed {
     final next = this.next;
     if (_disposed || next == null) return false;
     _index++;
-    _arrive(next, entered: false);
+    _arrive(next, entered: _index == _enteredAt);
     notifyListeners();
     _userMoved();
     return true;
@@ -230,7 +286,7 @@ class StoryList extends StoryFeed {
     final previous = this.previous;
     if (_disposed || previous == null) return false;
     _index--;
-    _arrive(previous, entered: _index == 0);
+    _arrive(previous, entered: _index == _enteredAt);
     notifyListeners();
     _userMoved();
     return true;
@@ -384,7 +440,7 @@ class StoryList extends StoryFeed {
   }
 
   void _askIfNear() {
-    if (_disposed || _loading || _stalled || _host.halted || _entries.isEmpty) return;
+    if (_listGiven || _disposed || _loading || _stalled || _host.halted || _entries.isEmpty) return;
     if (_entries.length - 1 - _index > ahead) return;
     if (_official case final official?) {
       _askOfficial(official);
@@ -553,13 +609,13 @@ class StoryList extends StoryFeed {
   }
 }
 
-StoryEntry _withSource(StoryEntry entry, PlaySource source) => StoryEntry(
+StoryEntry _withSource(StoryEntry entry, PlaySource source, {StoryEntry? fallback}) => StoryEntry(
   bvid: entry.bvid,
   aid: entry.aid,
-  cid: entry.cid,
+  cid: entry.cid ?? fallback?.cid,
   title: entry.title,
   cover: entry.cover,
-  firstFrame: entry.firstFrame,
+  firstFrame: entry.firstFrame ?? fallback?.firstFrame,
   duration: entry.duration,
   width: entry.width,
   height: entry.height,

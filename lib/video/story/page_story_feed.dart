@@ -10,7 +10,14 @@ import 'story_list.dart';
 
 /// The app's 竖屏 feed for [playback]'s video: the official feed while the client holds an iPhone token and reports
 /// are allowed (never in a `--fake-account` run), else the related lists.
-StoryFeed pageStoryFeed(PagePlayback playback) {
+StoryFeed pageStoryFeed(PagePlayback playback) => _storyList(playback);
+
+/// The feed of a page opened from the 竖屏 sheet's 相关视频: [story]'s cards from the one the page has open, nothing
+/// more asked, with its [StoryFeed.counter]; [pageStoryFeed]'s once the page opens a video of its own.
+StoryFeed relatedStoryFeed(PagePlayback playback, RelatedStory story) =>
+    _storyList(playback, list: (cards: story.cards, index: story.index));
+
+StoryList _storyList(PagePlayback playback, {({List<VideoCard> cards, int index})? list}) {
   final environment = playback.environment;
   final client = environment.client;
   final official = client.appToken?.identity == OfficialIdentity.iphone && WatchReporter.canReport(environment);
@@ -26,12 +33,9 @@ StoryFeed pageStoryFeed(PagePlayback playback) {
     // Windows' mpv reads the files through open-ended ranges that never meet a primed segment, and the PC is only a
     // check bench: the next video is loaded ahead on the phone alone.
     warmsNext: defaultTargetPlatform == TargetPlatform.iOS,
+    list: list,
   );
 }
-
-/// The feed of a page opened from the 竖屏 sheet's 相关视频: [story]'s cards from the one tapped, nothing more asked,
-/// with its [StoryFeed.counter].
-StoryFeed relatedStoryFeed(PagePlayback playback, RelatedStory story) => pageStoryFeed(playback);
 
 /// The page's playback as the feed sees it, notifying on the playback's changes and its controller's (the details
 /// arrive through the controller).
