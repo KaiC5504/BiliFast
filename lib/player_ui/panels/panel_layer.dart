@@ -8,6 +8,7 @@ import '../../offline/download_sheet.dart';
 import '../../shared/theme.dart';
 import '../../shared/toast.dart';
 import '../player_ui.dart';
+import 'chapters_panel.dart';
 import 'episodes_panel.dart';
 import 'more_panel.dart';
 import 'panel_controller.dart';
@@ -37,6 +38,7 @@ final class PanelFrame {
     this.lead,
     this.trailing,
     this.top = 0,
+    this.edge = false,
   }) : sheetColor = sheetColor ?? BiliColors.sheetFill;
 
   final double width;
@@ -55,8 +57,10 @@ final class PanelFrame {
   /// The light sheet's ground.
   final Color sheetColor;
 
-  /// The iPad's strips: a width in points instead of [width]'s share, and a hard edge in this shade.
+  /// The iPad's strips: a width in points instead of [width]'s share.
   final double? points;
+
+  /// A hard edge in this shade: the iPad's strips, and 章节 (273).
   final Color? shade;
 
   /// Where the content starts in from the strip's left and ends before the safe area; null keeps the phone's.
@@ -65,6 +69,9 @@ final class PanelFrame {
 
   /// Added under the safe area at the strip's top.
   final double top;
+
+  /// The content reaches the screen's right edge and keeps clear of the safe area itself: 273's header runs past it.
+  final bool edge;
 
   static PanelFrame of(PlayerPanel panel, {bool pad = false}) => pad ? _pad(panel) : _phone(panel);
 
@@ -100,7 +107,12 @@ final class PanelFrame {
     ),
     PlayerPanel.blockWords => PanelFrame(width: 1, sheetHeight: 1, full: true),
     PlayerPanel.danmakuList => PanelFrame(width: BiliMetrics.panelWidth, sheetHeight: BiliMetrics.panelSheetHeight),
-    PlayerPanel.chapters => PanelFrame(width: BiliMetrics.panelWidth, sheetHeight: BiliMetrics.panelSheetHeight),
+    PlayerPanel.chapters => PanelFrame(
+      width: ChapterPanelTheme.width,
+      sheetHeight: BiliMetrics.panelSheetHeight,
+      shade: ChapterPanelTheme.shade,
+      edge: true,
+    ),
   };
 
   /// Full screen on the iPad (ipad/10-13): every strip hard-edged and as wide in points sideways as upright. 选集 and
@@ -170,11 +182,12 @@ final class PanelFrame {
       other.shade == shade &&
       other.lead == lead &&
       other.trailing == trailing &&
-      other.top == top;
+      other.top == top &&
+      other.edge == edge;
 
   @override
   int get hashCode =>
-      Object.hash(width, sheetHeight, column, light, full, solid, sheetColor, points, shade, lead, trailing, top);
+      Object.hash(width, sheetHeight, column, light, full, solid, sheetColor, points, shade, lead, trailing, top, edge);
 }
 
 /// Where the iPad page's sheets and the danmaku send bar sit (no screenshot, a guess): [column] wide from the page's
@@ -319,13 +332,13 @@ class _PanelLayerState extends State<PanelLayer> with TickerProviderStateMixin {
   }
 
   /// 添加屏蔽词 and 当前弹幕列表 are laid out for landscape only; turned upright they give way to 弹幕设置's sheet.
-  /// 缓存 is portrait only, as landscape's ⋮ (20, 21) has no way to it.
+  /// 缓存 is portrait only, as landscape's ⋮ (20, 21) has no way to it; 章节 landscape only, as only its bar opens it.
   void _presentationChanged() {
     final panels = widget.ui.panels;
     final landscape = widget.ui.presentation == Presentation.landscape;
     if (!landscape && (panels.value == PlayerPanel.blockWords || panels.value == PlayerPanel.danmakuList)) {
       panels.open(PlayerPanel.danmakuSettings);
-    } else if (landscape && panels.value == PlayerPanel.download) {
+    } else if (landscape ? panels.value == PlayerPanel.download : panels.value == PlayerPanel.chapters) {
       panels.close();
     }
     _rebuild();
@@ -521,7 +534,7 @@ class _PanelLayerState extends State<PanelLayer> with TickerProviderStateMixin {
               close: _close,
               cover: (layer) => _cover.value = layer,
             ),
-            PlayerPanel.chapters => const SizedBox.shrink(),
+            PlayerPanel.chapters => ChaptersPanel(session: session, close: _close),
           },
         ),
       ),
@@ -569,7 +582,7 @@ class _PanelLayerState extends State<PanelLayer> with TickerProviderStateMixin {
                     top: insets.top + frame.top,
                     bottom: frame.solid ? 0 : insets.bottom + BiliMetrics.panelBottom,
                     left: frame.lead ?? 0,
-                    right: insets.right + (frame.trailing ?? BiliMetrics.panelTrailing),
+                    right: frame.edge ? 0 : insets.right + (frame.trailing ?? BiliMetrics.panelTrailing),
                   ),
                   child: content,
                 ),
