@@ -163,8 +163,9 @@ abstract interface class PlayerSession implements Listenable {
   /// Fetches [seekFrames] for the part playing, once per part.
   void wantSeekFrames();
 
-  /// Seeks at the keyframe nearest [seconds] (not precise) and holds [scrubbing] there until the seek lands.
-  Future<void> commitSeek(double seconds);
+  /// Seeks at the keyframe nearest [seconds], or exactly with [precise], and holds [scrubbing] there until the seek
+  /// lands. A chapter row seeks precisely: the keyframe before its start belongs to the chapter before.
+  Future<void> commitSeek(double seconds, {bool precise = false});
 
   /// The chosen speed; it stays for the next part.
   double get rate;

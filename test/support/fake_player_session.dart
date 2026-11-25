@@ -120,8 +120,8 @@ class FakePlayerSession extends ChangeNotifier implements PlayerSession {
   void wantSeekFrames() => calls.add('wantSeekFrames');
 
   @override
-  Future<void> commitSeek(double seconds) async {
-    calls.add('commitSeek $seconds');
+  Future<void> commitSeek(double seconds, {bool precise = false}) async {
+    calls.add(precise ? 'commitSeek $seconds precise' : 'commitSeek $seconds');
     scrubbing.value = null;
   }
 
