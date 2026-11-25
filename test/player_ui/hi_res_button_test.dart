@@ -37,7 +37,7 @@ void main() {
     expect(find.descendant(of: _hiRes, matching: find.text('Hi-Res无损')), findsOne);
     final speed = tester.getRect(_speed), hiRes = tester.getRect(_hiRes), quality = tester.getRect(_quality);
     expect(hiRes.left - speed.right, closeTo(HiResButtonTheme.gap, 0.01));
-    expect(quality.left - hiRes.right, closeTo(BiliMetrics.chromeQualityGap, 0.01));
+    expect(quality.left - hiRes.right, closeTo(HiResButtonTheme.qualityGap, 0.01));
     expect(hiRes.center.dy, closeTo(quality.center.dy, 0.01));
   });
 
@@ -56,8 +56,18 @@ void main() {
     expect(tester.getRect(_speed).width, speed.width);
     expect(
       speed.left - tester.getRect(_speed).left,
-      closeTo(tester.getRect(_hiRes).width + HiResButtonTheme.gap, 0.01),
+      closeTo(
+        tester.getRect(_hiRes).width + HiResButtonTheme.gap + HiResButtonTheme.qualityGap - BiliMetrics.chromeQualityGap,
+        0.01,
+      ),
     );
+
+    rig.session
+      ..hiResOffered = false
+      ..changed();
+    await tester.pump();
+    expect(tester.getRect(_speed), speed, reason: "04's row comes back as it was");
+    expect(tester.getRect(_quality), quality);
   });
 
   testWidgets('white while off and #FB7299 while on, its 大会员 tag in the same colour, outlined to match', (
@@ -75,7 +85,7 @@ void main() {
       ..changed();
     await tester.pump();
     expect(colorOf(tester), HiResButtonTheme.on);
-    expect(HiResButtonTheme.on, const Color(0xFFFB7299));
+    expect(HiResButtonTheme.on, BiliColors.verticalPink);
     tag = tester.widget<QualityTag>(_tag);
     expect(tag.color, HiResButtonTheme.on);
     expect(tag.line, HiResButtonTheme.tagLineOn);
@@ -110,12 +120,21 @@ void main() {
     }
   });
 
-  testWidgets('it presses through accessibility by its name', (tester) async {
+  testWidgets('it presses through accessibility by its name, and VoiceOver hears it on or off', (tester) async {
     final semantics = tester.ensureSemantics();
     final rig = await mount(tester);
+    final node = find.semantics.byLabel('Hi-Res无损');
+    Matcher state(bool on) =>
+        isSemantics(label: 'Hi-Res无损', isButton: true, hasToggledState: true, isToggled: on, hasTapAction: true);
+    expect(tester.getSemantics(_hiRes), state(false));
 
-    tester.semantics.tap(find.semantics.byLabel('Hi-Res无损'));
+    tester.semantics.tap(node);
     expect(rig.session.calls, ['setHiRes true']);
+    await tester.pump();
+    expect(tester.getSemantics(_hiRes), state(true));
+
+    tester.semantics.tap(node);
+    expect(rig.session.calls, ['setHiRes true', 'setHiRes false']);
     semantics.dispose();
   });
 

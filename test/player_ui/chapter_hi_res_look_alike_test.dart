@@ -114,6 +114,11 @@ void main() {
     expect(wu.left - hiRes.right - 1, closeTo(10, 1.5));
     expect(wu.right - hiRes.left + 1, closeTo(216, 3));
     expect(fourK.left - wu.right - 1, closeTo(118, 3));
+    // 274's centres from 4K's, within half a pt: 倍速 504.5 px before it, Hi-Res 297, 无损 184.
+    double centre(_Run run) => (run.left + run.right) / 2;
+    expect(centre(fourK) - centre(speed), closeTo(504.5, 1.5));
+    expect(centre(fourK) - centre(hiRes), closeTo(297, 1.5));
+    expect(centre(fourK) - centre(wu), closeTo(184, 1.5));
     final pink = shot.pixel(hiRes.left + 2, (hiRes.top + hiRes.bottom) ~/ 2 + 6);
     expect(pink, HiResButtonTheme.on);
 

@@ -60,14 +60,16 @@ class LandscapeChrome extends StatelessWidget {
       ]),
       builder: (context, _) {
         final shown = ui.chrome.visible && ui.panels.value == null;
+        final strip = _stripOpen;
         return Stack(
           fit: StackFit.expand,
           children: [
             LandscapeCornerOnline(
               ui: ui,
-              shown: !ui.chrome.visible && ui.panels.value == null && ui.overlay?.value == null,
+              shown: (strip || !ui.chrome.visible && ui.panels.value == null) && ui.overlay?.value == null,
+              lifted: strip,
             ),
-            _chapterStrip(context),
+            _chapterStrip(context, open: strip),
             _controls(context, insets, shown),
             PlayerNotesView(notes: ui.session.notes),
             SeekPreview(session: ui.session, shown: shown && ui.chrome.barHeld),
@@ -77,11 +79,14 @@ class LandscapeChrome extends StatelessWidget {
     );
   }
 
-  /// Under the 章节 panel's shade with 章节进度条 on (273); nothing there while the controls are only hidden (KaiC).
-  Widget _chapterStrip(BuildContext context) {
+  bool get _stripOpen =>
+      ui.panels.value == PlayerPanel.chapters && ui.session.chapterBar && ui.session.chapters.isNotEmpty;
+
+  /// Under the 章节 panel's shade with 章节进度条 on (273); nothing there while the controls are only hidden (KaiC,
+  /// 2026-11-25).
+  Widget _chapterStrip(BuildContext context, {required bool open}) {
     final session = ui.session;
     final chapters = session.chapters;
-    final open = ui.panels.value == PlayerPanel.chapters && session.chapterBar && chapters.isNotEmpty;
     return Positioned(
       left: 0,
       right: 0,
@@ -379,6 +384,7 @@ class LandscapeChrome extends StatelessWidget {
                       tagLine: session.hiResOn ? HiResButtonTheme.tagLineOn : BiliMetrics.chromeTagLine,
                       tagPad: HiResButtonTheme.tagPad,
                       untaggedPad: true,
+                      toggled: session.hiResOn,
                       onTap: _touch(
                         () => toastFailure(session.setHiRes(!session.hiResOn), (message) {
                           if (context.mounted) showToast(context, message);
@@ -386,7 +392,9 @@ class LandscapeChrome extends StatelessWidget {
                       ),
                     ),
                   ],
-                  const SizedBox(width: BiliMetrics.chromeQualityGap),
+                  SizedBox(
+                    width: session.hiResOffered ? HiResButtonTheme.qualityGap : BiliMetrics.chromeQualityGap,
+                  ),
                   _TextButton(
                     key: const ValueKey('landscape-quality'),
                     label: '清晰度',
@@ -523,7 +531,7 @@ class _DotPainter extends CustomPainter {
   bool shouldRepaint(_DotPainter oldDelegate) => false;
 }
 
-/// 274's ›: one round-ended stroke, its ends at the box's left and its point at the right.
+/// 274's ›.
 class _ChevronPainter extends CustomPainter {
   const _ChevronPainter();
 
@@ -569,7 +577,7 @@ TextSpan latinSpacedFromChinese(String text) {
   return TextSpan(children: spans);
 }
 
-final _latinBeforeChinese = RegExp(r'[A-Za-z](?=[㐀-鿿])');
+final _latinBeforeChinese = RegExp('[A-Za-z](?=[\u3400-\u9fff])');
 
 /// 倍速 at 1×, otherwise the rate as the 倍速 panel lists it (1.5X, 1.25X, 2.0X).
 String speedLabel(double rate) {
@@ -635,6 +643,7 @@ class _TextButton extends StatelessWidget {
     this.tagPad = BiliMetrics.chromeTagPad,
     this.untaggedPad = false,
     this.bold = false,
+    this.toggled,
   });
 
   final String label;
@@ -648,9 +657,12 @@ class _TextButton extends StatelessWidget {
   final Color tagLine;
   final double tagPad;
 
-  /// Keeps the untagged pads under a tag: Hi-Res无损 sits from 4K as 倍速 does on 04 (274).
+  /// Keeps the untagged pads under a tag, as 274's Hi-Res无损 does.
   final bool untaggedPad;
   final bool bold;
+
+  /// A switch's state for VoiceOver, which reads only the label otherwise.
+  final bool? toggled;
 
   @override
   Widget build(BuildContext context) {
@@ -675,23 +687,26 @@ class _TextButton extends StatelessWidget {
         ),
       ),
     );
-    return ChromeTap(
-      label: label,
-      square: false,
-      onTap: onTap,
-      child: tag == null
-          ? button
-          : Stack(
-              clipBehavior: Clip.none,
-              children: [
-                button,
-                Positioned(
-                  top: BiliMetrics.chromeTagTop,
-                  right: pad - BiliMetrics.chromeTaggedPad - BiliMetrics.chromeTagOverhang,
-                  child: QualityTag(tag, key: tagKey, color: color, line: tagLine, pad: tagPad),
-                ),
-              ],
-            ),
+    return Semantics(
+      toggled: toggled,
+      child: ChromeTap(
+        label: label,
+        square: false,
+        onTap: onTap,
+        child: tag == null
+            ? button
+            : Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  button,
+                  Positioned(
+                    top: BiliMetrics.chromeTagTop,
+                    right: pad - BiliMetrics.chromeTaggedPad - BiliMetrics.chromeTagOverhang,
+                    child: QualityTag(tag, key: tagKey, color: color, line: tagLine, pad: tagPad),
+                  ),
+                ],
+              ),
+      ),
     );
   }
 }
@@ -1336,12 +1351,14 @@ class LandscapeOnline extends StatelessWidget {
 }
 
 /// 25's faint N人正在看 in the bottom-left corner, which takes no touches; [shown] while the controls are hidden and
-/// no panel is open (BiliNative `LandscapeChrome.swift`). The end screen keeps it under its dim, as 27 does.
+/// no panel is open (BiliNative `LandscapeChrome.swift`), and over the 章节 panel's strip, [lifted] clear of it (273).
+/// The end screen keeps it under its dim, as 27 does.
 class LandscapeCornerOnline extends StatelessWidget {
-  const LandscapeCornerOnline({super.key, required this.ui, required this.shown});
+  const LandscapeCornerOnline({super.key, required this.ui, required this.shown, this.lifted = false});
 
   final PlayerUi ui;
   final bool shown;
+  final bool lifted;
 
   @override
   Widget build(BuildContext context) {
@@ -1372,7 +1389,13 @@ class LandscapeCornerOnline extends StatelessWidget {
                           duration: motion,
                           layoutBuilder: (current, previous) =>
                               Stack(alignment: Alignment.centerLeft, children: [...previous, ?current]),
-                          child: count == null ? const SizedBox.shrink() : _corner(count),
+                          child: count == null
+                              ? const SizedBox.shrink()
+                              : Transform.translate(
+                                  key: ValueKey(lifted),
+                                  offset: Offset(0, lifted ? -ChapterStripTheme.cornerLift : 0),
+                                  child: _corner(count),
+                                ),
                         ),
                       ),
               ),
@@ -1634,8 +1657,8 @@ class FullScreenSeekBar extends StatelessWidget {
   /// Holding it shows the seek preview (102; 竖屏's 19, 20).
   final bool preview;
 
-  /// The bar's own chapter ticks and the title over the thumb, while 章节进度条 is on; the iPad draws both itself, the
-  /// title over its preview's frame (recording 24).
+  /// The bar's chapter dots while 章节进度条 is on; the iPad draws its own ticks and title, the title over its preview's
+  /// frame (recording 24).
   final bool chapters;
 
   /// What the bar and the time redraw on.
