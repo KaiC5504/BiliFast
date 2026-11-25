@@ -868,6 +868,31 @@ void main() {
       await tester.pump(_tapSettles);
     });
 
+    testWidgets("a finger jittering on a dot ticks once, and leaving it back past the picture's 1 pt ticks again", (
+      tester,
+    ) async {
+      await rig.mountInline(tester);
+      double scrubbed() => double.parse(rig.callsStarting('scrub').last.substring('scrub '.length));
+      final (gesture, from) = await counting(tester);
+      // 136.95 s per 800 pt: 0.17 s a point.
+      var stamp = await moveFrames(tester, gesture, const Offset(20, 0), 3, from: from);
+      expect(scrubbed(), greaterThan(60));
+      expect(haptics, [tick]);
+      stamp = await moveFrames(tester, gesture, const Offset(-1.5, 0), 1, from: stamp);
+      expect(scrubbed(), closeTo(60, 0.05));
+      for (final step in [-0.3, 0.4, -0.4, 0.4, -0.4]) {
+        stamp = await moveFrames(tester, gesture, Offset(step, 0), 1, from: stamp);
+      }
+      expect(scrubbed(), lessThan(60), reason: 'back and forth across 60 s, within a point of it');
+      expect(haptics, [tick]);
+      await moveFrames(tester, gesture, const Offset(-6, 0), 1, from: stamp);
+      expect(scrubbed(), lessThan(59));
+      expect(haptics, [tick, tick]);
+      await gesture.up();
+      expect(haptics, hasLength(2));
+      await tester.pump(_tapSettles);
+    });
+
     testWidgets('no tick within a chapter, with 章节进度条 off, or without chapters', (tester) async {
       await rig.mountInline(tester);
       Future<void> across(double start, double by) async {

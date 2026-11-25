@@ -59,6 +59,7 @@ class _Seek {
   double target;
   double? anchor;
   Timer? rest;
+  final ticker = ChapterTicker();
 
   /// The travel the seek counts from, taken [GestureMath.seekCountsAfter] into the drag; null before then.
   double? fromDx;
@@ -427,8 +428,9 @@ class _PlayerGestureLayerState extends State<PlayerGestureLayer> {
       final target = seek.target = from == null
           ? seek.start
           : GestureMath.seekTarget(start: seek.start, dx: delta.dx - from, width: seek.width, duration: duration);
-      if (_tickChapters && ChapterCrossing.crossed(_ui.session.chapters, was, target)) {
-        unawaited(HapticFeedback.selectionClick());
+      final secondsPerPoint = GestureMath.seekSecondsPerWidth(duration) / seek.width;
+      if (_tickChapters && seek.ticker.moved(_ui.session.chapters, was, target, secondsPerPoint: secondsPerPoint)) {
+        ChapterCrossing.tick();
       }
       _ui.session.scrub(target);
       _ui.chrome.showHud(SeekHud(target: target, duration: duration));

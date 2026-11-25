@@ -463,6 +463,24 @@ void main() {
     await gesture.up();
     await tester.pumpAndSettle();
   });
+
+  testWidgets('章节进度条 off leaves the bar without chapters, and on brings them back', (tester) async {
+    final rig = Rig();
+    rig.session
+      ..duration.value = 100
+      ..chapters = const [Chapter(from: 0, to: 50, title: '开头'), Chapter(from: 50, to: 100, title: '后半')]
+      ..chapterBar = false;
+    await rig.mount(tester);
+    expect(tester.widget<SeekBar>(find.byType(SeekBar)).chapters, isEmpty);
+
+    rig.session.setChapterBar(true);
+    await tester.pump();
+    expect(tester.widget<SeekBar>(find.byType(SeekBar)).chapters, rig.session.chapters);
+
+    rig.session.setChapterBar(false);
+    await tester.pump();
+    expect(tester.widget<SeekBar>(find.byType(SeekBar)).chapters, isEmpty);
+  });
 }
 
 String _clock(double seconds) {

@@ -2355,8 +2355,11 @@ abstract final class SeekPreviewTheme {
 
   /// The frame's top above the screen's middle.
   static const aboveMiddle = 36.0;
-  static const timeGap = 15.0;
-  static const timeFont = 15.0;
+
+  /// 272: the digits 11.33 pt tall (the 0 12), their baseline at 307.33 and the first 0's ink at 431 pt, 16 pt SF
+  /// set 15.33 under the frame.
+  static const timeGap = 46 / 3;
+  static const timeFont = 16.0;
   static const time = Color(0xFFFFFFFF);
 
   /// Reads #999999 over 19's black.
