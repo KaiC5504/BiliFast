@@ -8,11 +8,13 @@ import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 
+import '../app/form_factor.dart';
 import '../device/device_controls.dart';
 import '../device/orientation.dart';
 import '../shared/theme.dart';
 import '../video/player_session.dart';
 import '../video/story/story_drag.dart';
+import 'chapter_crossing.dart';
 import 'chrome_state.dart';
 import 'player_ui.dart';
 import 'seek_bar.dart';
@@ -84,6 +86,7 @@ class _PlayerGestureLayerState extends State<PlayerGestureLayer> {
   Size _screen = Size.zero;
   EdgeInsets _padding = EdgeInsets.zero;
   ModalRoute<Object?>? _route;
+  bool _pad = false;
 
   Timer? _tapTimer;
   Offset? _firstTap;
@@ -128,6 +131,7 @@ class _PlayerGestureLayerState extends State<PlayerGestureLayer> {
     _screen = MediaQuery.sizeOf(context);
     _padding = MediaQuery.paddingOf(context);
     _route = ModalRoute.of(context);
+    _pad = FormFactor.of(context).isPad;
   }
 
   @override
@@ -266,6 +270,10 @@ class _PlayerGestureLayerState extends State<PlayerGestureLayer> {
   bool _allowsEdgeSwipe(PointerDownEvent event) => _inVerticalBackEdge(event.position);
 
   bool get _vertical => _ui.presentation == Presentation.vertical;
+
+  /// A seek across a chapter's dot ticks the hand as the bar's drag does: while 章节进度条 shows the dots, never on the
+  /// iPad, whose bar keeps its dark ticks.
+  bool get _tickChapters => _ui.session.chapterBar && !_pad;
 
   void _edgeSwipeEnded(Offset delta, double velocity) {
     final width = _screen.width;
@@ -415,9 +423,13 @@ class _PlayerGestureLayerState extends State<PlayerGestureLayer> {
       if (seek.fromDx == null && sinceStart >= GestureMath.seekCountsAfter) seek.fromDx = delta.dx;
       final duration = _ui.session.duration.value;
       final from = seek.fromDx;
+      final was = seek.target;
       final target = seek.target = from == null
           ? seek.start
           : GestureMath.seekTarget(start: seek.start, dx: delta.dx - from, width: seek.width, duration: duration);
+      if (_tickChapters && ChapterCrossing.crossed(_ui.session.chapters, was, target)) {
+        unawaited(HapticFeedback.selectionClick());
+      }
       _ui.session.scrub(target);
       _ui.chrome.showHud(SeekHud(target: target, duration: duration));
       _followRest(seek, local.dx);

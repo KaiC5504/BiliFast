@@ -10543,7 +10543,13 @@ abstract final class LiveRankTheme {
 
 /// 章节's dots on the landscape bar: white, smaller at rest than with the bar held (272).
 abstract final class ChapterDotTheme {
-  static const color = Color(0xFFFFFFFF);
+  /// 272's dot reads #DBDBDB at its centre over the held track, not pure white.
+  static const color = Color(0xFFDBDBDB);
+
+  /// The dot's diameter over the bar's thickness: 272's is 12 px across on the held bar's 12 px (4 pt), and the bar is
+  /// 6 px at rest (274), so the dot grows from 2 pt to 4 pt as the bar does.
+  static const held = 12 / 3;
+  static const barShare = held / BiliMetrics.tvBarDragHeight;
 }
 
 /// Landscape's `01:48/04:01 · 章节 · 2.3 ›` line over the bar's left end (274).
