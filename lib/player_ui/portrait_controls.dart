@@ -178,7 +178,7 @@ class _PortraitControlsState extends State<PortraitControls> {
               duration: _duration,
               buffered: () => _session.readout.bufferedEnd(_session.position),
               repaint: _bar,
-              chapters: _session.chapters,
+              chapters: _session.chapterBar ? _session.chapters : const [],
               onScrub: _scrub,
               onCommit: _commit,
               onCancel: _cancel,

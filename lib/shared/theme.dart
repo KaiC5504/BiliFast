@@ -10541,7 +10541,7 @@ abstract final class LiveRankTheme {
   static const spinnerRadius = HotListTheme.spinnerRadius;
 }
 
-/// 章节's dots on the landscape bar: white, smaller at rest than with the bar held (272).
+/// 章节's dots on the bar: as thick as the bar, so smaller at rest than with it held (272).
 abstract final class ChapterDotTheme {
   /// 272's dot reads #DBDBDB at its centre over the held track, not pure white.
   static const color = Color(0xFFDBDBDB);
