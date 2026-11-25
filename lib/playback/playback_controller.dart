@@ -275,6 +275,14 @@ class PlaybackController extends ChangeNotifier {
   List<QualityOption> _qualities = const [];
   int _selectedQuality;
   VideoCodec _codec;
+  bool _hiRes = false;
+
+  /// This open's answer carries a FLAC track; kept through a restart of the same part, so the offer doesn't blink.
+  bool _flacOffered = false;
+
+  /// The engine or the player refused this part's FLAC track: it plays AAC until another open or a new ask.
+  bool _flacRefused = false;
+  final _hiResRefusals = StreamController<void>.broadcast();
   PlayingStream? _playing;
   bool _pictureInPicture = false;
   ({int width, int height})? _videoSize;
@@ -413,6 +421,18 @@ class PlaybackController extends ChangeNotifier {
   /// at.
   int get selectedQuality => _local?.files.video.id ?? _selectedQuality;
   VideoCodec get codec => _codec;
+
+  /// Hi-Res 无损 for this controller's picks ([setHiRes]); off unless a page's session turns it on.
+  bool get hiRes => _hiRes;
+
+  /// The part's answer carries a Hi-Res 无损 track ([Dash.flac]); never for a cached part.
+  bool get hiResOffered => _local == null && _flacOffered;
+
+  /// The stream chosen plays the part's FLAC track.
+  bool get playingFlac => _carriesFlac(_choice);
+
+  /// Fires when this part's FLAC track was refused and it went on with AAC.
+  Stream<void> get hiResRefusals => _hiResRefusals.stream;
   PlayingStream? get playing => _playing;
   bool get pictureInPicture => _pictureInPicture;
   ({int width, int height})? get videoSize => _videoSize;
@@ -706,6 +726,8 @@ class PlaybackController extends ChangeNotifier {
     if (!keepSize) _videoSize = null;
     _playerInfo = null;
     _qualities = const [];
+    _flacOffered = false;
+    _flacRefused = false;
     _resumeFromHistory = false;
     _warmOutcome = null;
     _parallelOutcome = null;
@@ -845,6 +867,34 @@ class PlaybackController extends ChangeNotifier {
     _codec = codec;
     _notify();
     await _restart(sameChoice: false);
+  }
+
+  /// Hi-Res 无损 for the picks to come: [Dash.flac] in place of AAC where the part offers it. Off until a page's session
+  /// turns it on, so a card, and anything else that never sets it, plays AAC. With [reopen] (the user's switch) a part
+  /// whose audio changes with it opens again at the same second and play state, as [setQuality] does, but from the
+  /// answer in hand; an ask for FLAC tries a refused track again.
+  Future<void> setHiRes(bool on, {bool reopen = true}) async {
+    final changed = on != _hiRes;
+    if (changed) {
+      _dropWarm('hiRes');
+      _hiRes = on;
+    }
+    if (changed || reopen) _flacRefused = false;
+    if (!reopen) return;
+    _logger.info(LogCategory.ui, 'hi-res', {'on': on});
+    _notify();
+    final choice = _choice;
+    final dash = _dash;
+    if (_local != null || _page == null || choice == null || dash == null) return;
+    if (_carriesFlac(choice) == (on && dash.flac != null)) return;
+    final time = currentSeconds;
+    final autoplay = _playWhenLoaded;
+    _heldPosition = time;
+    _advance();
+    _teardownPlayback();
+    _playing = null;
+    _resetStart(autoplay: autoplay);
+    await _chooseAgain(time);
   }
 
   /// A seek the user made, after the player was told. One that is not [precise] lands on a keyframe near [seconds].
@@ -1015,10 +1065,10 @@ class PlaybackController extends ChangeNotifier {
   /// that open would make, which it then skips), its tracks chosen, and the engine holding its headers and first
   /// segments (`PlaybackRequest.warm`). [detail] is the video's, asked ahead; it names the part when [cid] doesn't (a
   /// video in one part) and saves the open its view. One at a time, BTR only. It goes on [dropWarm], another warm,
-  /// [close], a change of quality, codec or mode, memory pressure, a cover ([dropPrefetch]), a new engine or local
-  /// server, and dispose; an open of another video or part lets it go, as does one where its answer has grown old,
-  /// its addresses near their deadline or its streams no longer the choice. Throws the playurl call's error, so the
-  /// feed can stop on risk control; anything else only loses the head start. One `story warm` line each, no ids.
+  /// [close], a change of quality, codec, Hi-Res or mode, memory pressure, a cover ([dropPrefetch]), a new engine or
+  /// local server, and dispose; an open of another video or part lets it go, as does one where its answer has grown
+  /// old, its addresses near their deadline or its streams no longer the choice. Throws the playurl call's error, so
+  /// the feed can stop on risk control; anything else only loses the head start. One `story warm` line each, no ids.
   Future<void> warm(String bvid, {int? cid, VideoDetail? detail}) async {
     if (_disposed) return;
     final known = detail != null && detail.bvid == bvid && detail.redirectURL == null ? detail : null;
@@ -1031,7 +1081,8 @@ class PlaybackController extends ChangeNotifier {
         held.bvid == bvid &&
         held.page.cid == page?.cid &&
         held.quality == _selectedQuality &&
-        held.codec == _codec) {
+        held.codec == _codec &&
+        (held.hiRes ?? _hiRes) == _hiRes) {
       return;
     }
     _dropWarm('replaced');
@@ -1080,10 +1131,15 @@ class PlaybackController extends ChangeNotifier {
       warm.answeredAt = _now();
       if (warm.dropped) return;
       final dash = info.dash;
+      // Read as the answer lands, not when the warm began: a page's session sets it just after the open starts.
+      final hiRes = warm.hiRes = _hiRes;
       final choice = dash == null
           ? null
           : choose(dash,
-              quality: warm.quality, codecOrder: _memory.order(preferred: warm.codec), excluded: _memory.failedKinds);
+              quality: warm.quality,
+              codecOrder: _memory.order(preferred: warm.codec),
+              excluded: _memory.failedKinds,
+              hiRes: hiRes);
       if (choice == null) {
         warm.failure = dash == null ? 'dash' : 'track';
         return;
@@ -1182,7 +1238,8 @@ class PlaybackController extends ChangeNotifier {
   }
 
   /// The playurl answer [warm] holds, once it has gone as far as it will, when it can stand in for the open's own call:
-  /// the same quality, codec and mode, answered under [warmMaxAge] ago, its addresses clear of their deadline.
+  /// the same quality, codec and mode, answered under [warmMaxAge] ago, its addresses clear of their deadline. Hi-Res
+  /// asks the same call, so only [_warmFits] minds it.
   Future<PlayURLInfo?> _warmAnswer(_Warm warm, int current) async {
     await warm.done;
     _ensureCurrent(current);
@@ -1220,6 +1277,7 @@ class PlaybackController extends ChangeNotifier {
     String? why() {
       if (warm.source == null || warmed == null) return warm.failure ?? 'failed';
       if (_memory.failedKinds.contains(TrackSelector.codecKind(warmed.video))) return 'refused';
+      if (_carriesFlac(warmed) != _carriesFlac(choice)) return 'hiRes';
       final same = warmed.video.baseURL == choice.video.baseURL &&
           warmed.video.codecid == choice.video.codecid &&
           warmed.audio.baseURL == choice.audio.baseURL;
@@ -1356,6 +1414,7 @@ class PlaybackController extends ChangeNotifier {
       final dash = info.dash;
       if (dash == null) throw BiliError.notDash;
       _dash = dash;
+      _flacOffered = dash.flac != null;
       final choice = _choose(dash);
       final ready = warm != null && warmed != null && _warmFits(warm, choice, at) ? warm : null;
       if (ready == null) _preconnect(choice);
@@ -1434,6 +1493,7 @@ class PlaybackController extends ChangeNotifier {
       'codecs': choice.video.codecs,
       'kbps': choice.video.bandwidth ~/ 1000,
       'audio': choice.audio.id,
+      'audioKind': _audioKind(choice),
       'host': Uri.tryParse(choice.video.baseURL)?.host ?? '',
       'btr': activeMode == PlaybackMode.btr,
     });
@@ -1444,7 +1504,11 @@ class PlaybackController extends ChangeNotifier {
   TrackChoice _pickTracks(Dash dash, {required bool skipHEV1}) {
     final excluded = {..._memory.failedKinds, ..._rejectedHere};
     final choice = choose(dash,
-        quality: _selectedQuality, codecOrder: _memory.order(preferred: _codec), excluded: excluded, skipHEV1: skipHEV1);
+        quality: _selectedQuality,
+        codecOrder: _memory.order(preferred: _codec),
+        excluded: excluded,
+        skipHEV1: skipHEV1,
+        hiRes: _hiRes && !_flacRefused);
     if (choice != null) return choice;
     final offered = TrackSelector.choose(dash, quality: _selectedQuality, codecOrder: const []) != null;
     final withoutMemory = choose(dash,
@@ -1461,21 +1525,34 @@ class PlaybackController extends ChangeNotifier {
   }
 
   /// TrackSelector falls back to any codec the quality has, so rejected kinds are removed from the streams
-  /// first. Once anything was rejected, codecs of unknown kind are left out too.
+  /// first. Once anything was rejected, codecs of unknown kind are left out too. [hiRes] takes the FLAC track.
   static TrackChoice? choose(Dash dash,
       {required int quality,
       required List<VideoCodec> codecOrder,
       required Set<String> excluded,
-      bool skipHEV1 = false}) {
+      bool skipHEV1 = false,
+      bool hiRes = false}) {
     final banned = {...excluded};
     if (banned.isNotEmpty) banned.add('other');
     final videos = dash.video
         .where((stream) => !banned.contains(TrackSelector.codecKind(stream)) && !(skipHEV1 && _isHEV1(stream)))
         .toList();
     if (videos.isEmpty) return null;
-    return TrackSelector.choose(Dash(duration: dash.duration, video: videos, audio: dash.audio),
-        quality: quality, codecOrder: codecOrder.where((codec) => !banned.contains(codec.name)).toList());
+    return TrackSelector.choose(Dash(duration: dash.duration, video: videos, audio: dash.audio, flac: dash.flac),
+        quality: quality, codecOrder: codecOrder.where((codec) => !banned.contains(codec.name)).toList(), hiRes: hiRes);
   }
+
+  /// [choice]'s audio is this part's FLAC track.
+  bool _carriesFlac(TrackChoice? choice) {
+    final flac = _dash?.flac;
+    return choice != null && flac != null && choice.audio.id == flac.id;
+  }
+
+  String _audioKind(TrackChoice? choice) => _carriesFlac(choice) ? 'flac' : 'aac';
+
+  /// The engine couldn't index a track, which with FLAC chosen is likely the FLAC one; its codecUnplayable is only ever
+  /// the video's.
+  static bool _flacRefusal(Object error) => error is PlaybackError && error.kind == PlaybackErrorKind.noSidx;
 
   static bool _isHEV1(DashStream stream) => stream.codecs.startsWith('hev1');
 
@@ -1565,7 +1642,9 @@ class PlaybackController extends ChangeNotifier {
     } catch (error) {
       if (_isClosed(error)) throw _engineGone();
       final codec = error is PlaybackError && error.kind == PlaybackErrorKind.codecUnplayable;
-      if (current != _epoch || requested != PlaybackMode.btr || codec) rethrow;
+      // AAC is tried before BTR is given up on.
+      final flac = _carriesFlac(choice) && _flacRefusal(error);
+      if (current != _epoch || requested != PlaybackMode.btr || codec || flac) rethrow;
       _logger.warn(LogCategory.player, 'btr start failed, going direct', {'error': '$error'});
       _fellBack = true;
       _updateModeStats();
@@ -1762,6 +1841,10 @@ class PlaybackController extends ChangeNotifier {
       return;
     }
     final choice = _choice;
+    if (_carriesFlac(choice) && _flacRefusal(error)) {
+      await _refuseFlac('engine', '$error', time);
+      return;
+    }
     if (error is PlaybackError && error.kind == PlaybackErrorKind.codecUnplayable && choice != null) {
       _logger.warn(LogCategory.player, 'codec unplayable', {'reason': error.detail ?? ''});
       await _nextCodec(TrackSelector.codecKind(choice.video), remember: false, time: time);
@@ -1777,6 +1860,15 @@ class PlaybackController extends ChangeNotifier {
       _rejectedHere.add(kind);
     }
     _logger.warn(LogCategory.player, 'codec failed', {'kind': kind, 'remembered': remember, 'mode': modeLabel});
+    await _chooseAgain(time);
+  }
+
+  /// The FLAC track failed where AAC would not have: the part goes on with AAC from [time], once, and the page hears
+  /// of it. Nothing is remembered against the video's codec, and Hi-Res stays asked for, so the next part tries FLAC.
+  Future<void> _refuseFlac(String by, String reason, double time) async {
+    _flacRefused = true;
+    _logger.warn(LogCategory.player, 'flac refused, playing aac', {'by': by, 'reason': reason, 'mode': modeLabel});
+    if (!_hiResRefusals.isClosed) _hiResRefusals.add(null);
     await _chooseAgain(time);
   }
 
@@ -1796,6 +1888,11 @@ class PlaybackController extends ChangeNotifier {
     final time = currentSeconds;
     if (_local != null) {
       await _localItemFailed(failure, current);
+      return;
+    }
+    // Before the video's codec is blamed: an unexplained failure after the item played is more likely the network.
+    if (_carriesFlac(choice) && (failure == ItemFailure.format || (failure == ItemFailure.unknown && !_itemPlayed))) {
+      await _refuseFlac('player', event.message, time);
       return;
     }
     final kind = TrackSelector.codecKind(choice.video);
@@ -1931,14 +2028,21 @@ class PlaybackController extends ChangeNotifier {
       final info = await _playUrl();
       if (current != _epoch || token != _token) return;
       final dash = info.dash;
+      final playedFlac = _carriesFlac(choice);
       // Another codec chosen later must come from these URLs, not the ones about to expire.
-      if (dash != null) _dash = dash;
+      if (dash != null) {
+        _dash = dash;
+        _flacOffered = dash.flac != null;
+      }
       _qualities = info.qualityOptions;
       _notify();
       final video = dash?.video
           .where((stream) => stream.id == choice.video.id && stream.codecid == choice.video.codecid)
           .firstOrNull;
-      final audio = dash?.audio.where((stream) => stream.id == choice.audio.id).firstOrNull;
+      // The FLAC track isn't in the AAC list.
+      final audio = playedFlac
+          ? dash?.flac
+          : dash?.audio.where((stream) => stream.id == choice.audio.id).firstOrNull;
       if (video == null || audio == null) {
         _logger.warn(LogCategory.player, 'url refresh found no matching streams');
         return;
@@ -2043,6 +2147,7 @@ class PlaybackController extends ChangeNotifier {
             'codecs': choice?.video.codecs ?? '',
             'kbps': (choice?.video.bandwidth ?? 0) ~/ 1000,
             'audioKbps': (choice?.audio.bandwidth ?? 0) ~/ 1000,
+            'audioKind': _audioKind(choice),
           });
         }
         final seekMs = _seekTimer.playing(atMs: now);
@@ -2296,6 +2401,7 @@ class PlaybackController extends ChangeNotifier {
     duration.dispose();
     unawaited(_marks.close());
     unawaited(_endings.close());
+    unawaited(_hiResRefusals.close());
     unawaited(_restores.close());
     unawaited(_remoteCommands.close());
     unawaited(_interruptions.close());
@@ -2326,6 +2432,9 @@ final class _Warm {
   final PlaybackEngine engine;
   final bool parallel;
   final double? startAt;
+
+  /// Whether its pick took Hi-Res, as the controller had it when its answer landed; null before.
+  bool? hiRes;
 
   /// The fingerprint cookies' ask, shared with the open's view.
   Future<void>? cookies;

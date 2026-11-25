@@ -253,7 +253,8 @@ abstract interface class PlayerSession implements Listenable {
   bool get hiResOn;
 
   /// Saves the choice and, when the part offers it, reopens at the same second on the FLAC track or back on AAC,
-  /// saying so in [notes]: on, Hi-Res无损音质开启中，请稍候 then 已开启 once it plays (274); off, one 关闭 note.
+  /// saying so in [notes]: on, Hi-Res无损音质开启中，请稍候 then 已开启 once it plays (274); off, one 关闭 note. A FLAC
+  /// track the phone refuses, here or on any open, says 开启失败 and plays on with AAC, the choice kept.
   /// Completes with a failure's toast text, or null.
   Future<String?> setHiRes(bool on);
 
