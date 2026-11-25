@@ -12,7 +12,11 @@ import '../shared/remote_image.dart';
 import '../shared/theme.dart';
 import '../shared/toast.dart';
 import '../video/actions/video_actions.dart';
+import '../video/player_session.dart';
+import 'chapter_strip.dart';
 import 'panels/panel_controller.dart';
+import 'panels/panel_parts.dart' show toastFailure;
+import 'player_notes_view.dart';
 import 'player_ui.dart';
 import 'portrait_controls.dart';
 import 'seek_bar.dart';
@@ -63,11 +67,32 @@ class LandscapeChrome extends StatelessWidget {
               ui: ui,
               shown: !ui.chrome.visible && ui.panels.value == null && ui.overlay?.value == null,
             ),
+            _chapterStrip(context),
             _controls(context, insets, shown),
+            PlayerNotesView(notes: ui.session.notes),
             SeekPreview(session: ui.session, shown: shown && ui.chrome.barHeld),
           ],
         );
       },
+    );
+  }
+
+  /// Under the 章节 panel's shade with 章节进度条 on (273); nothing there while the controls are only hidden (KaiC).
+  Widget _chapterStrip(BuildContext context) {
+    final session = ui.session;
+    final chapters = session.chapters;
+    final open = ui.panels.value == PlayerPanel.chapters && session.chapterBar && chapters.isNotEmpty;
+    return Positioned(
+      left: 0,
+      right: 0,
+      bottom: 0,
+      height: ChapterStripTheme.height,
+      child: AnimatedSwitcher(
+        duration: _motion(context),
+        child: open
+            ? ChapterStrip(key: ObjectKey(chapters), chapters: chapters, duration: session.duration)
+            : const SizedBox.shrink(),
+      ),
     );
   }
 
@@ -134,7 +159,7 @@ class LandscapeChrome extends StatelessWidget {
               child: ChromeSlide(
                 shown: shown,
                 from: const Offset(0, BiliMetrics.chromeSlide),
-                child: _bottomBar(insets, aside: !ui.chrome.barHeld),
+                child: _bottomBar(context, insets, aside: !ui.chrome.barHeld),
               ),
             ),
           ],
@@ -246,7 +271,7 @@ class LandscapeChrome extends StatelessWidget {
   }
 
   /// [aside] false keeps only the bar.
-  Widget _bottomBar(EdgeInsets insets, {required bool aside}) {
+  Widget _bottomBar(BuildContext context, EdgeInsets insets, {required bool aside}) {
     final session = ui.session;
     final next = session.next;
     final bar = FullScreenSeekBar.repaintOf(ui);
@@ -262,29 +287,18 @@ class LandscapeChrome extends StatelessWidget {
         children: [
           _GiveWay(
             shown: aside,
-            child: SizedBox(
-              height: BiliMetrics.chromeTimeBox,
-              child: Padding(
-                padding: const EdgeInsets.only(left: BiliMetrics.chromeTimeInset),
-                child: Align(
-                  alignment: Alignment.centerLeft,
-                  child: ListenableBuilder(
-                    listenable: bar,
-                    builder: (context, _) => Text(
-                      TimeFormat.pair(session.position, session.duration.value),
-                      key: const ValueKey('landscape-time'),
-                      style: _timeStyle,
-                      maxLines: 1,
-                    ),
-                  ),
+            child: Padding(
+              padding: const EdgeInsets.only(left: BiliMetrics.chromeTimeInset),
+              child: ListenableBuilder(
+                listenable: bar,
+                builder: (context, _) => _TimeLine(
+                  session: session,
+                  onChapters: _touch(() => ui.panels.open(PlayerPanel.chapters)),
                 ),
               ),
             ),
           ),
-          Padding(
-            padding: const EdgeInsets.only(top: BiliMetrics.chromeBarTop),
-            child: FullScreenSeekBar(key: const ValueKey('landscape-bar'), ui: ui, repaint: bar, preview: true),
-          ),
+          FullScreenSeekBar(key: const ValueKey('landscape-bar'), ui: ui, repaint: bar, preview: true),
           _GiveWay(
             shown: aside,
             child: Padding(
@@ -353,6 +367,25 @@ class LandscapeChrome extends StatelessWidget {
                     text: speedLabel(session.rate),
                     onTap: _touch(() => ui.panels.open(PlayerPanel.speed)),
                   ),
+                  if (session.hiResOffered) ...[
+                    const SizedBox(width: HiResButtonTheme.gap),
+                    _TextButton(
+                      key: const ValueKey('landscape-hi-res'),
+                      label: HiResButtonTheme.label,
+                      text: HiResButtonTheme.label,
+                      color: session.hiResOn ? HiResButtonTheme.on : BiliColors.onVideo,
+                      tag: HiResButtonTheme.tag,
+                      tagKey: const ValueKey('landscape-hi-res-tag'),
+                      tagLine: session.hiResOn ? HiResButtonTheme.tagLineOn : BiliMetrics.chromeTagLine,
+                      tagPad: HiResButtonTheme.tagPad,
+                      untaggedPad: true,
+                      onTap: _touch(
+                        () => toastFailure(session.setHiRes(!session.hiResOn), (message) {
+                          if (context.mounted) showToast(context, message);
+                        }),
+                      ),
+                    ),
+                  ],
                   const SizedBox(width: BiliMetrics.chromeQualityGap),
                   _TextButton(
                     key: const ValueKey('landscape-quality'),
@@ -389,6 +422,127 @@ class _GiveWay extends StatelessWidget {
   );
 }
 
+/// `01:48/04:01` over the bar's left end, and for a video with chapters ` · 章节 · 2.3 ›` after it (274): the chapter
+/// holding the position, a drag's included, its part opening 章节's panel. The part's target reaches down to the bar.
+class _TimeLine extends StatelessWidget {
+  const _TimeLine({required this.session, required this.onChapters});
+
+  final PlayerSession session;
+  final VoidCallback onChapters;
+
+  static Widget _band(Widget child) => Padding(
+    padding: const EdgeInsets.only(bottom: BiliMetrics.chromeBarTop),
+    child: SizedBox(height: BiliMetrics.chromeTimeBox, child: child),
+  );
+
+  @override
+  Widget build(BuildContext context) {
+    final position = session.position;
+    final chapters = session.chapters;
+    final time = Text(
+      TimeFormat.pair(position, session.duration.value),
+      key: const ValueKey('landscape-time'),
+      style: LandscapeChrome._timeStyle,
+      maxLines: 1,
+    );
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        _band(Align(alignment: Alignment.centerLeft, widthFactor: 1, child: time)),
+        if (chapters.isNotEmpty)
+          Flexible(
+            child: ChromeTap(
+              key: const ValueKey('landscape-chapters'),
+              label: '章节',
+              square: false,
+              onTap: onChapters,
+              child: _band(_ChapterPart(title: SeekBar.chapterTitle(chapters, position))),
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+class _ChapterPart extends StatelessWidget {
+  const _ChapterPart({required this.title});
+
+  final String? title;
+
+  static final _dot = Padding(
+    padding: const EdgeInsets.symmetric(horizontal: ChapterLineTheme.dotGap),
+    child: Transform.translate(
+      offset: const Offset(0, -ChapterLineTheme.dotLift),
+      child: const CustomPaint(size: Size.square(ChapterLineTheme.dot), painter: _DotPainter()),
+    ),
+  );
+
+  @override
+  Widget build(BuildContext context) {
+    final title = this.title;
+    const style = LandscapeChrome._timeStyle;
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        _dot,
+        const Text('章节', maxLines: 1, softWrap: false, style: style),
+        if (title != null) ...[
+          _dot,
+          Flexible(
+            child: Text(
+              title,
+              key: const ValueKey('landscape-chapter-title'),
+              maxLines: 1,
+              softWrap: false,
+              overflow: TextOverflow.ellipsis,
+              style: style,
+            ),
+          ),
+        ],
+        const SizedBox(width: ChapterLineTheme.chevronGap),
+        Transform.translate(
+          offset: const Offset(0, -ChapterLineTheme.chevronLift),
+          child: const CustomPaint(
+            size: Size(ChapterLineTheme.chevronWidth, ChapterLineTheme.chevronHeight),
+            painter: _ChevronPainter(),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _DotPainter extends CustomPainter {
+  const _DotPainter();
+
+  @override
+  void paint(Canvas canvas, Size size) =>
+      canvas.drawCircle(size.center(Offset.zero), size.shortestSide / 2, Paint()..color = BiliColors.onVideo);
+
+  @override
+  bool shouldRepaint(_DotPainter oldDelegate) => false;
+}
+
+/// 274's ›: one round-ended stroke, its ends at the box's left and its point at the right.
+class _ChevronPainter extends CustomPainter {
+  const _ChevronPainter();
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    const s = ChapterLineTheme.chevronStroke / 2;
+    canvas.drawPath(
+      Path()
+        ..moveTo(s, s)
+        ..lineTo(size.width - s, size.height / 2)
+        ..lineTo(s, size.height - s),
+      _line(BiliColors.onVideo, ChapterLineTheme.chevronStroke),
+    );
+  }
+
+  @override
+  bool shouldRepaint(_ChevronPainter oldDelegate) => false;
+}
+
 /// The full-screen controls draw over the page's own text style, which may be outside any Material.
 TextStyle get fullScreenText => TextStyle(
   fontFamily: BiliFonts.family,
@@ -399,6 +553,23 @@ TextStyle get fullScreenText => TextStyle(
 
 /// [BiliFonts.strut] for a Text drawn in [style] under [fullScreenText], which replaces whatever style the page has.
 StrutStyle? fullScreenStrut(TextStyle style) => BiliFonts.strut(fullScreenText.merge(style));
+
+/// [text] with each Latin letter that runs into Chinese set [HiResButtonTheme.latinGap] further from it, as iOS draws
+/// 274's Hi-Res无损 at 12 and 14 pt alike; digits keep the fonts' spacing (23人正在看).
+TextSpan latinSpacedFromChinese(String text) {
+  final spans = <TextSpan>[];
+  var start = 0;
+  for (final match in _latinBeforeChinese.allMatches(text)) {
+    spans
+      ..add(TextSpan(text: text.substring(start, match.start)))
+      ..add(TextSpan(text: match[0], style: const TextStyle(letterSpacing: HiResButtonTheme.latinGap)));
+    start = match.end;
+  }
+  spans.add(TextSpan(text: text.substring(start)));
+  return TextSpan(children: spans);
+}
+
+final _latinBeforeChinese = RegExp(r'[A-Za-z](?=[㐀-鿿])');
 
 /// 倍速 at 1×, otherwise the rate as the 倍速 panel lists it (1.5X, 1.25X, 2.0X).
 String speedLabel(double rate) {
@@ -457,35 +628,46 @@ class _TextButton extends StatelessWidget {
     required this.label,
     required this.text,
     required this.onTap,
+    this.color = BiliColors.onVideo,
     this.tag,
+    this.tagKey = const ValueKey('landscape-quality-tag'),
+    this.tagLine = BiliMetrics.chromeTagLine,
+    this.tagPad = BiliMetrics.chromeTagPad,
+    this.untaggedPad = false,
     this.bold = false,
   });
 
   final String label;
   final String text;
   final VoidCallback onTap;
+  final Color color;
 
-  /// Drawn small and outlined over the text's top right, as 1080P's 60帧.
+  /// Drawn small and outlined over the text's top right, as 1080P's 60帧, in [color] with a [tagLine] outline.
   final String? tag;
+  final Key tagKey;
+  final Color tagLine;
+  final double tagPad;
+
+  /// Keeps the untagged pads under a tag: Hi-Res无损 sits from 4K as 倍速 does on 04 (274).
+  final bool untaggedPad;
   final bool bold;
 
   @override
   Widget build(BuildContext context) {
     final tag = this.tag;
+    final pad = tag == null || untaggedPad ? BiliMetrics.chromeTextPad : BiliMetrics.chromeTaggedPad;
     final button = SizedBox(
       height: BiliMetrics.chromeButton,
       child: Padding(
-        padding: EdgeInsets.symmetric(
-          horizontal: tag == null ? BiliMetrics.chromeTextPad : BiliMetrics.chromeTaggedPad,
-        ),
+        padding: EdgeInsets.symmetric(horizontal: pad),
         child: Center(
           widthFactor: 1,
-          child: Text(
-            text,
+          child: Text.rich(
+            latinSpacedFromChinese(text),
             maxLines: 1,
             softWrap: false,
             style: TextStyle(
-              color: BiliColors.onVideo,
+              color: color,
               fontSize: BiliMetrics.chromeLabelText,
               fontWeight: bold ? FontWeight.bold : FontWeight.normal,
             ),
@@ -505,8 +687,8 @@ class _TextButton extends StatelessWidget {
                 button,
                 Positioned(
                   top: BiliMetrics.chromeTagTop,
-                  right: -BiliMetrics.chromeTagOverhang,
-                  child: QualityTag(tag),
+                  right: pad - BiliMetrics.chromeTaggedPad - BiliMetrics.chromeTagOverhang,
+                  child: QualityTag(tag, key: tagKey, color: color, line: tagLine, pad: tagPad),
                 ),
               ],
             ),
@@ -514,19 +696,28 @@ class _TextButton extends StatelessWidget {
   }
 }
 
-/// 1080P's 高码率 or 60帧, small and outlined.
+/// 1080P's 高码率 or 60帧, small and outlined; 274's 大会员 over Hi-Res无损 in its colour.
 class QualityTag extends StatelessWidget {
-  const QualityTag(this.text, {super.key = const ValueKey('landscape-quality-tag')});
+  const QualityTag(
+    this.text, {
+    super.key = const ValueKey('landscape-quality-tag'),
+    this.color = BiliColors.onVideo,
+    this.line = BiliMetrics.chromeTagLine,
+    this.pad = BiliMetrics.chromeTagPad,
+  });
 
   final String text;
+  final Color color;
+  final Color line;
+  final double pad;
 
   @override
   Widget build(BuildContext context) => Container(
     height: BiliMetrics.chromeTagHeight,
-    padding: const EdgeInsets.symmetric(horizontal: BiliMetrics.chromeTagPad),
+    padding: EdgeInsets.symmetric(horizontal: pad),
     alignment: Alignment.center,
     decoration: BoxDecoration(
-      border: Border.all(color: BiliMetrics.chromeTagLine, width: BiliMetrics.chromeTagBorder),
+      border: Border.all(color: line, width: BiliMetrics.chromeTagBorder),
       borderRadius: BorderRadius.circular(BiliMetrics.chromeTagHeight / 2),
     ),
     // The text keeps its own line height, centred, though the font's line is taller than the tag.
@@ -537,7 +728,7 @@ class QualityTag extends StatelessWidget {
         text,
         maxLines: 1,
         softWrap: false,
-        style: const TextStyle(color: BiliColors.onVideo, fontSize: BiliMetrics.chromeTagText),
+        style: TextStyle(color: color, fontSize: BiliMetrics.chromeTagText),
       ),
     ),
   );
@@ -1443,8 +1634,8 @@ class FullScreenSeekBar extends StatelessWidget {
   /// Holding it shows the seek preview (102; 竖屏's 19, 20).
   final bool preview;
 
-  /// The bar's own chapter ticks and the title over the thumb; the iPad draws both itself, the title over its
-  /// preview's frame (recording 24).
+  /// The bar's own chapter ticks and the title over the thumb, while 章节进度条 is on; the iPad draws both itself, the
+  /// title over its preview's frame (recording 24).
   final bool chapters;
 
   /// What the bar and the time redraw on.
@@ -1461,7 +1652,7 @@ class FullScreenSeekBar extends StatelessWidget {
       duration: () => session.duration.value,
       buffered: () => session.readout.bufferedEnd(session.position),
       repaint: repaint,
-      chapters: chapters ? session.chapters : const [],
+      chapters: chapters && session.chapterBar ? session.chapters : const [],
       style: style,
       onScrub: session.scrub,
       onRest: session.hint,
