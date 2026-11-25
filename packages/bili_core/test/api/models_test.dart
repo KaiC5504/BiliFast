@@ -163,6 +163,60 @@ void main() {
     expect(dash.video.first.backupURLs, ['https://h/b.m4s']);
   });
 
+  group('Hi-Res', () {
+    const flacTrack = '{"id":30251,"baseUrl":"https://upos.example.com/upgcxcode/1/2/3/3-1-30251.m4s?deadline=1",'
+        '"backupUrl":["https://backup.example.com/upgcxcode/1/2/3/3-1-30251.m4s?deadline=1"],"bandwidth":1600000,'
+        '"mimeType":"audio/mp4","codecs":"fLaC","codecid":0,$goodBase}';
+    Dash dashWith(String flac) => decodeEnvelope(
+          '{"code":0,"data":{"dash":{"duration":10,"video":[${stream(extra: goodBase)}],'
+          '"audio":[${stream(id: 30280, extra: goodBase)}]$flac}}}',
+          PlayURLInfo.fromJson,
+        ).data!.dash!;
+
+    test('flac.audio decodes as the FLAC track, apart from the AAC list', () {
+      final dash = dashWith(',"flac":{"display":true,"audio":$flacTrack}');
+      final flac = dash.flac!;
+      expect(flac.id, 30251);
+      expect(flac.codecs, 'fLaC');
+      expect(flac.mimeType, 'audio/mp4');
+      expect(flac.bandwidth, 1600000);
+      expect(flac.backupURLs, hasLength(1));
+      expect(flac.initialization, ByteRange(0, 9));
+      expect(flac.indexRange, ByteRange(10, 19));
+      expect(dash.audio.map((stream) => stream.id), [30280]);
+    });
+
+    test('no FLAC track when flac is absent, null, or has no audio object', () {
+      expect(decodeEnvelope(Fixtures.playURL, PlayURLInfo.fromJson).data!.dash!.flac, isNull, reason: '"flac":null');
+      for (final flac in [
+        '',
+        ',"flac":null',
+        ',"flac":{"display":false}',
+        ',"flac":{"display":false,"audio":null}',
+        ',"flac":{"audio":[$flacTrack]}',
+        ',"flac":{"audio":"30251"}',
+        ',"flac":"30251"',
+      ]) {
+        final dash = dashWith(flac);
+        expect(dash.flac, isNull, reason: flac);
+        expect(dash.audio, hasLength(1), reason: flac);
+      }
+    });
+
+    test('a malformed FLAC track reads as none and costs nothing else', () {
+      for (final broken in [
+        '{"id":30251,"codecs":"fLaC",$goodBase}',
+        '{"id":30251,"baseUrl":"https://upos.example.com/a.m4s","codecs":"fLaC"}',
+        '{"id":"30251","baseUrl":"https://upos.example.com/a.m4s","codecs":"fLaC",$goodBase}',
+      ]) {
+        final dash = dashWith(',"flac":{"display":true,"audio":$broken}');
+        expect(dash.flac, isNull, reason: broken);
+        expect(dash.video, hasLength(1), reason: broken);
+        expect(dash.audio, hasLength(1), reason: broken);
+      }
+    });
+  });
+
   test('hasDurl needs a non-empty array', () {
     for (final (extra, expected) in [
       (',"durl":null', false),

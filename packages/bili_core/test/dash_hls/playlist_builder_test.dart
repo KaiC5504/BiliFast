@@ -18,6 +18,17 @@ void main() {
     expect(CodecMapper.video(codecs: 'avc1.640034', qualityId: 80, sampleEntry: 'avc1').codecs, 'avc1.640034');
   });
 
+  test('audio codec mapping: FLAC is always fLaC, an empty label AAC', () {
+    expect(CodecMapper.audio(codecs: 'mp4a.40.2', sampleEntry: 'mp4a'), 'mp4a.40.2');
+    expect(CodecMapper.audio(codecs: '', sampleEntry: 'mp4a'), 'mp4a.40.2');
+    expect(CodecMapper.audio(codecs: ''), 'mp4a.40.2');
+    expect(CodecMapper.audio(codecs: 'fLaC', sampleEntry: 'fLaC'), 'fLaC');
+    expect(CodecMapper.audio(codecs: 'fLaC'), 'fLaC');
+    expect(CodecMapper.audio(codecs: 'flac'), 'fLaC');
+    expect(CodecMapper.audio(codecs: 'FLAC'), 'fLaC');
+    expect(CodecMapper.audio(codecs: '', sampleEntry: 'fLaC'), 'fLaC', reason: 'the bytes say FLAC under a blank label');
+  });
+
   test('frame rate formatting', () {
     expect(CodecMapper.frameRate('29.412'), '29.412');
     expect(CodecMapper.frameRate('60'), '60.000');

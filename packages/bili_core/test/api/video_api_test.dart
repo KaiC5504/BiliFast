@@ -203,6 +203,19 @@ void main() {
     expect(highlights.chapters, isEmpty);
   });
 
+  test("player info keeps each chapter's frame as given, none when it is empty, absent or not text", () {
+    final framed = Fixtures.playerV2
+        .replaceFirst('"imgUrl":""', '"imgUrl":"http://i0.hdslb.com/bfs/videoshot/example-0001.jpg"')
+        .replaceFirst('"imgUrl":"",', '')
+        .replaceFirst('"imgUrl":""', '"imgUrl":7');
+    expect(decode(framed, PlayerInfo.fromJson).chapters, const [
+      Chapter(from: 0, to: 60, title: '开场', image: 'http://i0.hdslb.com/bfs/videoshot/example-0001.jpg'),
+      Chapter(from: 60, to: 150, title: '正片'),
+      Chapter(from: 150, to: 212, title: '结尾'),
+    ]);
+    expect(decode(Fixtures.playerV2, PlayerInfo.fromJson).chapters.map((chapter) => chapter.image), [null, null, null]);
+  });
+
   test('player info reads where the account stopped, 0 when it is missing', () {
     expect(decode(Fixtures.playerV2, PlayerInfo.fromJson).lastPlayTimeMs, 65000);
     expect(decode(Fixtures.playerV2Highlights, PlayerInfo.fromJson).lastPlayTimeMs, 0);

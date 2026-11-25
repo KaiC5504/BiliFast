@@ -41,6 +41,14 @@ abstract final class CodecMapper {
     return HLSVideoCodec(codecs: mapped, supplemental: null, videoRange: qualityId == 125 ? 'PQ' : 'SDR');
   }
 
+  /// `sampleEntry` is the audio init segment's four-character code: bytes holding FLAC are declared FLAC whatever
+  /// Bilibili's label says, and always as `fLaC`, the sample entry's own spelling, since RFC 6381 codes are
+  /// case-sensitive.
+  static String audio({required String codecs, String? sampleEntry}) {
+    if (sampleEntry == 'fLaC' || codecs.toLowerCase() == 'flac') return 'fLaC';
+    return codecs.isEmpty ? 'mp4a.40.2' : codecs;
+  }
+
   static String frameRate(String? text) {
     final value = text == null ? null : _swiftDouble(text);
     if (value == null || !value.isFinite || value <= 0) return '30.000';

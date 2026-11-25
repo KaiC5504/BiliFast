@@ -261,7 +261,10 @@ abstract final class PlaybackBuilder {
     final audio = prepared.audio.stream;
     final variant = HLSVariant(
       codec: CodecMapper.video(codecs: video.codecs, qualityId: video.id, sampleEntry: sampleEntry),
-      audioCodecs: audio.codecs.isEmpty ? 'mp4a.40.2' : audio.codecs,
+      audioCodecs: CodecMapper.audio(
+        codecs: audio.codecs,
+        sampleEntry: InitSegmentFixer.sampleEntry(prepared.audio.headers),
+      ),
       averageBandwidth: video.bandwidth + audio.bandwidth,
       width: video.width,
       height: video.height,

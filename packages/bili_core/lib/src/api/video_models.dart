@@ -466,12 +466,14 @@ final class PlayerInfo {
     final object = JsonObject.from(json);
     final points = object.lossyList('view_points', (json) {
       final point = JsonObject.from(json);
+      final image = point.text('imgUrl');
       return (
         type: point.integer('type') ?? 0,
         chapter: Chapter(
           from: point.number('from') ?? 0,
           to: point.number('to') ?? 0,
           title: point.string('content') ?? '',
+          image: image == null || image.isEmpty ? null : image,
         ),
       );
     });

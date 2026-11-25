@@ -33,7 +33,7 @@ abstract final class TrackSelector {
     required List<VideoCodec> codecOrder,
     bool hiRes = false,
   }) {
-    final audio = bestAudio(dash.audio);
+    final audio = (hiRes ? dash.flac : null) ?? bestAudio(dash.audio);
     if (audio == null) return null;
     final qualities = dash.video.map((stream) => stream.id).toSet().toList()..sort((a, b) => b.compareTo(a));
     final picked = qualities.where((id) => id <= quality).firstOrNull ?? qualities.lastOrNull;
@@ -47,7 +47,8 @@ abstract final class TrackSelector {
     return first == null ? null : TrackChoice(video: first, audio: audio);
   }
 
-  /// AAC only: 30280 (192K) > 30232 (132K) > 30216 (64K). Dolby and Hi-Res are later milestones.
+  /// AAC only: 30280 (192K) > 30232 (132K) > 30216 (64K). Hi-Res is [Dash.flac], through [choose]; Dolby is a later
+  /// milestone.
   static DashStream? bestAudio(List<DashStream> audio) {
     const rank = {30280: 3, 30232: 2, 30216: 1};
     DashStream? best;

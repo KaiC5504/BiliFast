@@ -47,6 +47,25 @@ abstract final class MP4Builder {
     return [...box('ftyp', [...ascii.encode('iso6'), ...be32(0)]), ...moov];
   }
 
+  /// ftyp and a moov whose one track is FLAC in ISO BMFF: an `fLaC` sample entry carrying a `dfLa` STREAMINFO.
+  static List<int> flacInitSegment({int sampleRate = 96000, int channels = 2, int bitsPerSample = 24}) {
+    final streamInfo = [
+      ...be16(4096), ...be16(4096), ...zeros(6), //
+      ...be64(sampleRate << 44 | (channels - 1) << 41 | (bitsPerSample - 1) << 36),
+      ...zeros(16),
+    ];
+    final dfLa = box('dfLa', [0, 0, 0, 0, 0x80, 0, 0, streamInfo.length, ...streamInfo]);
+    final entry = box('fLaC', [
+      ...zeros(6), ...be16(1), ...zeros(8), ...be16(channels), ...be16(bitsPerSample), ...zeros(4), //
+      ...be32(sampleRate > 0xffff ? 0 : sampleRate << 16),
+      ...dfLa,
+    ]);
+    final stsd = box('stsd', [0, 0, 0, 0, ...be32(1), ...entry]);
+    final trak = box('trak', [...box('tkhd', zeros(84)), ...box('mdia', box('minf', box('stbl', stsd)))]);
+    final moov = box('moov', [...box('mvhd', zeros(100)), ...trak]);
+    return [...box('ftyp', [...ascii.encode('iso6'), ...be32(0)]), ...moov];
+  }
+
   static List<int> zeros(int count) => List<int>.filled(count, 0);
 }
 

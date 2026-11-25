@@ -9,6 +9,7 @@ import 'package:bili_core/engine.dart';
 import 'package:bili_core/shared.dart';
 import 'package:test/test.dart';
 
+import 'mp4_builder.dart';
 import 'playback_fixtures.dart';
 
 Future<PreparedPlayback> prepareFixture(HeaderFixture fixture) => PlaybackBuilder.prepare(fixture.choice,
@@ -488,6 +489,73 @@ v.m3u8
       final expected = max(average, (peakOf(prepared.video.segments) + peakOf(prepared.audio.segments)).ceil());
       expect(bandwidth(peak: true), '$expected');
       expect(bandwidth(peak: false), '${(average * 1.5).toInt()}');
+    });
+  });
+
+  group('Hi-Res', () {
+    ({DashStream stream, Uint8List bytes, int total}) flacTrack({String codecs = 'fLaC'}) {
+      final init = MP4Builder.flacInitSegment();
+      final sidx = MP4Builder.sidx(
+          version: 0, timescale: 96000, earliest: 0, firstOffset: 0, refs: [(600000, 96000 * 5), (300000, 96000 * 2)]);
+      final bytes = bytesOf([...init, ...sidx]);
+      return (
+        stream: DashStream(
+          id: 30251,
+          baseURL: 'https://upos.example.com/upgcxcode/1/2/3/3-1-30251.m4s?deadline=1&upsig=sig',
+          backupURLs: const [],
+          bandwidth: 960000,
+          mimeType: 'audio/mp4',
+          codecs: codecs,
+          codecid: 0,
+          width: 0,
+          height: 0,
+          frameRate: null,
+          initialization: ByteRange(0, init.length - 1),
+          indexRange: ByteRange(init.length, bytes.length - 1),
+        ),
+        bytes: bytes,
+        total: bytes.length + 900000,
+      );
+    }
+
+    Future<PreparedPlayback> prepareWith(({DashStream stream, Uint8List bytes, int total}) flac) {
+      final video = headerFixture(withMoov: true);
+      return PlaybackBuilder.prepare(TrackChoice(video: video.choice.video, audio: flac.stream),
+          fetchHeaders: (kind, _) async =>
+              kind == TrackKind.video ? (bytes: video.bytes, total: video.total) : (bytes: flac.bytes, total: flac.total));
+    }
+
+    test('a FLAC track is served byte for byte on its own SIDX, and the master names it fLaC', () async {
+      final flac = flacTrack();
+      final prepared = await prepareWith(flac);
+      expect(prepared.audio.headers, flac.bytes);
+      expect(prepared.audio.totalSize, flac.total);
+      expect([for (final segment in prepared.audio.segments) (segment.range, segment.duration)], [
+        (ByteRange(flac.bytes.length, flac.bytes.length + 599999), 5.0),
+        (ByteRange(flac.bytes.length + 600000, flac.bytes.length + 899999), 2.0),
+      ]);
+
+      final ripper = PlaybackBuilder.ripperAssets(prepared, read: (_, _) => const Stream.empty());
+      final direct = PlaybackBuilder.directAssets(prepared);
+      for (final master in [ripper.playlists['master.m3u8']!, direct.playlists['master.m3u8']!]) {
+        expect(master, contains('CODECS="avc1.640032,fLaC"'));
+        expect(master, contains('AVERAGE-BANDWIDTH=1960000,'));
+      }
+      expect(ripper.media['a.mp4']!.prefix, flac.bytes);
+      final initLength = flac.stream.initialization.length;
+      expect(ripper.playlists['a.m3u8'], contains('#EXT-X-MAP:URI="a.mp4",BYTERANGE="$initLength@0"'));
+      expect(ripper.playlists['a.m3u8'], contains('#EXT-X-BYTERANGE:600000@${flac.bytes.length}\na.mp4\n'));
+      expect(direct.playlists['a.m3u8'],
+          contains('#EXT-X-BYTERANGE:300000@${flac.bytes.length + 600000}\n${flac.stream.baseURL}\n'));
+    });
+
+    test('FLAC bytes are declared fLaC whatever the label spells', () async {
+      for (final codecs in ['', 'flac', 'mp4a.40.2']) {
+        final prepared = await prepareWith(flacTrack(codecs: codecs));
+        final master = PlaybackBuilder.ripperAssets(prepared, read: (_, _) => const Stream.empty())
+            .playlists['master.m3u8']!;
+        expect(master, contains('CODECS="avc1.640032,fLaC"'), reason: codecs);
+      }
     });
   });
 }

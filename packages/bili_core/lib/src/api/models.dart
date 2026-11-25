@@ -368,10 +368,12 @@ final class Dash {
 
   factory Dash.fromJson(Object? json) {
     final object = JsonObject.from(json);
+    final flac = object.nested('flac')?.nested('audio');
     return Dash(
       duration: object.integer('duration') ?? 0,
       video: object.lossyList('video', DashStream.fromJson),
       audio: object.lossyList('audio', DashStream.fromJson),
+      flac: flac == null ? null : attempt(() => DashStream.fromJson(flac.map)),
     );
   }
 

@@ -78,4 +78,49 @@ void main() {
     final silent = Dash(duration: dash.duration, video: dash.video, audio: const []);
     expect(TrackSelector.choose(silent, quality: 120, codecOrder: [VideoCodec.hevc]), isNull);
   });
+
+  group('Hi-Res', () {
+    late DashStream flac;
+    late Dash lossless;
+
+    setUp(() {
+      final template = dash.audio.first;
+      flac = DashStream(
+        id: 30251,
+        baseURL: 'https://upos.example.com/upgcxcode/1/2/3/3-1-30251.m4s?deadline=1',
+        backupURLs: const [],
+        bandwidth: 1600000,
+        mimeType: 'audio/mp4',
+        codecs: 'fLaC',
+        codecid: 0,
+        width: 0,
+        height: 0,
+        frameRate: null,
+        initialization: template.initialization,
+        indexRange: template.indexRange,
+      );
+      lossless = Dash(duration: dash.duration, video: dash.video, audio: dash.audio, flac: flac);
+    });
+
+    test('hiRes takes the FLAC track when the answer offers one', () {
+      final choice = TrackSelector.choose(lossless, quality: 120, codecOrder: [VideoCodec.hevc], hiRes: true);
+      expect(choice?.audio, flac);
+      expect(choice?.video.codecs, 'hev1.1.6.L153.90', reason: 'the video is chosen as without it');
+    });
+
+    test('without hiRes the best AAC plays, FLAC offered or not', () {
+      expect(TrackSelector.choose(lossless, quality: 120, codecOrder: [VideoCodec.hevc])?.audio.id, 30280);
+      expect(TrackSelector.bestAudio(lossless.audio)?.id, 30280);
+    });
+
+    test('hiRes without a FLAC track falls back to the best AAC', () {
+      expect(TrackSelector.choose(dash, quality: 120, codecOrder: [VideoCodec.hevc], hiRes: true)?.audio.id, 30280);
+    });
+
+    test('hiRes plays FLAC even when no AAC track decoded', () {
+      final flacOnly = Dash(duration: dash.duration, video: dash.video, audio: const [], flac: flac);
+      expect(TrackSelector.choose(flacOnly, quality: 120, codecOrder: [VideoCodec.hevc], hiRes: true)?.audio, flac);
+      expect(TrackSelector.choose(flacOnly, quality: 120, codecOrder: [VideoCodec.hevc]), isNull);
+    });
+  });
 }
