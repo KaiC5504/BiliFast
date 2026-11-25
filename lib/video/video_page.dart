@@ -191,6 +191,12 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
   /// by the small window, and not under a reply notification's thread, which full screen would hide.
   bool _fullScreenOnOpen = false;
 
+  /// That full screen was asked for, and the page isn't at rest until its turn has run ([_settle]).
+  bool _openTurn = false;
+
+  /// The route's slide in is over.
+  bool _arrivedIn = false;
+
   /// The playback's session, once the page has built its player around it.
   PlayerSession? _session;
   PageDetails? _details;
@@ -673,6 +679,7 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
     }
     _flushDrawn();
     setState(() {});
+    _motionDone();
   }
 
   /// Rebuilds the PopScope, which holds the page while it turns.
@@ -680,6 +687,26 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
     if (!status.isCompleted || !mounted) return;
     _settleDrawing();
     setState(() {});
+    _motionDone();
+  }
+
+  void _motionStatus(AnimationStatus status) {
+    if (!status.isAnimating) _motionDone();
+  }
+
+  /// A turn or grow ended. Reached from a build too (a turn under Reduce Motion jumps), where the session must not
+  /// reopen anything.
+  void _motionDone() {
+    _openTurn = false;
+    scheduleMicrotask(_settle);
+  }
+
+  /// Tells the session the page is at rest ([PlayerSession.settled]): slid in or back, and turned into the full screen
+  /// it opens with, so a reopen for Hi-Res doesn't stop the picture mid-way.
+  void _settle() {
+    if (!mounted || _left || _covered || !_arrivedIn || _fullScreenOnOpen || _openTurn) return;
+    if (_spinning || _grow.isAnimating || _padFull.isAnimating || _turnFrom != null || _pendingTurn != null) return;
+    _session?.settled();
   }
 
   double get _rotation => _spinFrom * (1 - RotationTheme.curve.transform(_spin.value));
@@ -767,6 +794,8 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
     _uploaderSheet.addListener(_sheetChanged);
     _collapse.addListener(_collapseChanged);
     _spin.addStatusListener(_spinStatus);
+    _grow.addStatusListener(_motionStatus);
+    _padFull.addStatusListener(_motionStatus);
     _holdVertical = widget.route.relatedStory != null && !_offline;
     _storySheet.addListener(_storySheetChanged);
     _storySheet.position.addListener(_storySheetMoved);
@@ -797,10 +826,34 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
     // so ModalRoute.isCurrentOf would stop the end rules and the background pause under a menu.
     if (ModalRoute.of(context) case final PageRoute<dynamic> route when route != _route) {
       pageRoutes.unsubscribe(this);
+      _route?.animation?.removeStatusListener(_routeArrived);
       _route = route;
       pageRoutes.subscribe(this, route);
       unawaited(route.popped.then((_) => _routeDone(route)));
+      final arriving = route.animation;
+      // Offstage for its first frame (the Hero controller measures it), a pushed route reads as arrived.
+      if (arriving != null && (route.offstage || !arriving.isCompleted)) {
+        arriving.addStatusListener(_routeArrived);
+      } else {
+        _arrivedIn = true;
+        // After the frame's own callbacks, which may ask for the full screen on open first.
+        WidgetsBinding.instance.addPostFrameCallback((_) => _settle());
+      }
     }
+  }
+
+  void _routeArrived(AnimationStatus status) {
+    final route = _route;
+    if (!status.isCompleted || route == null || route.offstage) return;
+    route.animation?.removeStatusListener(_routeArrived);
+    _arrivedIn = true;
+    _settle();
+  }
+
+  void _uncovered(AnimationStatus status) {
+    if (!status.isDismissed) return;
+    _route?.secondaryAnimation?.removeStatusListener(_uncovered);
+    _settle();
   }
 
   @override
@@ -823,6 +876,7 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
     _owning = false;
     // Owed since the open, it would turn the page long after, whenever it shows again.
     _fullScreenOnOpen = false;
+    _openTurn = false;
     // The page above claims the orientation only once its video is known; until then a turn must not be taken over
     // with no page to draw it. A newer begin first makes this a no-op.
     final orientation = _orientation;
@@ -850,6 +904,14 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
       if (playback == null) return;
       playback.show(resuming: _services!.pipKeeper.pageShown(playback, opened: false));
       _details?.active = true;
+      final leaving = _route?.secondaryAnimation;
+      if (leaving == null || leaving.isDismissed) {
+        _settle();
+      } else {
+        leaving
+          ..removeStatusListener(_uncovered)
+          ..addStatusListener(_uncovered);
+      }
     });
   }
 
@@ -1072,8 +1134,12 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
       return;
     }
     _fullScreenOnOpen = false;
-    if (_presentation.fullScreen) return;
+    if (_presentation.fullScreen) {
+      _settle();
+      return;
+    }
     Logger.shared.info(LogCategory.ui, 'video open full screen', {'bvid': _playback?.bvid ?? widget.route.bvid});
+    _openTurn = true;
     _orientation.enterFullScreen();
   }
 
@@ -1858,7 +1924,10 @@ class _VideoPageState extends State<VideoPage> with RouteAware, TickerProviderSt
     _leave(fromDispose: true);
     _playback?.letGo(this);
     _stopFollowingSignIn();
-    _route?.animation?.removeStatusListener(_arrived);
+    _route?.animation
+      ?..removeStatusListener(_arrived)
+      ..removeStatusListener(_routeArrived);
+    _route?.secondaryAnimation?.removeStatusListener(_uncovered);
     pageRoutes.unsubscribe(this);
     _services?.device.orientation.removeListener(_presentationChanged);
     _panels.removeListener(_panelChanged);

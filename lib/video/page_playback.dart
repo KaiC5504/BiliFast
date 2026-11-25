@@ -313,6 +313,7 @@ class PagePlayback extends ChangeNotifier implements KeptPlayback {
       requestLogin: () => _requestLogin?.call(),
       willPlay: _userPlays,
     );
+    if (_inline) session.holdForCard();
     if (_covered) {
       session.active = false;
       _hold();

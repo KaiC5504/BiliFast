@@ -366,7 +366,7 @@ void main() {
     test('a card\'s session, inactive as it is made, plays AAC; taken over, it goes on with AAC while the page slides '
         'in, then reopens on FLAC at the same second, quietly', () async {
       prefs.hiRes = true;
-      final session = makeSession()..active = false;
+      final session = makeSession()..holdForCard()..active = false;
       await controller.openVideo(bv, cid: p1);
       playing();
       expect(audios(), [aacId]);
@@ -386,7 +386,7 @@ void main() {
     });
 
     test('a card taken over while Hi-Res is off stays on AAC, and nothing reopens', () async {
-      final session = makeSession()..active = false;
+      final session = makeSession()..holdForCard()..active = false;
       await controller.openVideo(bv, cid: p1);
       playing();
       session.active = true;
@@ -396,7 +396,7 @@ void main() {
 
     test('a page covered again while it slides in reopens nothing until it shows once more', () async {
       prefs.hiRes = true;
-      final session = makeSession()..active = false;
+      final session = makeSession()..holdForCard()..active = false;
       await controller.openVideo(bv, cid: p1);
       playing();
       session.active = true;
@@ -409,6 +409,58 @@ void main() {
       session.active = true;
       await slidIn();
       expect(audios(), [aacId, flacId]);
+    });
+
+    test('a card taken over reopens on FLAC as soon as the page says it is at rest, not at the bound', () async {
+      prefs.hiRes = true;
+      final session = makeSession()..holdForCard()..active = false;
+      await controller.openVideo(bv, cid: p1);
+      playing();
+      session.active = true;
+      session.settled();
+      await settle();
+      expect(audios(), [aacId, flacId]);
+      expect(settleTimer(), isNull, reason: 'the bound is let go');
+      session.settled();
+      await settle();
+      expect(audios(), [aacId, flacId], reason: 'said twice, nothing more');
+    });
+
+    test('settled with nothing waiting reopens nothing: the pref already picked the stream', () async {
+      prefs.hiRes = true;
+      final session = makeSession();
+      await controller.openVideo(bv, cid: p1);
+      playing();
+      session.settled();
+      await settle();
+      expect(audios(), [flacId]);
+    });
+
+    test('the bound reopens it when the page never says so, and not before', () async {
+      prefs.hiRes = true;
+      final session = makeSession()..holdForCard()..active = false;
+      await controller.openVideo(bv, cid: p1);
+      playing();
+      session.active = true;
+      expect(PagePlayerSession.hiResSettle, greaterThan(const Duration(milliseconds: 500 + 250 + 300)),
+          reason: 'past the slide and the turn into full screen');
+      await settle();
+      expect(audios(), [aacId]);
+      await slidIn();
+      expect(audios(), [aacId, flacId]);
+    });
+
+    test('a page made while covered, not a card\'s, picks FLAC from its first open and reopens nothing when it '
+        'shows', () async {
+      prefs.hiRes = true;
+      final session = makeSession()..active = false;
+      await controller.openVideo(bv, cid: p1);
+      expect(audios(), [flacId]);
+      playing();
+      session.active = true;
+      session.settled();
+      await settle();
+      expect(audios(), [flacId]);
     });
 
     test('a page shown again after the page above turned Hi-Res off goes back on AAC at the same second, once it '

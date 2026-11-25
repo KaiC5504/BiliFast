@@ -297,10 +297,38 @@ void main() {
         final renewed = timers.activeWith(const Duration(seconds: 700));
         expect(renewed, isNotNull);
         expect(renewed, isNot(same(refresh)));
-        expect(refusals, isEmpty);
+        expect(refusals, hasLength(1), reason: 'the page says 开启失败');
         expect(lines('url refresh found no matching streams'), isEmpty);
       });
     }
+
+    test('after FLAC went on a refresh, a later answer carrying it again neither offers nor picks it until the next '
+        'open', () async {
+      final controller = make();
+      await controller.setHiRes(true, reopen: false);
+      await controller.openVideo(bv, cid: p1);
+      player.emit(const StatusChanged(PlayerStatus.playing));
+      at(300);
+      http.routes[Canned.playUrlPath] = (200, Canned.playUrl(tag: 'fresh'));
+      timers.activeWith(const Duration(seconds: 700))!.fire();
+      await settle();
+      expect(audios(), [flacId, aacId]);
+      player.emit(const StatusChanged(PlayerStatus.playing));
+
+      http.routes[Canned.playUrlPath] = (200, playUrlWithFlac(tag: 'again'));
+      timers.activeWith(const Duration(seconds: 700))!.fire();
+      await settle();
+      expect(controller.hiResOffered, isFalse);
+      expect(controller.playingFlac, isFalse);
+      await controller.matchHiRes(true);
+      await controller.setQuality(80);
+      expect(audios().last, aacId);
+      expect(controller.hiResOffered, isFalse);
+
+      await controller.openVideo(bv, cid: p2);
+      expect(controller.hiResOffered, isTrue);
+      expect(audios().last, flacId);
+    });
 
     test('matchHiRes reopens at the same second only when the audio differs, and keeps a refused track refused', () async {
       final controller = make();

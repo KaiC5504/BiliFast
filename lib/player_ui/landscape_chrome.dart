@@ -493,7 +493,7 @@ class _ChapterPart extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       children: [
         _dot,
-        const Text('章节', maxLines: 1, softWrap: false, style: style),
+        const Text(ChapterPanelTheme.title, maxLines: 1, softWrap: false, style: style),
         if (title != null) ...[
           _dot,
           Flexible(

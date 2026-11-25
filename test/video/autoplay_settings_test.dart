@@ -24,6 +24,7 @@ import 'package:bilifast/video/fake_page_api.dart';
 import 'package:bilifast/video/intro/intro_tab.dart';
 import 'package:bilifast/video/page_details.dart';
 import 'package:bilifast/video/page_playback.dart';
+import 'package:bilifast/video/page_session.dart' show PagePlayerSession;
 import 'package:bilifast/video/player_prefs.dart';
 import 'package:bilifast/video/player_session.dart';
 import 'package:bilifast/video/video_page.dart';
@@ -33,6 +34,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 import '../app/fake_keychain.dart';
 import '../playback/fakes.dart';
+import '../playback/hi_res_test.dart' show playUrlWithFlac;
 import '../support/fake_player.dart';
 import '../support/fake_video_actions.dart';
 import '../support/look_alike.dart' show showAsPad;
@@ -794,6 +796,67 @@ void main() {
       );
       await frames(tester, 20);
       expect(autoPip(player), isNot(contains('pip auto true')));
+      await back(tester);
+    });
+  });
+
+  group('Hi-Res 无损 waits for the page to be at rest', () {
+    int loads(FakePlayer player) => player.calls.where((call) => call.startsWith('load')).length;
+
+    testWidgets('a card taken over with 详情页直接全屏播放 reopens on FLAC once the turn into full screen is over, not '
+        'during it, and before the bound', (tester) async {
+      prefs
+        ..hiRes = true
+        ..detailFullScreen = true;
+      http.routes[Canned.playUrlPath] = (200, playUrlWithFlac());
+      await host(tester);
+      final inline = await handedOver(tester);
+      final player = players.single;
+      expect(controllers.single.playingFlac, isFalse, reason: 'the card plays AAC');
+      push(SwipeBackPageRoute<void>(builder: (_) => page(VideoRoute(bvid: bv, playback: inline))));
+      // The slide is 500 ms; the grow into full screen starts after it and takes 300 ms.
+      await frames(tester, 15);
+      expect(orientation.presentation, Presentation.landscape);
+      expect(loads(player), 0, reason: 'mid-turn');
+      await frames(tester, 6);
+      expect(loads(player), 1);
+      expect(controllers.single.playingFlac, isTrue);
+      expect(PagePlayerSession.hiResSettle, greaterThan(const Duration(milliseconds: 1050)));
+      await back(tester);
+    });
+
+    testWidgets('a card taken over without it reopens as the slide ends', (tester) async {
+      prefs.hiRes = true;
+      http.routes[Canned.playUrlPath] = (200, playUrlWithFlac());
+      await host(tester);
+      final inline = await handedOver(tester);
+      final player = players.single;
+      push(SwipeBackPageRoute<void>(builder: (_) => page(VideoRoute(bvid: bv, playback: inline))));
+      await frames(tester, 8);
+      expect(loads(player), 0, reason: 'still sliding in');
+      await frames(tester, 4);
+      expect(loads(player), 1);
+      expect(controllers.single.playingFlac, isTrue);
+      await back(tester);
+    });
+
+    testWidgets('shown again after the page above turned it on, it reopens once that page has slid off', (
+      tester,
+    ) async {
+      http.routes[Canned.playUrlPath] = (200, playUrlWithFlac());
+      await host(tester);
+      final player = await open(tester, const VideoRoute(bvid: bv, cid: p1, start: 0));
+      player.emit(const StatusChanged(PlayerStatus.playing));
+      coverPage(tester);
+      await frames(tester, 12);
+      prefs.hiRes = true;
+      player.calls.clear();
+      unawaited(services.navigator.currentState!.maybePop());
+      await frames(tester, 8);
+      expect(loads(player), 0, reason: 'the page above is still sliding off');
+      await frames(tester, 4);
+      expect(loads(player), 1);
+      expect(controllers.single.playingFlac, isTrue);
       await back(tester);
     });
   });

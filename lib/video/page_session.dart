@@ -168,7 +168,6 @@ class PagePlayerSession extends ChangeNotifier with WidgetsBindingObserver imple
     _commands = controller.remoteCommands.listen(_remoteCommand);
     _interruptions = controller.interruptions.listen(_interrupted);
     _flacRefusals = controller.hiResRefusals.listen((_) => _flacRefused());
-    scheduleMicrotask(() => _justMade = false);
     _applyPrefs();
     _applyBackgroundListen();
     _controllerChanged();
@@ -182,9 +181,10 @@ class PagePlayerSession extends ChangeNotifier with WidgetsBindingObserver imple
   /// Auto picture in picture can report its start after the app is already in the background.
   static const backgroundGrace = Duration(seconds: 1);
 
-  /// A page shown again, or one taking a card's playback over, is still sliding in (CupertinoPageRoute's 500 ms), and a
-  /// reopen for Hi-Res would stop its picture mid-slide; it waits this long.
-  static const hiResSettle = Duration(milliseconds: 600);
+  /// A page shown again, or one taking a card's playback over, is still sliding in (CupertinoPageRoute's 500 ms) and
+  /// may then turn into full screen (up to 250 ms waiting for the turn, then 300 ms drawing it); a reopen for Hi-Res
+  /// would stop its picture mid-way, so it waits for [settled], or this long at most.
+  static const hiResSettle = Duration(milliseconds: 1500);
 
   /// A pause this close before an interruption is reported is the one the interruption made.
   static const interruptionPause = Duration(seconds: 1);
@@ -277,9 +277,7 @@ class PagePlayerSession extends ChangeNotifier with WidgetsBindingObserver imple
   /// began.
   bool _resumeAfterInterruption = false;
 
-  /// Until the microtask after it was made: a session set inactive by then is 推荐's card's (or a page's made under
-  /// another), which plays AAC until a page shows it ([_hiResHeld]).
-  bool _justMade = true;
+  /// 推荐's card's ([holdForCard]), on AAC until a page shows it.
   bool _hiResHeld = false;
 
   /// The controller's open whose picks last took the pref ([PlaybackController.opens]).
@@ -974,7 +972,7 @@ class PagePlayerSession extends ChangeNotifier with WidgetsBindingObserver imple
 
   /// The part playing is put on the audio [_hiResWanted] says when the two differ, quietly: its open picked by an
   /// account not yet known, a pref another page changed while this one was covered, or a card's AAC. While covered or
-  /// sliding in ([hiResSettle]) only the picks to come follow.
+  /// until the page is [settled] only the picks to come follow.
   void _matchHiRes() {
     if (_disposed) return;
     final wanted = _hiResWanted;
@@ -987,10 +985,22 @@ class PagePlayerSession extends ChangeNotifier with WidgetsBindingObserver imple
 
   void _settleHiRes() {
     _hiResSettle?.cancel();
-    _hiResSettle = _startTimer(hiResSettle, () {
-      _hiResSettle = null;
-      _matchHiRes();
-    });
+    _hiResSettle = _startTimer(hiResSettle, settled);
+  }
+
+  @override
+  void settled() {
+    if (_disposed || _hiResSettle == null) return;
+    _hiResSettle!.cancel();
+    _hiResSettle = null;
+    _matchHiRes();
+  }
+
+  @override
+  void holdForCard() {
+    if (_disposed || _hiResHeld) return;
+    _hiResHeld = true;
+    unawaited(_controller.setHiRes(false, reopen: false));
   }
 
   @override
@@ -1152,10 +1162,7 @@ class PagePlayerSession extends ChangeNotifier with WidgetsBindingObserver imple
   set active(bool value) {
     if (_disposed || value == _active) return;
     _active = value;
-    if (!value && _justMade && !_hiResHeld) {
-      _hiResHeld = true;
-      unawaited(_controller.setHiRes(false, reopen: false));
-    } else if (value) {
+    if (value) {
       _hiResHeld = false;
       // The picks to come take the pref at once; the part playing waits for the slide.
       _settleHiRes();

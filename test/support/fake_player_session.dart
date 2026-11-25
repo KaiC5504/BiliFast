@@ -5,6 +5,7 @@ import 'package:bilifast/player/bili_player.dart';
 import 'package:bilifast/player/playback_clock.dart';
 import 'package:bilifast/player_ui/player_notes.dart';
 import 'package:bilifast/player_ui/player_readout.dart';
+import 'package:bilifast/shared/theme.dart' show LivePlayerTheme;
 import 'package:bilifast/video/player_session.dart';
 import 'package:flutter/foundation.dart';
 
@@ -303,7 +304,7 @@ class FakePlayerSession extends ChangeNotifier implements PlayerSession {
   }
 
   @override
-  final notes = PlayerNotes(shownFor: const Duration(seconds: 3));
+  final notes = PlayerNotes(shownFor: LivePlayerTheme.noteShown);
 
   @override
   bool chapterBar = true;
@@ -363,6 +364,17 @@ class FakePlayerSession extends ChangeNotifier implements PlayerSession {
 
   @override
   bool active = true;
+
+  /// How many times the page said it was at rest; kept out of [calls].
+  int settles = 0;
+
+  @override
+  void settled() => settles += 1;
+
+  bool heldForCard = false;
+
+  @override
+  void holdForCard() => heldForCard = true;
 
   @override
   void dispose() {

@@ -301,4 +301,11 @@ abstract interface class PlayerSession implements Listenable {
   /// on the player (end rules, 定时关闭, background pause, fetches) and ignores its events. A playback the small window
   /// keeps after its page left stays active.
   set active(bool value);
+
+  /// The page showing it is at rest: slid in (or back, once the page above has slid off) and turned into the full
+  /// screen it opens with. What waited for that ([hiResOn]'s reopen) goes now, else at a bound after it became active.
+  void settled();
+
+  /// 推荐's card plays it inline until a page takes it over: on AAC, whatever [hiResOn] says, till then.
+  void holdForCard();
 }

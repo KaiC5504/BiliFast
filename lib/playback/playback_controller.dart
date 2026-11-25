@@ -283,6 +283,10 @@ class PlaybackController extends ChangeNotifier {
   /// The engine or the player refused this part's FLAC track: it plays AAC until another open or a new ask.
   bool _flacRefused = false;
 
+  /// A URL refresh's answer had no FLAC track: this part's FLAC addresses can't be renewed, so it plays AAC with no
+  /// offer until another open, whatever a later answer carries.
+  bool _flacGone = false;
+
   /// How the FLAC track failed (`format`, `unknown` or `noSidx`), until an AAC load plays: one that fails the same way
   /// first shows the failure was never the FLAC track's, so the page only hears of a refusal once AAC plays.
   String? _refusedAs;
@@ -736,6 +740,7 @@ class PlaybackController extends ChangeNotifier {
     _qualities = const [];
     _flacOffered = false;
     _flacRefused = false;
+    _flacGone = false;
     _refusedAs = null;
     _resumeFromHistory = false;
     _warmOutcome = null;
@@ -1445,7 +1450,7 @@ class PlaybackController extends ChangeNotifier {
       final dash = info.dash;
       if (dash == null) throw BiliError.notDash;
       _dash = dash;
-      _flacOffered = dash.flac != null;
+      _flacOffered = dash.flac != null && !_flacGone;
       final choice = _choose(dash);
       final ready = warm != null && warmed != null && _warmFits(warm, choice, at) ? warm : null;
       if (ready == null) _preconnect(choice);
@@ -1541,7 +1546,7 @@ class PlaybackController extends ChangeNotifier {
         codecOrder: _memory.order(preferred: _codec),
         excluded: excluded,
         skipHEV1: skipHEV1,
-        hiRes: _hiRes && !_flacRefused);
+        hiRes: _hiRes && !_flacRefused && !_flacGone);
     if (choice != null) return choice;
     final offered = TrackSelector.choose(dash, quality: _selectedQuality, codecOrder: const []) != null;
     final withoutMemory = choose(dash,
@@ -1575,7 +1580,7 @@ class PlaybackController extends ChangeNotifier {
         quality: quality, codecOrder: codecOrder.where((codec) => !banned.contains(codec.name)).toList(), hiRes: hiRes);
   }
 
-  bool _picksFlac(Dash dash) => _hiRes && !_flacRefused && dash.flac != null;
+  bool _picksFlac(Dash dash) => _hiRes && !_flacRefused && !_flacGone && dash.flac != null;
 
   String get _audioKind => _choseFlac ? 'flac' : 'aac';
 
@@ -2084,15 +2089,18 @@ class PlaybackController extends ChangeNotifier {
       final audio = _choseFlac
           ? dash?.flac
           : dash?.audio.where((stream) => stream.id == choice.audio.id).firstOrNull;
+      // The FLAC addresses can't be renewed, and stop working at their deadline.
+      final flacGone = _choseFlac && dash != null && dash.flac == null;
+      if (flacGone) _flacGone = true;
       // Another codec chosen later must come from these URLs, not the ones about to expire.
       if (dash != null) {
         _dash = dash;
-        _flacOffered = dash.flac != null;
+        _flacOffered = dash.flac != null && !_flacGone;
       }
       _qualities = info.qualityOptions;
       _notify();
-      // The FLAC addresses can't be renewed, and stop working at their deadline.
-      if (_choseFlac && dash != null && dash.flac == null) {
+      if (flacGone) {
+        if (!_hiResRefusals.isClosed) _hiResRefusals.add(null);
         final time = currentSeconds;
         _logger.warn(LogCategory.player, 'flac gone on refresh', {'at': time.round(), 'mode': modeLabel});
         // Let go first, so a failure of the FLAC item meanwhile can't be taken for the AAC load's.

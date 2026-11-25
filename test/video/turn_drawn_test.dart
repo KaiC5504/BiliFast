@@ -1,5 +1,7 @@
 import 'dart:math' show pi;
 
+import 'package:bilifast/device/orientation.dart' show Presentation;
+import 'package:bilifast/video/player_prefs.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart' show RenderClipRect;
 import 'package:flutter_test/flutter_test.dart';
@@ -102,6 +104,38 @@ void main() {
     expect(tabs.bottom, closeTo(box.top! + portrait.width + portrait.height - box.width!, 1e-6),
         reason: "the window's height and width add up to the screen's sides");
     expect(tabs.bottom, lessThan(box.top! + portrait.height), reason: 'cut short of the upright page');
+    await page.leave(tester);
+  });
+
+  testWidgets('详情页直接全屏播放: the page tells its session it is at rest only once the turn into full screen has been '
+      'drawn', (tester) async {
+    final saved = PlayerPrefs.shared;
+    PlayerPrefs.shared = PlayerPrefs.memory()..detailFullScreen = true;
+    addTearDown(() => PlayerPrefs.shared = saved);
+    final page = TurnPage();
+    await page.open(tester);
+    expect(page.session.settles, 0, reason: 'slid in, the full screen still owed');
+    page.session
+      ..videoShape = (width: 1920, height: 1080)
+      ..changed();
+    await tester.pump();
+    expect(page.orientation.presentation, Presentation.landscape);
+    page.screen(tester, landscape);
+    await tester.pump();
+    page.host.startTurn(pi / 2, duration: const Duration(milliseconds: 300));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 150));
+    expect(page.session.settles, 0, reason: 'mid-turn');
+    await tester.pump(const Duration(milliseconds: 200));
+    await tester.pump();
+    expect(page.session.settles, greaterThan(0), reason: 'the spin and the grow end together; once is enough');
+    await page.leave(tester);
+  });
+
+  testWidgets('without it, the page is at rest as its slide ends', (tester) async {
+    final page = TurnPage();
+    await page.open(tester);
+    expect(page.session.settles, 1);
     await page.leave(tester);
   });
 }

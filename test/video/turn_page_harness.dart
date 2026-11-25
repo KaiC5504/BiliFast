@@ -49,6 +49,8 @@ class TurnPage {
   final _player = FakePlayer();
   final _sessions = <FakePlayerSession>[];
 
+  FakePlayerSession get session => _sessions.single;
+
   /// Wrapped around the app, for a test that reads the whole screen's picture.
   static const shotKey = ValueKey('turn-shot');
 
