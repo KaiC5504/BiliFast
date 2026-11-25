@@ -6,6 +6,7 @@ import 'package:flutter/widgets.dart';
 
 import '../../player_ui/chrome_state.dart';
 import '../../player_ui/landscape_chrome.dart' show LockPainter, fullScreenStrut, fullScreenText;
+import '../../player_ui/player_notes.dart';
 import '../../player_ui/portrait_controls.dart' show BackGlyph, ChromeTap, MoreDots;
 import '../../shared/theme.dart';
 import '../../shared/toast.dart';
@@ -959,7 +960,7 @@ class _Shades extends StatelessWidget {
 class _Notes extends StatelessWidget {
   const _Notes({required this.notices});
 
-  final LivePlayerNotices notices;
+  final PlayerNotes notices;
 
   @override
   Widget build(BuildContext context) {

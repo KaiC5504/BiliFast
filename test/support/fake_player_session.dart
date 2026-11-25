@@ -3,6 +3,7 @@ import 'package:bili_core/api.dart'
 import 'package:bilifast/playback/overlay_stats.dart';
 import 'package:bilifast/player/bili_player.dart';
 import 'package:bilifast/player/playback_clock.dart';
+import 'package:bilifast/player_ui/player_notes.dart';
 import 'package:bilifast/player_ui/player_readout.dart';
 import 'package:bilifast/video/player_session.dart';
 import 'package:flutter/foundation.dart';
@@ -288,6 +289,33 @@ class FakePlayerSession extends ChangeNotifier implements PlayerSession {
   }
 
   @override
+  bool hiResOffered = false;
+
+  @override
+  bool hiResOn = false;
+
+  @override
+  Future<String?> setHiRes(bool on) async {
+    calls.add('setHiRes $on');
+    hiResOn = on;
+    notifyListeners();
+    return failure;
+  }
+
+  @override
+  final notes = PlayerNotes(shownFor: const Duration(seconds: 3));
+
+  @override
+  bool chapterBar = true;
+
+  @override
+  void setChapterBar(bool on) {
+    calls.add('setChapterBar $on');
+    chapterBar = on;
+    notifyListeners();
+  }
+
+  @override
   bool ended = false;
 
   @override
@@ -343,6 +371,7 @@ class FakePlayerSession extends ChangeNotifier implements PlayerSession {
     scrubbing.dispose();
     sleepRemaining.dispose();
     stats.dispose();
+    notes.dispose();
     super.dispose();
   }
 }

@@ -10540,3 +10540,28 @@ abstract final class LiveRankTheme {
   static const footerLine = HotListTheme.footerLine;
   static const spinnerRadius = HotListTheme.spinnerRadius;
 }
+
+/// 章节's dots on the landscape bar: white, smaller at rest than with the bar held (272).
+abstract final class ChapterDotTheme {
+  static const color = Color(0xFFFFFFFF);
+}
+
+/// Landscape's `01:48/04:01 · 章节 · 2.3 ›` line over the bar's left end (274).
+abstract final class ChapterLineTheme {
+  static const separator = ' · ';
+}
+
+/// Landscape's Hi-Res无损 button between 倍速 and the quality, with its 大会员 tag; pink while on (274).
+abstract final class HiResButtonTheme {
+  static const label = 'Hi-Res无损';
+}
+
+/// A video's notes at full screen's bottom left (274), as the live room's (210).
+abstract final class PlayerNotesTheme {
+  static const shown = LivePlayerTheme.noteShown;
+}
+
+/// 章节's panel at the right (273), and the chapters' strip along the bottom while it is open.
+abstract final class ChapterPanelTheme {
+  static const title = '章节';
+}

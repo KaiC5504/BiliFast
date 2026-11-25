@@ -16,6 +16,7 @@ import '../playback/overlay_stats.dart';
 import '../playback/playback_controller.dart';
 import '../player/bili_player.dart';
 import '../player/playback_clock.dart';
+import '../player_ui/player_notes.dart';
 import '../player_ui/player_readout.dart';
 import '../shared/image_disk_cache.dart';
 import '../shared/remote_image.dart' show secureImageUrl;
@@ -891,6 +892,31 @@ class PagePlayerSession extends ChangeNotifier with WidgetsBindingObserver imple
   }
 
   @override
+  bool get hiResOffered => false;
+
+  @override
+  bool get hiResOn => _prefs.hiRes;
+
+  @override
+  Future<String?> setHiRes(bool on) async {
+    _prefs.hiRes = on;
+    notifyListeners();
+    return null;
+  }
+
+  @override
+  final notes = PlayerNotes();
+
+  @override
+  bool get chapterBar => _prefs.chapterBar;
+
+  @override
+  void setChapterBar(bool on) {
+    _prefs.chapterBar = on;
+    notifyListeners();
+  }
+
+  @override
   bool get ended => _ended;
 
   @override
@@ -1369,6 +1395,7 @@ class PagePlayerSession extends ChangeNotifier with WidgetsBindingObserver imple
     _seekFrames.dispose();
     _danmakuMask.dispose();
     sleepRemaining.dispose();
+    notes.dispose();
     super.dispose();
   }
 }

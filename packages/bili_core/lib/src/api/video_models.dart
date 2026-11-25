@@ -363,17 +363,21 @@ final class VideoDetail {
 T? _optional<T>(Object? json, T Function(Object? json) decode) => json == null ? null : decode(json);
 
 final class Chapter {
-  const Chapter({required this.from, required this.to, required this.title});
+  const Chapter({required this.from, required this.to, required this.title, this.image});
 
   final double from;
   final double to;
   final String title;
 
-  @override
-  bool operator ==(Object other) => other is Chapter && other.from == from && other.to == to && other.title == title;
+  /// The frame 章节's panel shows for it (273), null when the answer has none.
+  final String? image;
 
   @override
-  int get hashCode => Object.hash(from, to, title);
+  bool operator ==(Object other) =>
+      other is Chapter && other.from == from && other.to == to && other.title == title && other.image == image;
+
+  @override
+  int get hashCode => Object.hash(from, to, title, image);
 
   @override
   String toString() => 'Chapter($from-$to, $title)';

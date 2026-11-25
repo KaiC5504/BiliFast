@@ -18,6 +18,9 @@ enum PlayerPanel {
 
   /// 缓存 (141, 144, 153, 154): the light sheet under the player that queues parts for 离线缓存; portrait only.
   download,
+
+  /// 章节 (273): the chapters, and 章节进度条; landscape only.
+  chapters,
 }
 
 /// The open panel, or null. Opening one replaces the last.

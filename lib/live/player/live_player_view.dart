@@ -5,6 +5,7 @@ import 'package:flutter/widgets.dart';
 
 import '../../player_ui/landscape_chrome.dart' show fullScreenText, fullScreenStrut;
 import '../../player_ui/player_loading.dart';
+import '../../player_ui/player_notes.dart';
 import '../../player_ui/portrait_controls.dart' show ChromeTap;
 import '../../shared/remote_image.dart';
 import '../../shared/theme.dart';
@@ -315,7 +316,7 @@ class _BoxNote extends StatelessWidget {
   const _BoxNote({required this.link, required this.notices});
 
   final LayerLink link;
-  final LivePlayerNotices notices;
+  final PlayerNotes notices;
 
   @override
   Widget build(BuildContext context) => Align(

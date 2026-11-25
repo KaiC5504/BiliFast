@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import '../playback/overlay_stats.dart';
 import '../player/bili_player.dart';
 import '../player/playback_clock.dart';
+import '../player_ui/player_notes.dart';
 import '../player_ui/player_readout.dart';
 
 enum LoopMode {
@@ -244,6 +245,25 @@ abstract interface class PlayerSession implements Listenable {
   VideoCodec get codec;
 
   Future<String?> setCodec(VideoCodec codec);
+
+  /// The part's answer carries a Hi-Res 无损 track ([Dash.flac]); false until it arrives and for an offline page.
+  bool get hiResOffered;
+
+  /// Hi-Res 无损 is chosen (PlayerPrefs.hiRes), whether or not this part offers it.
+  bool get hiResOn;
+
+  /// Saves the choice and, when the part offers it, reopens at the same second on the FLAC track or back on AAC,
+  /// saying so in [notes]: on, Hi-Res无损音质开启中，请稍候 then 已开启 once it plays (274); off, one 关闭 note.
+  /// Completes with a failure's toast text, or null.
+  Future<String?> setHiRes(bool on);
+
+  /// The notes at full screen's bottom left (274).
+  PlayerNotes get notes;
+
+  /// 章节进度条 (273, PlayerPrefs.chapterBar): the chapters' dots on the bar and their strip under the 章节 panel.
+  bool get chapterBar;
+
+  void setChapterBar(bool on);
 
   /// The video played to its end and nothing plays next: the end screen's moment.
   bool get ended;

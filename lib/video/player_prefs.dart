@@ -100,6 +100,8 @@ class PlayerPrefs {
   bool _autoPip = true;
   bool _backgroundListen = true;
   bool _backgroundNext = true;
+  bool _hiRes = false;
+  bool _chapterBar = true;
 
   bool get autoplay => _autoplay;
   set autoplay(bool value) => _set(() => _autoplay = value);
@@ -188,6 +190,14 @@ class PlayerPrefs {
   bool get backgroundNext => _backgroundNext;
   set backgroundNext(bool value) => _set(() => _backgroundNext = value);
 
+  /// Hi-Res 无损 (274): a video offering it plays its FLAC track; kept across videos.
+  bool get hiRes => _hiRes;
+  set hiRes(bool value) => _set(() => _hiRes = value);
+
+  /// 章节's 章节进度条 (273): the chapters' dots on the bar and their strip along the bottom under the 章节 panel.
+  bool get chapterBar => _chapterBar;
+  set chapterBar(bool value) => _set(() => _chapterBar = value);
+
   void _read(Map<String, Object?> values) {
     void ignored(String key) => _logger.warn(LogCategory.app, 'player prefs value ignored', {'key': key});
     T? pick<T>(String key) {
@@ -230,6 +240,8 @@ class PlayerPrefs {
     _autoPip = pick<bool>('autoPip') ?? _autoPip;
     _backgroundListen = pick<bool>('backgroundListen') ?? _backgroundListen;
     _backgroundNext = pick<bool>('backgroundNext') ?? _backgroundNext;
+    _hiRes = pick<bool>('hiRes') ?? _hiRes;
+    _chapterBar = pick<bool>('chapterBar') ?? _chapterBar;
   }
 
   Map<String, Object?> toJson() => {
@@ -256,6 +268,8 @@ class PlayerPrefs {
     if (!_autoPip) 'autoPip': false,
     if (!_backgroundListen) 'backgroundListen': false,
     if (!_backgroundNext) 'backgroundNext': false,
+    if (_hiRes) 'hiRes': true,
+    if (!_chapterBar) 'chapterBar': false,
   };
 
   void _set(void Function() change) {

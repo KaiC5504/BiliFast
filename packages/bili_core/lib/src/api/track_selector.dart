@@ -26,8 +26,13 @@ final class TrackChoice {
 
 abstract final class TrackSelector {
   /// The highest quality not above `quality` (or the lowest offered), then the first codec of
-  /// `codecOrder` that quality has, else whatever it has.
-  static TrackChoice? choose(Dash dash, {required int quality, required List<VideoCodec> codecOrder}) {
+  /// `codecOrder` that quality has, else whatever it has. `hiRes` takes [Dash.flac] for the audio when it is offered.
+  static TrackChoice? choose(
+    Dash dash, {
+    required int quality,
+    required List<VideoCodec> codecOrder,
+    bool hiRes = false,
+  }) {
     final audio = bestAudio(dash.audio);
     if (audio == null) return null;
     final qualities = dash.video.map((stream) => stream.id).toSet().toList()..sort((a, b) => b.compareTo(a));

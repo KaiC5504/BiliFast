@@ -364,7 +364,7 @@ final class DashStream {
 }
 
 final class Dash {
-  const Dash({required this.duration, required this.video, required this.audio});
+  const Dash({required this.duration, required this.video, required this.audio, this.flac});
 
   factory Dash.fromJson(Object? json) {
     final object = JsonObject.from(json);
@@ -379,12 +379,19 @@ final class Dash {
   final List<DashStream> video;
   final List<DashStream> audio;
 
-  @override
-  bool operator ==(Object other) =>
-      other is Dash && other.duration == duration && listEquals(other.video, video) && listEquals(other.audio, audio);
+  /// Hi-Res 无损 (`flac.audio`, 30251): null when the answer offers none, which it does only to 大会员.
+  final DashStream? flac;
 
   @override
-  int get hashCode => Object.hash(duration, Object.hashAll(video), Object.hashAll(audio));
+  bool operator ==(Object other) =>
+      other is Dash &&
+      other.duration == duration &&
+      listEquals(other.video, video) &&
+      listEquals(other.audio, audio) &&
+      other.flac == flac;
+
+  @override
+  int get hashCode => Object.hash(duration, Object.hashAll(video), Object.hashAll(audio), flac);
 }
 
 final class QualityOption {

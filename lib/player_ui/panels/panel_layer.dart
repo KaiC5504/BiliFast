@@ -100,6 +100,7 @@ final class PanelFrame {
     ),
     PlayerPanel.blockWords => PanelFrame(width: 1, sheetHeight: 1, full: true),
     PlayerPanel.danmakuList => PanelFrame(width: BiliMetrics.panelWidth, sheetHeight: BiliMetrics.panelSheetHeight),
+    PlayerPanel.chapters => PanelFrame(width: BiliMetrics.panelWidth, sheetHeight: BiliMetrics.panelSheetHeight),
   };
 
   /// Full screen on the iPad (ipad/10-13): every strip hard-edged and as wide in points sideways as upright. 选集 and
@@ -151,7 +152,7 @@ final class PanelFrame {
         shade: PadPanelTheme.darkShade,
         trailing: PadPanelTheme.trailing,
       ),
-      PlayerPanel.blockWords => phone,
+      PlayerPanel.blockWords || PlayerPanel.chapters => phone,
     };
   }
 
@@ -520,6 +521,7 @@ class _PanelLayerState extends State<PanelLayer> with TickerProviderStateMixin {
               close: _close,
               cover: (layer) => _cover.value = layer,
             ),
+            PlayerPanel.chapters => const SizedBox.shrink(),
           },
         ),
       ),
