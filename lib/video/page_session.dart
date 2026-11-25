@@ -161,7 +161,7 @@ class PagePlayerSession extends ChangeNotifier with WidgetsBindingObserver imple
     controller.inBackground = _background;
     WidgetsBinding.instance.addObserver(this);
     controller.addListener(_controllerChanged);
-    accountChanges?.addListener(notifyListeners);
+    accountChanges?.addListener(_accountChanged);
     playlist?.addListener(_playlistChanged);
     readout.status.addListener(_statusChanged);
     _endings = controller.endings.listen((_) => unawaited(_handleEnd()));
@@ -181,6 +181,10 @@ class PagePlayerSession extends ChangeNotifier with WidgetsBindingObserver imple
 
   /// Auto picture in picture can report its start after the app is already in the background.
   static const backgroundGrace = Duration(seconds: 1);
+
+  /// A page shown again, or one taking a card's playback over, is still sliding in (CupertinoPageRoute's 500 ms), and a
+  /// reopen for Hi-Res would stop its picture mid-slide; it waits this long.
+  static const hiResSettle = Duration(milliseconds: 600);
 
   /// A pause this close before an interruption is reported is the one the interruption made.
   static const interruptionPause = Duration(seconds: 1);
@@ -284,6 +288,7 @@ class PagePlayerSession extends ChangeNotifier with WidgetsBindingObserver imple
   /// Hi-Res无损音质开启中 is up, waiting for the FLAC stream to play.
   bool _hiResPending = false;
   bool? _hiResOfferSeen;
+  Timer? _hiResSettle;
 
   /// What a new page starts with: the saved settings, at 1× and unmirrored (Swift kept those per page). Before the
   /// part is chosen none of these restarts anything.
@@ -962,6 +967,32 @@ class PagePlayerSession extends ChangeNotifier with WidgetsBindingObserver imple
     notes.add('Hi-Res无损音质开启失败');
   }
 
+  void _accountChanged() {
+    notifyListeners();
+    _matchHiRes();
+  }
+
+  /// The part playing is put on the audio [_hiResWanted] says when the two differ, quietly: its open picked by an
+  /// account not yet known, a pref another page changed while this one was covered, or a card's AAC. While covered or
+  /// sliding in ([hiResSettle]) only the picks to come follow.
+  void _matchHiRes() {
+    if (_disposed) return;
+    final wanted = _hiResWanted;
+    if (!_active || _hiResSettle != null) {
+      unawaited(_controller.setHiRes(wanted, reopen: false));
+      return;
+    }
+    _quietly(() => _controller.matchHiRes(wanted), 'hi-res match');
+  }
+
+  void _settleHiRes() {
+    _hiResSettle?.cancel();
+    _hiResSettle = _startTimer(hiResSettle, () {
+      _hiResSettle = null;
+      _matchHiRes();
+    });
+  }
+
   @override
   final notes = PlayerNotes();
 
@@ -1124,12 +1155,15 @@ class PagePlayerSession extends ChangeNotifier with WidgetsBindingObserver imple
     if (!value && _justMade && !_hiResHeld) {
       _hiResHeld = true;
       unawaited(_controller.setHiRes(false, reopen: false));
-    } else if (value && _hiResHeld) {
-      // The stream picked for the card plays on; the next pick takes the pref.
+    } else if (value) {
       _hiResHeld = false;
-      unawaited(_controller.setHiRes(_hiResWanted, reopen: false));
+      // The picks to come take the pref at once; the part playing waits for the slide.
+      _settleHiRes();
+      _matchHiRes();
     }
     if (!value) {
+      _hiResSettle?.cancel();
+      _hiResSettle = null;
       _pauseSleepTimer();
       _stopBackgroundChecks();
       // A covered page doesn't come back by itself when a call ends: covering it decided that.
@@ -1441,7 +1475,8 @@ class PagePlayerSession extends ChangeNotifier with WidgetsBindingObserver imple
     _disposed = true;
     WidgetsBinding.instance.removeObserver(this);
     _controller.removeListener(_controllerChanged);
-    _accountChanges?.removeListener(notifyListeners);
+    _accountChanges?.removeListener(_accountChanged);
+    _hiResSettle?.cancel();
     _playlist
       ?..removeListener(_playlistChanged)
       ..dispose();

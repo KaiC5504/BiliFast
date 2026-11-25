@@ -184,36 +184,50 @@ void main() {
       expect(flac.initialization, ByteRange(0, 9));
       expect(flac.indexRange, ByteRange(10, 19));
       expect(dash.audio.map((stream) => stream.id), [30280]);
+      expect(dash.flacMalformed, isFalse);
     });
 
-    test('no FLAC track when flac is absent, null, or has no audio object', () {
-      expect(decodeEnvelope(Fixtures.playURL, PlayURLInfo.fromJson).data!.dash!.flac, isNull, reason: '"flac":null');
+    test('no FLAC track, and none malformed, when flac is absent, null, or has no audio', () {
+      final fixture = decodeEnvelope(Fixtures.playURL, PlayURLInfo.fromJson).data!.dash!;
+      expect(fixture.flac, isNull, reason: '"flac":null');
+      expect(fixture.flacMalformed, isFalse);
       for (final flac in [
         '',
         ',"flac":null',
         ',"flac":{"display":false}',
         ',"flac":{"display":false,"audio":null}',
+      ]) {
+        final dash = dashWith(flac);
+        expect(dash.flac, isNull, reason: flac);
+        expect(dash.flacMalformed, isFalse, reason: flac);
+        expect(dash.audio, hasLength(1), reason: flac);
+      }
+    });
+
+    test('a FLAC track there but unreadable reads as none, is marked malformed, and costs nothing else', () {
+      for (final flac in [
+        ',"flac":{"display":true,"audio":{"id":30251,"codecs":"fLaC",$goodBase}}',
+        ',"flac":{"display":true,"audio":{"id":30251,"baseUrl":"https://upos.example.com/a.m4s","codecs":"fLaC"}}',
+        ',"flac":{"display":true,"audio":'
+            '{"id":"30251","baseUrl":"https://upos.example.com/a.m4s","codecs":"fLaC",$goodBase}}',
         ',"flac":{"audio":[$flacTrack]}',
         ',"flac":{"audio":"30251"}',
         ',"flac":"30251"',
       ]) {
         final dash = dashWith(flac);
         expect(dash.flac, isNull, reason: flac);
+        expect(dash.flacMalformed, isTrue, reason: flac);
+        expect(dash.video, hasLength(1), reason: flac);
         expect(dash.audio, hasLength(1), reason: flac);
       }
     });
 
-    test('a malformed FLAC track reads as none and costs nothing else', () {
-      for (final broken in [
-        '{"id":30251,"codecs":"fLaC",$goodBase}',
-        '{"id":30251,"baseUrl":"https://upos.example.com/a.m4s","codecs":"fLaC"}',
-        '{"id":"30251","baseUrl":"https://upos.example.com/a.m4s","codecs":"fLaC",$goodBase}',
-      ]) {
-        final dash = dashWith(',"flac":{"display":true,"audio":$broken}');
-        expect(dash.flac, isNull, reason: broken);
-        expect(dash.video, hasLength(1), reason: broken);
-        expect(dash.audio, hasLength(1), reason: broken);
-      }
+    test('equality minds the malformed mark', () {
+      final none = dashWith('');
+      final malformed = dashWith(',"flac":"30251"');
+      expect(malformed, isNot(none));
+      expect(malformed, dashWith(',"flac":{"audio":"30251"}'));
+      expect(malformed.hashCode, dashWith(',"flac":{"audio":"30251"}').hashCode);
     });
   });
 

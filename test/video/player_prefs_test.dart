@@ -239,6 +239,54 @@ void main() {
     });
   }
 
+  group('Hi-Res 无损 and 章节进度条', () {
+    test('off and on without a file', () async {
+      final prefs = await PlayerPrefs.load(path, logger: logger);
+      expect(prefs.hiRes, isFalse);
+      expect(prefs.chapterBar, isTrue);
+    });
+
+    test('come back on the next launch, and leave the file at their defaults', () async {
+      final prefs = await PlayerPrefs.load(path, logger: logger)
+        ..hiRes = true
+        ..chapterBar = false;
+      await prefs.settle();
+      final written = jsonDecode(File(path).readAsStringSync()) as Map<String, Object?>;
+      expect(written, allOf(containsPair('hiRes', true), containsPair('chapterBar', false)));
+
+      final again = await PlayerPrefs.load(path, logger: logger);
+      expect(again.hiRes, isTrue);
+      expect(again.chapterBar, isFalse);
+      again.hiRes = false;
+      await again.settle();
+      final once = jsonDecode(File(path).readAsStringSync()) as Map<String, Object?>;
+      expect(once.containsKey('hiRes'), isFalse);
+      expect(once, containsPair('chapterBar', false));
+      again.chapterBar = true;
+      await again.settle();
+      final cleared = jsonDecode(File(path).readAsStringSync()) as Map<String, Object?>;
+      expect(cleared.keys, isNot(anyOf(contains('hiRes'), contains('chapterBar'))));
+      final third = await PlayerPrefs.load(path, logger: logger);
+      expect(third.hiRes, isFalse);
+      expect(third.chapterBar, isTrue);
+    });
+
+    for (final (json, key, hiRes, chapterBar) in [
+      ('{"hiRes":"on","chapterBar":false}', 'hiRes', false, false),
+      ('{"hiRes":true,"chapterBar":0}', 'chapterBar', true, true),
+    ]) {
+      test('$json: $key falls back alone, logged by its key only', () async {
+        File(path).writeAsStringSync(json);
+        final prefs = await PlayerPrefs.load(path, logger: logger);
+        expect(prefs.hiRes, hiRes);
+        expect(prefs.chapterBar, chapterBar);
+        final ignored = logs.events.where((event) => event.msg == 'player prefs value ignored').toList();
+        expect(ignored.map((event) => event.f['key']), [LogString(key)]);
+        expect(ignored.map((event) => event.f.keys.toList()), everyElement(['key']), reason: 'never the value');
+      });
+    }
+  });
+
   test('in memory nothing touches the disk', () async {
     final prefs = PlayerPrefs.memory(logger: logger)..autoplay = false;
     await prefs.settle();
