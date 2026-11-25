@@ -364,16 +364,28 @@ final class DashStream {
 }
 
 final class Dash {
-  const Dash({required this.duration, required this.video, required this.audio, this.flac});
+  const Dash({
+    required this.duration,
+    required this.video,
+    required this.audio,
+    this.flac,
+    this.flacMalformed = false,
+  });
 
   factory Dash.fromJson(Object? json) {
     final object = JsonObject.from(json);
-    final flac = object.nested('flac')?.nested('audio');
+    final audio = switch (object.map['flac']) {
+      final Map<String, Object?> flac => flac['audio'],
+      // A `flac` that isn't an object is as unreadable as a broken track.
+      final other => other,
+    };
+    final flac = audio == null ? null : attempt(() => DashStream.fromJson(audio));
     return Dash(
       duration: object.integer('duration') ?? 0,
       video: object.lossyList('video', DashStream.fromJson),
       audio: object.lossyList('audio', DashStream.fromJson),
-      flac: flac == null ? null : attempt(() => DashStream.fromJson(flac.map)),
+      flac: flac,
+      flacMalformed: audio != null && flac == null,
     );
   }
 
@@ -384,16 +396,20 @@ final class Dash {
   /// Hi-Res 无损 (`flac.audio`, 30251): null when the answer offers none, which it does only to 大会员.
   final DashStream? flac;
 
+  /// The answer had a `flac` track that couldn't be read, so [flac] is null for a 大会员 too; only the log tells.
+  final bool flacMalformed;
+
   @override
   bool operator ==(Object other) =>
       other is Dash &&
       other.duration == duration &&
       listEquals(other.video, video) &&
       listEquals(other.audio, audio) &&
-      other.flac == flac;
+      other.flac == flac &&
+      other.flacMalformed == flacMalformed;
 
   @override
-  int get hashCode => Object.hash(duration, Object.hashAll(video), Object.hashAll(audio), flac);
+  int get hashCode => Object.hash(duration, Object.hashAll(video), Object.hashAll(audio), flac, flacMalformed);
 }
 
 final class QualityOption {

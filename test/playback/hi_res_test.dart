@@ -261,11 +261,92 @@ void main() {
       expect(controller.playingFlac, isTrue);
       expect(lines('url refresh found no matching streams'), isEmpty);
     });
+
+    for (final mode in [PlaybackMode.btr, PlaybackMode.direct]) {
+      test('${mode.name}: a refresh whose answer has no FLAC track reopens on its AAC at the same second, with a renewed '
+          'schedule; the FLAC item let go meanwhile blames no codec', () async {
+        final controller = make(mode: mode);
+        final refusals = <void>[];
+        controller.hiResRefusals.listen(refusals.add);
+        await controller.setHiRes(true, reopen: false);
+        await controller.openVideo(bv, cid: p1);
+        player.emit(const StatusChanged(PlayerStatus.playing));
+        at(300);
+        final refresh = timers.activeWith(const Duration(seconds: 700))!;
+        http.routes[Canned.playUrlPath] = (200, Canned.playUrl(tag: 'fresh'));
+        final gate = engine.prepareGate = Completer<void>();
+        refresh.fire();
+        await settle();
+        expect(lines('flac gone on refresh').single, containsPair('at', 300));
+        expect(controller.playingFlac, isFalse);
+        expect(controller.hiResOffered, isFalse);
+        player.emit(const PlayerFailed('cannot decode', formatRejected: true));
+        await settle();
+        engine.prepareGate = null;
+        gate.complete();
+        await settle();
+        expect(audios(), [flacId, aacId]);
+        expect(engine.prepared.last.startSeconds, closeTo(300, 1e-9));
+        expect(engine.prepared.last.choice.audio.baseURL, contains('upsig=fresh'));
+        expect(engine.prepared.last.choice.video.codecid, VideoCodec.hevc.codecid);
+        expect(memory.failedKinds, isEmpty);
+        expect(engine.replaced, isEmpty, reason: 'nothing renews the FLAC addresses');
+        expect(engine.released, contains('tok1'));
+        expect(player.loaded!.autoplay, isTrue);
+        expect(playUrls(), 2);
+        final renewed = timers.activeWith(const Duration(seconds: 700));
+        expect(renewed, isNotNull);
+        expect(renewed, isNot(same(refresh)));
+        expect(refusals, isEmpty);
+        expect(lines('url refresh found no matching streams'), isEmpty);
+      });
+    }
+
+    test('matchHiRes reopens at the same second only when the audio differs, and keeps a refused track refused', () async {
+      final controller = make();
+      await controller.openVideo(bv, cid: p1);
+      player.emit(const StatusChanged(PlayerStatus.playing));
+      at(20);
+      await controller.matchHiRes(false);
+      expect(engine.prepared, hasLength(1));
+      await controller.matchHiRes(true);
+      expect(audios(), [aacId, flacId]);
+      expect(player.loaded!.startSeconds, closeTo(20, 1e-9));
+      expect(lines('hi-res matched').single, {'on': true});
+      expect(lines('hi-res'), isEmpty, reason: 'not the user\'s switch');
+
+      player.emit(const PlayerFailed('cannot decode', formatRejected: true));
+      await settle();
+      expect(audios().last, aacId);
+      await controller.matchHiRes(true);
+      expect(audios(), hasLength(3), reason: 'the refused track is not tried again');
+    });
+  });
+
+  group('the playurl line', () {
+    const unreadable = '"flac":{"display":true,"audio":{"id":$flacId,"codecs":"fLaC"}},';
+    for (final (answer, flac) in [
+      (playUrlWithFlac(), 'ok'),
+      (Canned.playUrl(), 'none'),
+      (Canned.playUrl().replaceFirst('"audio":[', '$unreadable"audio":['), 'malformed'),
+    ]) {
+      test('says flac $flac, with no address', () async {
+        http.routes[Canned.playUrlPath] = (200, answer);
+        final controller = make();
+        await controller.openVideo(bv, cid: p1);
+        expect(lines('playurl').single, containsPair('flac', flac));
+        expect(controller.hiResOffered, flac == 'ok');
+        final text = logs.events.map((event) => event.encode()).join('\n');
+        expect(text, isNot(contains('upsig')));
+        expect(text, isNot(contains('$flacId.m4s')));
+      });
+    }
   });
 
   group('a refused FLAC track', () {
     test(
-      'the player\'s refusal goes on with AAC where it was, once, blaming no codec; the next part tries again',
+      'the player\'s refusal goes on with AAC where it was, once, blaming no codec, and is told once AAC plays; the '
+      'next part tries again',
       () async {
         final controller = make();
         final refusals = <void>[];
@@ -279,14 +360,24 @@ void main() {
         expect(engine.prepared.map((request) => request.choice.video.codecid), [12, 12]);
         expect(memory.failedKinds, isEmpty);
         expect(player.loaded!.startSeconds, closeTo(12, 1e-9));
-        expect(refusals, hasLength(1));
+        expect(refusals, isEmpty, reason: 'an AAC load failing the same way would make it no refusal');
         expect(controller.hiRes, isTrue, reason: 'the choice stays');
         expect(controller.playingFlac, isFalse);
-        expect(lines('flac refused, playing aac').single['by'], 'player');
+        expect(lines('flac refused, playing aac').single, containsPair('by', 'player'));
+        expect(lines('flac refused, playing aac').single, containsPair('how', 'format'));
+
+        player.emit(const StatusChanged(PlayerStatus.playing));
+        await settle();
+        expect(refusals, hasLength(1));
 
         player.emit(const PlayerFailed('cannot decode', formatRejected: true));
         await settle();
-        expect(memory.failedKinds, {'hevc'}, reason: 'with AAC playing, a refusal is the codec\'s again');
+        expect(
+          engine.prepared.last.choice.video.codecid,
+          VideoCodec.avc.codecid,
+          reason: 'with AAC playing, a refusal is the codec\'s again',
+        );
+        expect(audios().last, aacId);
         expect(refusals, hasLength(1));
 
         await controller.openVideo(bv, cid: p2);
@@ -322,8 +413,114 @@ void main() {
       expect(engine.prepared.map((request) => request.mode), [PlaybackMode.btr, PlaybackMode.btr]);
       expect(controller.fellBack, isFalse);
       expect(controller.phase, isNot(PlaybackPhase.failed));
+      expect(lines('flac refused, playing aac').single, containsPair('by', 'engine'));
+      player.emit(const StatusChanged(PlayerStatus.playing));
+      await settle();
       expect(refusals, hasLength(1));
-      expect(lines('flac refused, playing aac').single['by'], 'engine');
+    });
+
+    test('after a refusal, a quality or codec change and a replay keep AAC, and nothing is refused again', () async {
+      final controller = make();
+      final refusals = <void>[];
+      controller.hiResRefusals.listen(refusals.add);
+      await controller.setHiRes(true, reopen: false);
+      await controller.openVideo(bv, cid: p1);
+      player.emit(const PlayerFailed('cannot decode', formatRejected: true));
+      await settle();
+      player.emit(const StatusChanged(PlayerStatus.playing));
+      await controller.setQuality(80);
+      player.emit(const StatusChanged(PlayerStatus.playing));
+      await controller.setCodec(VideoCodec.av1);
+      player.emit(const StatusChanged(PlayerStatus.playing));
+      await controller.replay();
+      player.emit(const StatusChanged(PlayerStatus.playing));
+      await settle();
+      expect(audios(), [flacId, aacId, aacId, aacId, aacId]);
+      expect(controller.playingFlac, isFalse);
+      expect(controller.hiRes, isTrue);
+      expect(refusals, hasLength(1));
+      expect(lines('flac refused, playing aac'), hasLength(1));
+    });
+
+    group('an AAC load failing as the FLAC one did, before it plays, withdraws the refusal', () {
+      late PlaybackController controller;
+      late List<void> refusals;
+
+      Future<void> open({PlaybackMode mode = PlaybackMode.btr, bool link = false}) async {
+        controller = make(mode: mode);
+        refusals = [];
+        controller.hiResRefusals.listen(refusals.add);
+        await controller.setHiRes(true, reopen: false);
+        if (link) {
+          await controller.open(bv);
+        } else {
+          await controller.openVideo(bv, cid: p1);
+        }
+        await settle();
+      }
+
+      test('a format failure: the video\'s codec takes the blame, FLAC is picked again, nothing is said', () async {
+        await open();
+        player.emit(const PlayerFailed('cannot decode', formatRejected: true));
+        await settle();
+        expect(audios(), [flacId, aacId]);
+        player.emit(const PlayerFailed('cannot decode', formatRejected: true));
+        await settle();
+        expect(memory.failedKinds, {'hevc'}, reason: 'as it was before Hi-Res');
+        expect(audios(), [flacId, aacId, flacId]);
+        expect(engine.prepared.last.choice.video.codecid, VideoCodec.avc.codecid);
+        expect(controller.playingFlac, isTrue);
+        expect(lines('flac refusal withdrawn').single, containsPair('by', 'player'));
+        player.emit(const StatusChanged(PlayerStatus.playing));
+        await settle();
+        expect(refusals, isEmpty);
+      });
+
+      test('an unexplained failure: BTR takes the blame, and direct mode plays FLAC', () async {
+        await open();
+        player.emit(const PlayerFailed('unknown', domain: 'AVFoundationErrorDomain', code: -11800));
+        await settle();
+        player.emit(const PlayerFailed('unknown', domain: 'AVFoundationErrorDomain', code: -11800));
+        await settle();
+        expect(audios(), [flacId, aacId, flacId]);
+        expect(engine.prepared.map((request) => request.mode), [PlaybackMode.btr, PlaybackMode.btr, PlaybackMode.direct]);
+        expect(controller.fellBack, isTrue);
+        expect(memory.failedKinds, isEmpty);
+        player.emit(const StatusChanged(PlayerStatus.playing));
+        await settle();
+        expect(refusals, isEmpty);
+      });
+
+      test('an engine that can\'t index the AAC load either: BTR takes the blame, and direct mode plays FLAC', () async {
+        engine.prepareErrors.addAll(const [
+          PlaybackError(PlaybackErrorKind.noSidx),
+          PlaybackError(PlaybackErrorKind.noSidx),
+        ]);
+        await open(link: true);
+        expect(audios(), [flacId, aacId, flacId]);
+        expect(engine.prepared.map((request) => request.mode), [PlaybackMode.btr, PlaybackMode.btr, PlaybackMode.direct]);
+        expect(controller.fellBack, isTrue);
+        expect(controller.playingFlac, isTrue);
+        expect(controller.phase, isNot(PlaybackPhase.failed));
+        expect(lines('flac refusal withdrawn').single, containsPair('by', 'engine'));
+        player.emit(const StatusChanged(PlayerStatus.playing));
+        await settle();
+        expect(refusals, isEmpty);
+      });
+
+      test('but a failure of another kind leaves it standing, and it is told once AAC plays', () async {
+        await open();
+        player.emit(const PlayerFailed('cannot decode', formatRejected: true));
+        await settle();
+        player.emit(const PlayerFailed('offline', domain: 'NSURLErrorDomain', code: -1009));
+        await settle();
+        expect(audios(), [flacId, aacId, aacId]);
+        expect(controller.fellBack, isTrue);
+        expect(lines('flac refusal withdrawn'), isEmpty);
+        player.emit(const StatusChanged(PlayerStatus.playing));
+        await settle();
+        expect(refusals, hasLength(1));
+      });
     });
 
     test('asked for again, FLAC is tried again', () async {

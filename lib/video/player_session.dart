@@ -250,12 +250,15 @@ abstract interface class PlayerSession implements Listenable {
   /// The part's answer carries a Hi-Res 无损 track ([Dash.flac]); false until it arrives and for an offline page.
   bool get hiResOffered;
 
-  /// Hi-Res 无损 is chosen (PlayerPrefs.hiRes), whether or not this part offers it.
+  /// Hi-Res 无损 is chosen (PlayerPrefs.hiRes), whether or not this part offers it. The part playing follows it
+  /// without a note when it changes elsewhere or the account turns out to have 大会员: once the page shows again, or
+  /// has slid in over 推荐's card it took over.
   bool get hiResOn;
 
   /// Saves the choice and, when the part offers it, reopens at the same second on the FLAC track or back on AAC,
   /// saying so in [notes]: on, Hi-Res无损音质开启中，请稍候 then 已开启 once it plays (274); off, one 关闭 note. A FLAC
-  /// track the phone refuses, here or on any open, says 开启失败 and plays on with AAC, the choice kept.
+  /// track the phone refuses, here or on any open, plays on with AAC, the choice kept, and says 开启失败 once AAC plays;
+  /// an AAC load failing the same way first shows it was never the FLAC track's, and says nothing.
   /// Completes with a failure's toast text, or null.
   Future<String?> setHiRes(bool on);
 
