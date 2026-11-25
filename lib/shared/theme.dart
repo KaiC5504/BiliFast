@@ -10554,17 +10554,77 @@ abstract final class ChapterDotTheme {
 
 /// Landscape's `01:48/04:01 · 章节 · 2.3 ›` line over the bar's left end (274).
 abstract final class ChapterLineTheme {
-  static const separator = ' · ';
+  /// 274: every part in the time's 12 pt white; each dot a 1.67 pt disc on the digits' middle, its ink 6.67 pt clear
+  /// of the words either side.
+  static const dot = 5 / 3;
+  static const dotGap = 6.0;
+  static const dotLift = 0.5;
+
+  /// 274: › 6.33 × 11 pt, a 1.65 pt round-ended stroke, its ink 6.67 pt after the title's and its middle 0.67 pt
+  /// above the digits'.
+  static const chevronGap = 5.5;
+  static const chevronWidth = 19 / 3;
+  static const chevronHeight = 11.0;
+  static const chevronStroke = 1.65;
+  static const chevronLift = 1.0;
 }
 
 /// Landscape's Hi-Res无损 button between 倍速 and the quality, with its 大会员 tag; pink while on (274).
 abstract final class HiResButtonTheme {
   static const label = 'Hi-Res无损';
+  static const tag = '大会员';
+
+  /// 274: Bilibili's #FB7299 on the words and the tag alike, the tag's line as faint as the white one's.
+  static const on = Color(0xFFFB7299);
+  static const tagLineOn = Color(0xCCFB7299);
+
+  /// 274: iOS sets Hi-Res's s 1.67 pt further from 无 than the fonts do, on the button and in the notes alike.
+  static const latinGap = 5 / 3;
+
+  /// 274: the tag is 60帧's but 0.67 pt narrower inside each end.
+  static const tagPad = BiliMetrics.chromeTagPad - 2 / 3;
+
+  /// 274: 倍速's words end 35 pt of ink before Hi-Res's; from Hi-Res on, the row is 04's from 倍速 on, and its tag sits
+  /// as 60帧 does over 1080P.
+  static const gap = 17.0;
 }
 
 /// A video's notes at full screen's bottom left (274), as the live room's (210).
 abstract final class PlayerNotesTheme {
   static const shown = LivePlayerTheme.noteShown;
+
+  /// 274: each 34.33 pt tall on 80% black with 4 pt corners, 8 apart, flush with the safe area's left, the newest
+  /// lowest and ending 131 pt above the screen's bottom (7 over the time line's box); 12 pt white, 12 pt in.
+  static const left = 0.0;
+  static const bottom = 393 / 3;
+  static const height = 103 / 3;
+  static const gap = 8.0;
+  static const inset = 12.0;
+  static const radius = 4.0;
+  static const text = 12.0;
+  static const fill = Color(0xCC000000);
+
+  /// 274: the words' ink sits 1 pt below the box's middle.
+  static const textDrop = 1.0;
+}
+
+/// 273's strip along the screen's bottom under the open 章节 panel: the chapters spread over the screen's whole width,
+/// 22 pt of #AEB1B5 fading in over its top 12.6 pt, a 1 pt white rule where each chapter but the first starts (40%
+/// at its middle, clear at its ends), and each title 10 pt light white, centred on its stretch 11.33 pt up.
+abstract final class ChapterStripTheme {
+  static const height = 22.0;
+  static const fill = Color(0xFFAEB1B5);
+  static const fillClear = Color(0x00AEB1B5);
+  static const solidFrom = 12.6 / 22;
+  static const rule = 1.0;
+  static const ruleInk = Color(0x66FFFFFF);
+  static const ruleClear = Color(0x00FFFFFF);
+  static const titleText = 10.0;
+  static const titleWeight = FontWeight.w300;
+
+  /// The title's box centred here puts its digits' middle 11.33 pt up, as 273's.
+  static const titleCentre = 10.5;
+  static const titlePad = 4.0;
 }
 
 /// 章节's panel at the right (273), and the chapters' strip along the bottom while it is open.
