@@ -5,10 +5,13 @@ import 'dart:ui' show lerpDouble;
 import 'package:bili_core/api.dart' show Chapter;
 import 'package:bili_core/logic.dart' show TimeFormat;
 import 'package:flutter/foundation.dart' show listEquals;
+import 'package:flutter/services.dart' show HapticFeedback;
 import 'package:flutter/widgets.dart';
 import 'package:lottie/lottie.dart';
 
+import '../app/form_factor.dart';
 import '../shared/theme.dart';
+import 'chapter_crossing.dart';
 
 enum SeekBarStyle {
   /// The small player and landscape, as 15 and 04 show: pink played part, white buffered part and the TV face.
@@ -31,12 +34,13 @@ enum SeekBarStyle {
 }
 
 /// The seek bar (port of BiliNative `ProgressBar.swift`): played in pink, buffered in white at 40%, the rest at 20%, a
-/// tick where each chapter starts, and the official TV thumb, or the 竖屏 [SeekBarStyle.dot]. It paints from [repaint]
-/// without rebuilding. As in the official app, a touch takes hold of the current position rather than jumping to the
-/// finger: a drag moves it by the distance dragged, [onCommit] comes when it lifts, and a tap seeks nowhere. While a
-/// finger is on it the bar thickens, the TV's eyes look the way it is dragged (竖屏's dot gives way to the TV) and the
-/// chapter under it shows its title above; when a drag lifts the eyes come back and the TV blinks. VoiceOver reads the
-/// time and steps it by [step] through [onCommit].
+/// dot where each chapter starts (272), and the official TV thumb, or the 竖屏 [SeekBarStyle.dot]. It paints from
+/// [repaint] without rebuilding. As in the official app, a touch takes hold of the current position rather than
+/// jumping to the finger: a drag moves it by the distance dragged, [onCommit] comes when it lifts, and a tap seeks
+/// nowhere. While a finger is on it the bar thickens with its dots, the TV's eyes look the way it is dragged (竖屏's dot
+/// gives way to the TV), and each move across a chapter's dot ticks the hand; when a drag lifts the eyes come back and
+/// the TV blinks. The iPad keeps the dark ticks and the chapter's title over the thumb, and no tick of the hand.
+/// VoiceOver reads the time and steps it by [step] through [onCommit].
 class SeekBar extends StatefulWidget {
   const SeekBar({
     super.key,
@@ -128,7 +132,7 @@ class SeekBar extends StatefulWidget {
   /// True once a drag starts moving the position, false when it lifts or gives way.
   final ValueChanged<bool>? onHold;
 
-  /// 看点: a tick at each start, and the title of the one under the thumb while dragging.
+  /// 章节: a dot at each start but the first; none draws no dots and ticks no hand.
   final List<Chapter> chapters;
   final SeekBarStyle style;
 
@@ -345,10 +349,15 @@ class SeekBarState extends State<SeekBar> with TickerProviderStateMixin {
           builder: (context, constraints) {
             final width = constraints.maxWidth;
             final travel = math.max(width - _thumbWidth, 1.0);
+            final pad = FormFactor.of(context).isPad;
             void scrub(Offset local) {
               final duration = math.max(widget.duration(), 0.0);
               final from = _from ?? widget.position();
+              final was = _scrubbed;
               _scrubbed = (from + (local.dx - _fromX) / travel * duration).clamp(0.0, duration);
+              if (!pad && ChapterCrossing.crossed(widget.chapters, was, _scrubbed)) {
+                unawaited(HapticFeedback.selectionClick());
+              }
               _looked(_scrubbed);
               widget.onScrub(_scrubbed);
               _follow(local.dx, _scrubbed);
@@ -361,6 +370,7 @@ class SeekBarState extends State<SeekBar> with TickerProviderStateMixin {
                 final from = widget.position();
                 _from = from;
                 _fromX = details.localPosition.dx;
+                _scrubbed = from;
                 _touched(from);
                 _drag.forward();
               },
@@ -396,6 +406,7 @@ class SeekBarState extends State<SeekBar> with TickerProviderStateMixin {
                       duration: widget.duration,
                       buffered: widget.buffered,
                       chapters: widget.chapters,
+                      ticks: pad,
                       style: widget.style,
                       drag: _dragCurve,
                       faces: _TvFaces.of(widget.style),
@@ -404,7 +415,8 @@ class SeekBarState extends State<SeekBar> with TickerProviderStateMixin {
                       repaint: Listenable.merge([widget.repaint, _drag, _eyes, _blink]),
                     ),
                   ),
-                  if (widget.chapters.isNotEmpty)
+                  // The phone's bar names no chapter while held (272); the iPad's inline controls count on it.
+                  if (pad && widget.chapters.isNotEmpty)
                     Positioned(
                       left: 0,
                       right: 0,
@@ -513,6 +525,7 @@ class _SeekBarPainter extends CustomPainter {
     required this.duration,
     required this.buffered,
     required this.chapters,
+    required this.ticks,
     required this.style,
     required this.drag,
     required this.faces,
@@ -525,6 +538,9 @@ class _SeekBarPainter extends CustomPainter {
   final double Function() duration;
   final double Function() buffered;
   final List<Chapter> chapters;
+
+  /// The iPad's dark square ticks in place of the dots.
+  final bool ticks;
   final SeekBarStyle style;
   final Animation<double> drag;
   final _TvFace? faces;
@@ -562,12 +578,20 @@ class _SeekBarPainter extends CustomPainter {
         },
     );
 
-    if (duration > 0) {
+    if (duration > 0 && ticks) {
       final tick = Paint()..color = BiliColors.chromeTick;
       for (final chapter in chapters) {
         if (chapter.from <= 0 || chapter.from >= duration) continue;
         final x = travel * _fraction(chapter.from, duration) + thumbWidth / 2;
         canvas.drawRect(Rect.fromLTWH(x - barHeight / 2, top, barHeight, barHeight), tick);
+      }
+    } else if (duration > 0) {
+      final dot = Paint()..color = ChapterDotTheme.color;
+      final radius = barHeight * ChapterDotTheme.barShare / 2;
+      for (final chapter in chapters.skip(1)) {
+        if (chapter.from <= 0 || chapter.from >= duration) continue;
+        final x = travel * _fraction(chapter.from, duration) + thumbWidth / 2;
+        canvas.drawCircle(Offset(x, top + barHeight / 2), radius, dot);
       }
     }
 
@@ -603,6 +627,7 @@ class _SeekBarPainter extends CustomPainter {
       oldDelegate.duration != duration ||
       oldDelegate.buffered != buffered ||
       !listEquals(oldDelegate.chapters, chapters) ||
+      oldDelegate.ticks != ticks ||
       oldDelegate.style != style ||
       oldDelegate.faces != faces;
 }

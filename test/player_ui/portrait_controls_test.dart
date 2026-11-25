@@ -446,7 +446,7 @@ void main() {
     expect(rig.session.calls.where((call) => call.startsWith('scrub') || call.startsWith('commitSeek')), isEmpty);
   });
 
-  testWidgets('the bar carries the video\'s chapters', (tester) async {
+  testWidgets('the bar carries the video\'s chapters, and names none while held (272)', (tester) async {
     final rig = Rig();
     rig.session
       ..duration.value = 100
@@ -458,10 +458,10 @@ void main() {
     final gesture = await tester.startGesture(bar.centerLeft + const Offset(20, 0));
     await gesture.moveBy(Offset(bar.width * 0.7, 0));
     await tester.pumpAndSettle();
-    expect(find.text('后半'), findsOneWidget);
+    expect(rig.session.calls.where((call) => call.startsWith('scrub')), isNotEmpty);
+    expect(find.text('后半'), findsNothing);
     await gesture.up();
     await tester.pumpAndSettle();
-    expect(find.text('后半'), findsNothing);
   });
 }
 

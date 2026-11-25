@@ -27,13 +27,14 @@ final class Rig {
   /// Whether the bar is in the tree.
   final shown = ValueNotifier(true);
 
-  /// [vertical] puts a vertical drag above the bar, as the page's swipes are.
+  /// [vertical] puts a vertical drag above the bar, as the page's swipes are; [pad] the screen of an iPad.
   Future<void> mount(
     WidgetTester tester, {
     List<Chapter> chapters = const [],
     SeekBarStyle? style,
     bool still = false,
     bool vertical = false,
+    bool pad = false,
   }) async {
     addTearDown(repaint.dispose);
     addTearDown(ticking.dispose);
@@ -53,7 +54,7 @@ final class Rig {
     );
     await tester.pumpWidget(
       MediaQuery(
-        data: MediaQueryData(disableAnimations: still),
+        data: MediaQueryData(disableAnimations: still, size: pad ? const Size(1194, 834) : Size.zero),
         child: Directionality(
           textDirection: TextDirection.ltr,
           child: GestureDetector(
@@ -105,61 +106,54 @@ Future<TestGesture> _hold(WidgetTester tester, Rig rig, {double by = 4, int step
 }
 
 void main() {
-  testWidgets('a tick marks each chapter start inside the video, not the first at 0', (tester) async {
-    final rig = Rig();
-    await rig.mount(tester, chapters: _chapters);
-    expect(rig.painter(tester), paintsExactlyCountTimes(#drawRect, 2));
-    expect(rig.painter(tester), paints..rect(color: BiliColors.chromeTick));
-  });
-
-  testWidgets('without chapters there are no ticks', (tester) async {
-    final rig = Rig();
-    await rig.mount(tester);
-    expect(rig.painter(tester), paintsExactlyCountTimes(#drawRect, 0));
-  });
-
-  testWidgets('no ticks before the duration is known', (tester) async {
+  testWidgets('no chapter marks before the duration is known', (tester) async {
     final rig = Rig()..duration = 0;
     await rig.mount(tester, chapters: _chapters);
     expect(rig.painter(tester), paintsExactlyCountTimes(#drawRect, 0));
+    expect(rig.painter(tester), paintsExactlyCountTimes(#drawCircle, 0));
   });
 
-  testWidgets('the chapter under the thumb shows its title while dragging, and goes when the finger lifts', (
-    tester,
-  ) async {
-    final rig = Rig();
-    await rig.mount(tester, chapters: _chapters);
-    expect(find.text('开场'), findsNothing);
+  group("the iPad's chapter title over the thumb", () {
+    /// The iPad's inline controls count on the bar naming the chapter under the thumb while held.
+    Future<Rig> mountPad(WidgetTester tester, {double position = 0}) async {
+      final rig = Rig()..position = position;
+      await rig.mount(tester, chapters: _chapters, pad: true);
+      return rig;
+    }
 
-    final rect = rig.rect(tester);
-    final gesture = await tester.startGesture(rect.centerLeft + const Offset(30, 0));
-    await gesture.moveBy(const Offset(4, 0));
-    await tester.pumpAndSettle();
-    expect(find.text('开场'), findsOneWidget);
-    final title = tester.getRect(find.text('开场'));
-    expect(title.bottom, lessThan(rect.top), reason: 'the title sits above the bar');
+    testWidgets('shows while dragging, and goes when the finger lifts', (tester) async {
+      final rig = await mountPad(tester);
+      expect(find.text('开场'), findsNothing);
 
-    await gesture.moveTo(rect.center);
-    await tester.pumpAndSettle();
-    expect(find.text('正片'), findsOneWidget);
-    expect(find.text('开场'), findsNothing);
+      final rect = rig.rect(tester);
+      final gesture = await tester.startGesture(rect.centerLeft + const Offset(30, 0));
+      await gesture.moveBy(const Offset(4, 0));
+      await tester.pumpAndSettle();
+      expect(find.text('开场'), findsOneWidget);
+      final title = tester.getRect(find.text('开场'));
+      expect(title.bottom, lessThan(rect.top), reason: 'the title sits above the bar');
 
-    await gesture.up();
-    await tester.pumpAndSettle();
-    expect(find.text('正片'), findsNothing);
-    expect(rig.commits, hasLength(1));
-  });
+      await gesture.moveTo(rect.center);
+      await tester.pumpAndSettle();
+      expect(find.text('正片'), findsOneWidget);
+      expect(find.text('开场'), findsNothing);
 
-  testWidgets('a chapter without a title shows nothing', (tester) async {
-    final rig = Rig()..position = 80;
-    await rig.mount(tester, chapters: _chapters);
-    final rect = rig.rect(tester);
-    final gesture = await tester.startGesture(rect.centerRight - const Offset(10, 0));
-    await gesture.moveBy(const Offset(-4, 0));
-    await tester.pumpAndSettle();
-    expect(rig.position, greaterThan(70));
-    expect(find.byType(Text), findsNothing);
-    await gesture.up();
+      await gesture.up();
+      await tester.pumpAndSettle();
+      expect(find.text('正片'), findsNothing);
+      expect(rig.commits, hasLength(1));
+    });
+
+    testWidgets('a chapter without a title shows nothing', (tester) async {
+      final rig = await mountPad(tester, position: 80);
+      final rect = rig.rect(tester);
+      final gesture = await tester.startGesture(rect.centerRight - const Offset(10, 0));
+      await gesture.moveBy(const Offset(-4, 0));
+      await tester.pumpAndSettle();
+      expect(rig.position, greaterThan(70));
+      expect(find.byType(Text), findsNothing);
+      await gesture.up();
+    });
   });
 
   test('the chapter holding a position', () {

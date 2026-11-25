@@ -254,31 +254,34 @@ void main() {
     });
   });
 
-  testWidgets('a chapter title over the bar keeps the Chinese line', (tester) async {
+  testWidgets("the iPad's chapter title over the bar keeps the Chinese line", (tester) async {
     await _useSystemFont(tester);
     final repaint = ValueNotifier(0);
     addTearDown(repaint.dispose);
     var position = 0.0;
     await tester.pumpWidget(
-      Directionality(
-        textDirection: TextDirection.ltr,
-        child: DefaultTextStyle(
-          style: TextStyle(fontFamily: BiliFonts.family, fontFamilyFallback: BiliFonts.fallback),
-          child: Center(
-            child: SizedBox(
-              width: 218,
-              child: SeekBar(
-                position: () => position,
-                duration: () => 100,
-                buffered: () => 0,
-                repaint: repaint,
-                onScrub: (seconds) {
-                  position = seconds;
-                  repaint.value++;
-                },
-                onCommit: (_) {},
-                onCancel: () {},
-                chapters: const [Chapter(from: 0, to: 100, title: 'OP 开场 Part 1')],
+      MediaQuery(
+        data: const MediaQueryData(size: Size(1194, 834)),
+        child: Directionality(
+          textDirection: TextDirection.ltr,
+          child: DefaultTextStyle(
+            style: TextStyle(fontFamily: BiliFonts.family, fontFamilyFallback: BiliFonts.fallback),
+            child: Center(
+              child: SizedBox(
+                width: 218,
+                child: SeekBar(
+                  position: () => position,
+                  duration: () => 100,
+                  buffered: () => 0,
+                  repaint: repaint,
+                  onScrub: (seconds) {
+                    position = seconds;
+                    repaint.value++;
+                  },
+                  onCommit: (_) {},
+                  onCancel: () {},
+                  chapters: const [Chapter(from: 0, to: 100, title: 'OP 开场 Part 1')],
+                ),
               ),
             ),
           ),

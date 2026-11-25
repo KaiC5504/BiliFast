@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:bili_core/api.dart' show Chapter;
 import 'package:bili_core/devlog.dart';
 import 'package:bili_core/logic.dart';
 import 'package:bilifast/app/swipe_back_route.dart';
@@ -796,6 +797,116 @@ void main() {
 
       expect(rig.callsStarting('speedUp'), isEmpty);
       expect(haptics, isEmpty);
+    });
+  });
+
+  group("a seek across a chapter's dot", () {
+    const tick = 'HapticFeedbackType.selectionClick';
+    late List<Object?> haptics;
+
+    setUp(() {
+      haptics = [];
+      rig.session.chapters = const [
+        Chapter(from: 0, to: 60, title: '开场'),
+        Chapter(from: 60, to: 120, title: '正片'),
+        Chapter(from: 120, to: 600, title: '结尾'),
+      ];
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger.setMockMethodCallHandler(
+        SystemChannels.platform,
+        (call) async {
+          if (call.method == 'HapticFeedback.vibrate') haptics.add(call.arguments);
+          return null;
+        },
+      );
+    });
+
+    tearDown(
+      () => TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger.setMockMethodCallHandler(
+        SystemChannels.platform,
+        null,
+      ),
+    );
+
+    /// A drag from 50 s whose seek has begun counting: 20 pt a frame, counted from the third step.
+    Future<(TestGesture, Duration)> counting(WidgetTester tester) async {
+      await rig.startAt(tester, 50);
+      final gesture = await tester.startGesture(const Offset(100, 200));
+      final stamp = await moveFrames(tester, gesture, const Offset(20, 0), 3);
+      expect(rig.calls.last, 'scrub 50.0');
+      return (gesture, stamp);
+    }
+
+    testWidgets('ticks the hand once each way, and not when it lifts', (tester) async {
+      await rig.mountInline(tester);
+      final (gesture, from) = await counting(tester);
+      // 20 pt of the 800 pt player is 3.4 s of the 600 s video: the third step passes 60 s.
+      var stamp = await moveFrames(tester, gesture, const Offset(20, 0), 2, from: from);
+      expect(haptics, isEmpty);
+      stamp = await moveFrames(tester, gesture, const Offset(20, 0), 2, from: stamp);
+      expect(haptics, [tick]);
+      stamp = await moveFrames(tester, gesture, const Offset(-20, 0), 4, from: stamp);
+      expect(rig.calls.last, 'scrub 50.0');
+      expect(haptics, [tick, tick]);
+      await gesture.up();
+      expect(rig.callsStarting('commitSeek'), hasLength(1));
+      expect(haptics, hasLength(2));
+      await tester.pump(_tapSettles);
+    });
+
+    testWidgets('several dots in one move tick once', (tester) async {
+      rig.session.chapters = const [
+        Chapter(from: 0, to: 60, title: '开场'),
+        Chapter(from: 60, to: 70, title: '正片'),
+        Chapter(from: 70, to: 600, title: '结尾'),
+      ];
+      await rig.mountFullScreen(tester);
+      final (gesture, stamp) = await counting(tester);
+      await gesture.moveBy(const Offset(200, 0), timeStamp: stamp + _frame);
+      await tester.pump();
+      expect(haptics, [tick]);
+      await gesture.up();
+      await tester.pump(_tapSettles);
+    });
+
+    testWidgets('no tick within a chapter, with 章节进度条 off, or without chapters', (tester) async {
+      await rig.mountInline(tester);
+      Future<void> across(double start, double by) async {
+        await rig.startAt(tester, start);
+        final gesture = await tester.startGesture(const Offset(100, 200));
+        final stamp = await moveFrames(tester, gesture, const Offset(20, 0), 3);
+        await moveFrames(tester, gesture, Offset(by / 4, 0), 4, from: stamp);
+        await gesture.up();
+        await tester.pump(_tapSettles);
+      }
+
+      await across(70, 200);
+      expect(rig.callsStarting('commitSeek').last, startsWith('commitSeek 104.'));
+
+      rig.session.chapterBar = false;
+      await across(50, 200);
+      rig.session.chapterBar = true;
+      rig.session.chapters = const [];
+      await across(50, 200);
+      expect(rig.callsStarting('commitSeek'), hasLength(3));
+      expect(haptics, isEmpty);
+    });
+
+    testWidgets("the iPad's picture ticks nothing: its bar keeps the dark ticks", (tester) async {
+      await tester.pumpWidget(
+        MediaQuery(
+          data: const MediaQueryData(size: Size(834, 1194)),
+          child: Directionality(
+            textDirection: TextDirection.ltr,
+            child: Align(alignment: Alignment.topCenter, child: rig.player(height: 450)),
+          ),
+        ),
+      );
+      final (gesture, stamp) = await counting(tester);
+      await moveFrames(tester, gesture, const Offset(20, 0), 4, from: stamp);
+      await gesture.up();
+      expect(rig.callsStarting('commitSeek'), hasLength(1));
+      expect(haptics, isEmpty);
+      await tester.pump(_tapSettles);
     });
   });
 
