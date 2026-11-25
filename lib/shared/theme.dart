@@ -10634,7 +10634,7 @@ abstract final class ChapterStripTheme {
   static const cornerLift = height;
 }
 
-/// 章节's panel at the right (273), and the chapters' strip along the bottom while it is open.
+/// 章节's panel at the right (273).
 abstract final class ChapterPanelTheme {
   static const title = '章节';
 

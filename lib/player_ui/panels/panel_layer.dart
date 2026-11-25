@@ -39,6 +39,7 @@ final class PanelFrame {
     this.trailing,
     this.top = 0,
     this.edge = false,
+    this.ownScroll = false,
   }) : sheetColor = sheetColor ?? BiliColors.sheetFill;
 
   final double width;
@@ -72,6 +73,10 @@ final class PanelFrame {
 
   /// The content reaches the screen's right edge and keeps clear of the safe area itself: 273's header runs past it.
   final bool edge;
+
+  /// The content scrolls its own list under a header that stays, and ends that scroll itself: 273's, so 章节进度条's
+  /// switch stays in reach down a long list.
+  final bool ownScroll;
 
   static PanelFrame of(PlayerPanel panel, {bool pad = false}) => pad ? _pad(panel) : _phone(panel);
 
@@ -112,6 +117,7 @@ final class PanelFrame {
       sheetHeight: BiliMetrics.panelSheetHeight,
       shade: ChapterPanelTheme.shade,
       edge: true,
+      ownScroll: true,
     ),
   };
 
@@ -183,11 +189,26 @@ final class PanelFrame {
       other.lead == lead &&
       other.trailing == trailing &&
       other.top == top &&
-      other.edge == edge;
+      other.edge == edge &&
+      other.ownScroll == ownScroll;
 
   @override
-  int get hashCode =>
-      Object.hash(width, sheetHeight, column, light, full, solid, sheetColor, points, shade, lead, trailing, top, edge);
+  int get hashCode => Object.hash(
+    width,
+    sheetHeight,
+    column,
+    light,
+    full,
+    solid,
+    sheetColor,
+    points,
+    shade,
+    lead,
+    trailing,
+    top,
+    edge,
+    ownScroll,
+  );
 }
 
 /// Where the iPad page's sheets and the danmaku send bar sit (no screenshot, a guess): [column] wide from the page's
@@ -293,21 +314,29 @@ class _PanelLayerState extends State<PanelLayer> with TickerProviderStateMixin {
 
   double _dragFrom = 0;
 
+  /// The last part the session named; between two parts it names none. Read once the session notifies or 章节 opens,
+  /// never as the layer starts: a live room's stand-in session has no part.
+  int? _partCid;
+
   void _listen(PlayerUi ui) {
     ui.panels.addListener(_panelChanged);
     ui.presentationChanges.addListener(_presentationChanged);
+    ui.session.addListener(_sessionChanged);
+    _partCid = null;
   }
 
   void _unlisten(PlayerUi ui) {
     ui.panels.removeListener(_panelChanged);
     ui.presentationChanges.removeListener(_presentationChanged);
+    ui.session.removeListener(_sessionChanged);
   }
 
   @override
   void didUpdateWidget(PanelLayer oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (identical(oldWidget.ui.panels, widget.ui.panels) &&
-        identical(oldWidget.ui.presentationChanges, widget.ui.presentationChanges)) {
+        identical(oldWidget.ui.presentationChanges, widget.ui.presentationChanges) &&
+        identical(oldWidget.ui.session, widget.ui.session)) {
       return;
     }
     _unlisten(oldWidget.ui);
@@ -344,10 +373,22 @@ class _PanelLayerState extends State<PanelLayer> with TickerProviderStateMixin {
     _rebuild();
   }
 
+  /// 章节 lists one part's chapters: another part (自动连播, 后台连播, 合集's next) closes it, and so does a part that
+  /// settles with none. A part is told by its cid, as the list empties while each part's chapters load.
+  void _sessionChanged() {
+    final session = widget.ui.session;
+    final cid = session.part?.cid;
+    final moved = cid != null && _partCid != null && cid != _partCid;
+    if (cid != null) _partCid = cid;
+    if (widget.ui.panels.value != PlayerPanel.chapters) return;
+    if (moved || (cid != null && !session.opening && session.chapters.isEmpty)) _close();
+  }
+
   void _panelChanged() {
     _confirm.value = null;
     _cover.value = null;
     final next = widget.ui.panels.value;
+    if (next == PlayerPanel.chapters) _partCid = widget.ui.session.part?.cid ?? _partCid;
     if (next == null) {
       if (_shown == null) return;
       setState(() {});
@@ -404,60 +445,64 @@ class _PanelLayerState extends State<PanelLayer> with TickerProviderStateMixin {
           landscape: landscape,
           reveal: _motion,
           pad: pad,
-          child: LayoutBuilder(
-            builder: (context, constraints) {
-              final size = constraints.biggest;
-              final insets = MediaQuery.paddingOf(context);
-              final content = _content(shown, light: light);
-              return Stack(
-                children: [
-                  Positioned.fill(
-                    child: Semantics(
-                      button: true,
-                      label: '关闭',
-                      child: GestureDetector(
-                        key: const ValueKey('panel-dismiss'),
-                        behavior: HitTestBehavior.opaque,
-                        onTap: _close,
+          // A setState anywhere under a LayoutBuilder lays it out again, which marks it for paint: without a boundary
+          // here, 章节's moving bars would repaint the whole page under the layer 30 times a second.
+          child: RepaintBoundary(
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final size = constraints.biggest;
+                final insets = MediaQuery.paddingOf(context);
+                final content = _content(shown, light: light);
+                return Stack(
+                  children: [
+                    Positioned.fill(
+                      child: Semantics(
+                        button: true,
+                        label: '关闭',
+                        child: GestureDetector(
+                          key: const ValueKey('panel-dismiss'),
+                          behavior: HitTestBehavior.opaque,
+                          onTap: _close,
+                        ),
                       ),
                     ),
-                  ),
-                  if (frame.full)
-                    _full(content)
-                  else if (!landscape && light)
-                    ..._lightSheet(size, insets, frame, content, pad: pad)
-                  else if (!landscape)
-                    ..._sheet(size, insets, frame, content, pad: pad)
-                  else if (frame.column)
-                    _column(size, insets, frame, content)
-                  else
-                    _side(size, insets, frame, content),
-                  Positioned.fill(
-                    child: ValueListenableBuilder(
-                      valueListenable: _cover,
-                      builder: (context, cover, _) => cover ?? const SizedBox.shrink(),
-                    ),
-                  ),
-                  Positioned.fill(
-                    child: ValueListenableBuilder(
-                      valueListenable: _confirm,
-                      builder: (context, request, _) => AnimatedSwitcher(
-                        duration: MediaQuery.disableAnimationsOf(context)
-                            ? Duration.zero
-                            : const Duration(milliseconds: 180),
-                        child: request == null
-                            ? const SizedBox.shrink()
-                            : PanelConfirmDialog(
-                                key: ValueKey(request),
-                                request: request,
-                                dismiss: () => _confirm.value = null,
-                              ),
+                    if (frame.full)
+                      _full(content)
+                    else if (!landscape && light)
+                      ..._lightSheet(size, insets, frame, content, pad: pad)
+                    else if (!landscape)
+                      ..._sheet(size, insets, frame, content, pad: pad)
+                    else if (frame.column)
+                      _column(size, insets, frame, content)
+                    else
+                      _side(size, insets, frame, content),
+                    Positioned.fill(
+                      child: ValueListenableBuilder(
+                        valueListenable: _cover,
+                        builder: (context, cover, _) => cover ?? const SizedBox.shrink(),
                       ),
                     ),
-                  ),
-                ],
-              );
-            },
+                    Positioned.fill(
+                      child: ValueListenableBuilder(
+                        valueListenable: _confirm,
+                        builder: (context, request, _) => AnimatedSwitcher(
+                          duration: MediaQuery.disableAnimationsOf(context)
+                              ? Duration.zero
+                              : const Duration(milliseconds: 180),
+                          child: request == null
+                              ? const SizedBox.shrink()
+                              : PanelConfirmDialog(
+                                  key: ValueKey(request),
+                                  request: request,
+                                  dismiss: () => _confirm.value = null,
+                                ),
+                        ),
+                      ),
+                    ),
+                  ],
+                );
+              },
+            ),
           ),
         ),
       ),
@@ -549,6 +594,12 @@ class _PanelLayerState extends State<PanelLayer> with TickerProviderStateMixin {
     final width = frame.points ?? size.width * frame.width;
     final hard = frame.solid || frame.shade != null;
     final reach = hard ? 0.0 : size.width * BiliMetrics.panelFadeFraction;
+    final padding = EdgeInsets.only(
+      top: insets.top + frame.top,
+      bottom: frame.solid || frame.ownScroll ? 0 : insets.bottom + BiliMetrics.panelBottom,
+      left: frame.lead ?? 0,
+      right: frame.edge ? 0 : insets.right + (frame.trailing ?? BiliMetrics.panelTrailing),
+    );
     return Positioned(
       top: 0,
       bottom: 0,
@@ -577,15 +628,9 @@ class _PanelLayerState extends State<PanelLayer> with TickerProviderStateMixin {
               right: 0,
               width: width,
               child: _body(
-                child: SingleChildScrollView(
-                  padding: EdgeInsets.only(
-                    top: insets.top + frame.top,
-                    bottom: frame.solid ? 0 : insets.bottom + BiliMetrics.panelBottom,
-                    left: frame.lead ?? 0,
-                    right: frame.edge ? 0 : insets.right + (frame.trailing ?? BiliMetrics.panelTrailing),
-                  ),
-                  child: content,
-                ),
+                child: frame.ownScroll
+                    ? Padding(padding: padding, child: content)
+                    : SingleChildScrollView(padding: padding, child: content),
               ),
             ),
           ],
@@ -739,14 +784,17 @@ class _PanelLayerState extends State<PanelLayer> with TickerProviderStateMixin {
                       ),
                     ),
                     Expanded(
-                      child: SingleChildScrollView(
-                        padding: EdgeInsets.only(
-                          left: insets.left + BiliMetrics.gutter,
-                          right: insets.right + BiliMetrics.gutter,
-                          bottom: insets.bottom + BiliMetrics.gutter,
-                        ),
-                        child: content,
-                      ),
+                      // Content scrolling itself needs a bounded box: 章节, here only as it slides out after a turn upright.
+                      child: frame.ownScroll
+                          ? content
+                          : SingleChildScrollView(
+                              padding: EdgeInsets.only(
+                                left: insets.left + BiliMetrics.gutter,
+                                right: insets.right + BiliMetrics.gutter,
+                                bottom: insets.bottom + BiliMetrics.gutter,
+                              ),
+                              child: content,
+                            ),
                     ),
                   ],
                 ),

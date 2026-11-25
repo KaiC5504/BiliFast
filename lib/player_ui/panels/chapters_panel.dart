@@ -1,5 +1,8 @@
+import 'dart:math' as math;
+
 import 'package:bili_core/api.dart' show Chapter;
 import 'package:bili_core/logic.dart' show TimeFormat;
+import 'package:flutter/rendering.dart';
 import 'package:flutter/widgets.dart';
 
 import '../../shared/cover_placeholder.dart';
@@ -10,8 +13,9 @@ import '../../video/player_session.dart';
 import 'panel_parts.dart';
 
 /// 章节 (273): 章节进度条's switch over a row per chapter, its frame, title and range, the one playing pink after the
-/// moving bars. A tap seeks to the chapter's start and closes. Landscape only; it fills the strip to the screen's edge
-/// ([PanelFrame.edge]), its rows ending at the safe area.
+/// moving bars. A tap seeks exactly to the chapter's start and closes. Landscape only; it fills the strip to the
+/// screen's edge ([PanelFrame.edge]), its rows ending at the safe area and scrolling under the header, which stays
+/// ([PanelFrame.ownScroll]).
 class ChaptersPanel extends StatefulWidget {
   const ChaptersPanel({super.key, required this.session, required this.close});
 
@@ -35,18 +39,30 @@ class ChaptersPanel extends StatefulWidget {
 }
 
 class _ChaptersPanelState extends State<ChaptersPanel> {
-  final _playingRow = GlobalKey();
+  final _list = ScrollController();
+
+  /// On the row playing as the panel opened, and kept there: moved with the mark, it would carry that row's
+  /// elements, its picture's among them, to the next.
+  final _openedRow = GlobalKey();
+  int? _openedOn;
   int? _shownPlaying;
 
   @override
   void initState() {
     super.initState();
     _listen(widget.session);
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (_playingRow.currentContext case final row? when mounted) {
-        Scrollable.ensureVisible(row, alignmentPolicy: ScrollPositionAlignmentPolicy.keepVisibleAtEnd);
-      }
-    });
+    _openedOn = _playing;
+    WidgetsBinding.instance.addPostFrameCallback((_) => _revealPlaying());
+  }
+
+  /// A playing row out of sight starts the list; one already in sight leaves it where it is.
+  void _revealPlaying() {
+    final row = _openedRow.currentContext?.findRenderObject();
+    if (!mounted || row == null || !_list.hasClients) return;
+    final viewport = RenderAbstractViewport.of(row);
+    final position = _list.position;
+    if (viewport.getOffsetToReveal(row, 1).offset <= position.pixels) return;
+    position.jumpTo(math.min(viewport.getOffsetToReveal(row, 0).offset, position.maxScrollExtent));
   }
 
   @override
@@ -60,6 +76,7 @@ class _ChaptersPanelState extends State<ChaptersPanel> {
   @override
   void dispose() {
     _unlisten(widget.session);
+    _list.dispose();
     super.dispose();
   }
 
@@ -81,7 +98,7 @@ class _ChaptersPanelState extends State<ChaptersPanel> {
   }
 
   void _choose(Chapter chapter) {
-    widget.session.commitSeek(chapter.from);
+    widget.session.commitSeek(chapter.from, precise: true);
     widget.close();
   }
 
@@ -90,23 +107,34 @@ class _ChaptersPanelState extends State<ChaptersPanel> {
     final session = widget.session;
     final chapters = session.chapters;
     final playing = _shownPlaying = _playing;
-    final safeRight = MediaQuery.paddingOf(context).right;
+    final insets = MediaQuery.paddingOf(context);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         _Header(on: session.chapterBar, toggle: () => session.setChapterBar(!session.chapterBar)),
-        for (final (index, chapter) in chapters.indexed)
-          PanelReveal(
-            key: index == playing ? _playingRow : null,
-            order: index,
-            child: _ChapterRow(
-              chapter: chapter,
-              playing: index == playing,
-              divider: index > 0,
-              trailing: safeRight,
-              onTap: () => _choose(chapter),
+        Expanded(
+          child: SingleChildScrollView(
+            controller: _list,
+            padding: EdgeInsets.only(bottom: insets.bottom + BiliMetrics.panelBottom),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                for (final (index, chapter) in chapters.indexed)
+                  PanelReveal(
+                    key: index == _openedOn ? _openedRow : null,
+                    order: index,
+                    child: _ChapterRow(
+                      chapter: chapter,
+                      playing: index == playing,
+                      divider: index > 0,
+                      trailing: insets.right,
+                      onTap: () => _choose(chapter),
+                    ),
+                  ),
+              ],
             ),
           ),
+        ),
       ],
     );
   }
@@ -303,14 +331,18 @@ class _ChapterRow extends StatelessWidget {
                             ? Row(
                                 children: [
                                   const SizedBox(width: ChapterPanelTheme.barsLead),
-                                  Transform.translate(
-                                    offset: const Offset(
-                                      0,
-                                      ChapterPanelTheme.barsCentre - ChapterPanelTheme.rowTitleCentre,
-                                    ),
-                                    child: const PlayingBars(
-                                      color: ChapterPanelTheme.barsInk,
-                                      height: ChapterPanelTheme.barsHeight,
+                                  // The bars draw 30 frames a second, paused too; the rest of the panel draws none.
+                                  RepaintBoundary(
+                                    key: const ValueKey('chapter-bars'),
+                                    child: Transform.translate(
+                                      offset: const Offset(
+                                        0,
+                                        ChapterPanelTheme.barsCentre - ChapterPanelTheme.rowTitleCentre,
+                                      ),
+                                      child: const PlayingBars(
+                                        color: ChapterPanelTheme.barsInk,
+                                        height: ChapterPanelTheme.barsHeight,
+                                      ),
                                     ),
                                   ),
                                   const SizedBox(width: ChapterPanelTheme.barsGap),

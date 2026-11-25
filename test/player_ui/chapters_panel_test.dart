@@ -1,4 +1,4 @@
-import 'package:bili_core/api.dart' show Chapter;
+import 'package:bili_core/api.dart' show Chapter, VideoPage;
 import 'package:bilifast/device/device_controls.dart';
 import 'package:bilifast/device/orientation.dart';
 import 'package:bilifast/player_ui/chrome_state.dart';
@@ -11,6 +11,7 @@ import 'package:bilifast/shared/remote_image.dart';
 import 'package:bilifast/shared/theme.dart';
 import 'package:bilifast/video/intro/collection_row.dart' show PlayingBars;
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import '../support/fake_player_session.dart';
@@ -23,6 +24,8 @@ const _chapters = [
   Chapter(from: 241, to: 3725, title: '尾声'),
 ];
 
+const _part = VideoPage(cid: 1, page: 1, part: 'P1', duration: 3725);
+
 final class _Rig {
   _Rig(this.session, this.ui);
 
@@ -32,15 +35,23 @@ final class _Rig {
   PanelController get panels => ui.panels;
 }
 
-/// The layer in landscape full screen on KaiC's iPhone (its 62 pt sides and 21 pt home indicator), at 1×.
-Future<_Rig> _pump(WidgetTester tester, {List<Chapter> chapters = _chapters, double at = 150}) async {
+/// The layer in landscape full screen on KaiC's iPhone (its 62 pt sides and 21 pt home indicator), at 1×. Unsettled,
+/// it pumps through the slide in, for moving bars that no pumpAndSettle outlasts.
+Future<_Rig> _pump(
+  WidgetTester tester, {
+  List<Chapter> chapters = _chapters,
+  double at = 150,
+  bool settle = true,
+}) async {
   tester.view
     ..physicalSize = _screen
     ..devicePixelRatio = 1
     ..padding = const FakeViewPadding(left: 62, right: 62, bottom: 21)
     ..viewPadding = const FakeViewPadding(left: 62, right: 62, bottom: 21);
   addTearDown(tester.view.reset);
-  final session = FakePlayerSession()..chapters = chapters;
+  final session = FakePlayerSession()
+    ..chapters = chapters
+    ..part = _part;
   session.scrubbing.value = at;
   final orientation = OrientationController()..enterLandscape();
   final chrome = ChromeState();
@@ -70,7 +81,13 @@ Future<_Rig> _pump(WidgetTester tester, {List<Chapter> chapters = _chapters, dou
     session.dispose();
   });
   panels.open(PlayerPanel.chapters);
-  await tester.pumpAndSettle();
+  if (settle) {
+    await tester.pumpAndSettle();
+  } else {
+    for (var i = 0; i < 3; i++) {
+      await tester.pump(const Duration(milliseconds: 200));
+    }
+  }
   return _Rig(session, ui);
 }
 
@@ -176,6 +193,71 @@ void main() {
     expect(_colour(tester, '1'), ChapterPanelTheme.playing);
   });
 
+  testWidgets('the moving bars repaint their own layer: nothing else in the panel, nor the page under it, builds or '
+      'paints per frame', (tester) async {
+    PlayingBars.debugHoldStill = false;
+    await _pump(tester, settle: false);
+    final boundary = find.byKey(const ValueKey('chapter-bars'));
+    expect(tester.widget(boundary), isA<RepaintBoundary>());
+    expect(find.descendant(of: _rowOf('2.3'), matching: boundary), findsOneWidget);
+    expect(find.descendant(of: boundary, matching: find.byType(PlayingBars)), findsOneWidget);
+    final bars = tester.element(boundary);
+    final barsBox = tester.renderObject(boundary);
+    final layer = tester.renderObject(find.byType(PanelLayer));
+    final panel = tester.renderObject(find.byType(ChaptersPanel));
+
+    final built = <Element>[];
+    final painted = <RenderObject>[];
+    debugOnRebuildDirtyWidget = (element, _) => built.add(element);
+    debugOnProfilePaint = painted.add;
+    try {
+      for (var i = 0; i < 6; i++) {
+        await tester.pump(const Duration(milliseconds: 34));
+      }
+    } finally {
+      debugOnRebuildDirtyWidget = null;
+      debugOnProfilePaint = null;
+    }
+
+    bool builtUnder(Element element) {
+      var under = false;
+      element.visitAncestorElements((ancestor) {
+        under = identical(ancestor, bars);
+        return !under;
+      });
+      return under;
+    }
+
+    bool paintedUnder(RenderObject object, RenderObject ancestor) {
+      for (RenderObject? at = object; at != null; at = at.parent) {
+        if (identical(at, ancestor)) return true;
+      }
+      return false;
+    }
+
+    expect(painted.where((object) => paintedUnder(object, barsBox)), isNotEmpty, reason: 'the bars move');
+    expect([
+      for (final element in built)
+        if (!builtUnder(element)) element.widget.runtimeType,
+    ], isEmpty);
+    expect(
+      [
+        for (final object in painted)
+          if (!paintedUnder(object, layer)) object.runtimeType,
+      ],
+      isEmpty,
+      reason: 'the page under the layer',
+    );
+    expect(
+      [
+        for (final object in painted)
+          if (paintedUnder(object, panel) && !paintedUnder(object, barsBox)) object.runtimeType,
+      ],
+      isEmpty,
+      reason: "the panel's header and rows",
+    );
+  });
+
   test('the chapter holding a second is the last starting at or before it', () {
     expect(ChaptersPanel.playingIndex(_chapters, 0), 0);
     expect(ChaptersPanel.playingIndex(_chapters, 107.9), 0);
@@ -213,40 +295,152 @@ void main() {
     expect(tester.getSize(_switch).height, greaterThanOrEqualTo(BiliMetrics.panelHitBox));
   });
 
-  testWidgets("a tap on a row seeks to the chapter's start and closes", (tester) async {
+  // The keyframe before a chapter's start belongs to the chapter before, which would then show as playing.
+  testWidgets("a tap on a row seeks exactly to the chapter's start and closes", (tester) async {
     final rig = await _pump(tester);
     await tester.tap(find.text('01:48 - 04:01'));
     await tester.pumpAndSettle();
-    expect(rig.session.calls, ['commitSeek 108.0']);
+    expect(rig.session.calls, ['commitSeek 108.0 precise']);
     expect(rig.panels.value, isNull);
   });
 
-  testWidgets('the playing row too seeks to its start', (tester) async {
+  testWidgets('the playing row too seeks exactly to its start', (tester) async {
     final rig = await _pump(tester, at: 200);
     await tester.tap(find.text('2.3'));
     await tester.pumpAndSettle();
-    expect(rig.session.calls, ['commitSeek 108.0']);
+    expect(rig.session.calls, ['commitSeek 108.0 precise']);
     expect(rig.panels.value, isNull);
   });
 
-  group('opens scrolled so the playing row shows', () {
+  group('closes when another part plays', () {
+    const next = VideoPage(cid: 2, page: 2, part: 'P2', duration: 600);
+
+    for (final (name, theirs) in [
+      ('with chapters of its own', _chapters),
+      ('whose chapters are still loading', const <Chapter>[]),
+    ]) {
+      testWidgets('one $name', (tester) async {
+        final rig = await _pump(tester);
+        rig.session
+          ..part = next
+          ..chapters = theirs
+          ..changed();
+        await tester.pumpAndSettle();
+        expect(rig.panels.value, isNull);
+        expect(_frame, findsNothing);
+      });
+    }
+
+    testWidgets('also when the session named no part between the two', (tester) async {
+      final rig = await _pump(tester);
+      rig.session
+        ..opening = true
+        ..part = null
+        ..changed();
+      await tester.pumpAndSettle();
+      expect(rig.panels.value, PlayerPanel.chapters);
+      rig.session
+        ..part = next
+        ..changed();
+      await tester.pumpAndSettle();
+      expect(rig.panels.value, isNull);
+    });
+
+    testWidgets('but not on an empty list while its own part opens, nor on that part coming back', (tester) async {
+      final rig = await _pump(tester);
+      rig.session
+        ..opening = true
+        ..part = null
+        ..changed();
+      await tester.pumpAndSettle();
+      rig.session
+        ..part = _part
+        ..chapters = const []
+        ..changed();
+      await tester.pumpAndSettle();
+      expect(rig.panels.value, PlayerPanel.chapters);
+      rig.session
+        ..chapters = _chapters
+        ..opening = false
+        ..changed();
+      await tester.pumpAndSettle();
+      expect(rig.panels.value, PlayerPanel.chapters);
+      expect(find.text('2.3'), findsOneWidget);
+    });
+
+    testWidgets('and when the part settles with no chapters', (tester) async {
+      final rig = await _pump(tester);
+      rig.session
+        ..opening = true
+        ..chapters = const []
+        ..changed();
+      await tester.pumpAndSettle();
+      expect(rig.panels.value, PlayerPanel.chapters);
+      rig.session
+        ..opening = false
+        ..changed();
+      await tester.pumpAndSettle();
+      expect(rig.panels.value, isNull);
+    });
+  });
+
+  group('the header stays over the list; opened with the playing row out of sight, the list starts at it', () {
     final many = [for (var i = 0; i < 12; i++) Chapter(from: i * 60.0, to: (i + 1) * 60.0, title: '第${i + 1}章')];
 
     ScrollPosition position(WidgetTester tester) =>
         tester.state<ScrollableState>(find.descendant(of: _frame, matching: find.byType(Scrollable))).position;
 
-    testWidgets('one far down', (tester) async {
-      await _pump(tester, chapters: many, at: 9 * 60 + 5);
+    void expectHeader(WidgetTester tester) {
+      expect(tester.getCenter(find.text('章节')).dy, closeTo(ChapterPanelTheme.headerCentre, 0.01));
+      expect(tester.getCenter(find.text('章节进度条')).dy, closeTo(ChapterPanelTheme.headerCentre, 0.01));
+      final track = find.descendant(of: _switch, matching: find.byType(AnimatedContainer));
+      expect(tester.getRect(track).center.dy, closeTo(ChapterPanelTheme.switchCentre, 0.01));
+    }
+
+    double frameTop(WidgetTester tester, String title) =>
+        tester.getTopLeft(find.descendant(of: _rowOf(title), matching: find.byType(ClipRRect))).dy;
+
+    testWidgets('one far down comes to the top, its hairline where the header ends', (tester) async {
+      await _pump(tester, chapters: many, at: 5 * 60 + 5);
       expect(position(tester).pixels, greaterThan(0));
-      final row = tester.getRect(_rowOf('第10章'));
-      expect(row.top, greaterThanOrEqualTo(0));
-      expect(row.bottom, lessThanOrEqualTo(_screen.height));
+      expect(tester.getTopLeft(_rowOf('第6章')).dy, closeTo(ChapterPanelTheme.listTop, 0.01));
+      expect(
+        frameTop(tester, '第6章'),
+        closeTo(ChapterPanelTheme.listTop + BiliMetrics.panelHairline + ChapterPanelTheme.rowTop, 0.01),
+      );
+      expect(_colour(tester, '第6章'), ChapterPanelTheme.playing);
+      expectHeader(tester);
+    });
+
+    testWidgets('one cut by the bottom edge comes to the top too', (tester) async {
+      await _pump(tester, chapters: many, at: 4 * 60 + 5);
+      expect(tester.getTopLeft(_rowOf('第5章')).dy, closeTo(ChapterPanelTheme.listTop, 0.01));
+      expectHeader(tester);
+    });
+
+    testWidgets('the last comes as far up as the list goes, ending clear of the home indicator', (tester) async {
+      await _pump(tester, chapters: many, at: 11 * 60 + 5);
+      expect(position(tester).pixels, position(tester).maxScrollExtent);
+      expect(tester.getBottomLeft(_rowOf('第12章')).dy, closeTo(_screen.height - 21 - BiliMetrics.panelBottom, 0.01));
+      expectHeader(tester);
     });
 
     testWidgets('one already in sight leaves the list at its top', (tester) async {
-      await _pump(tester, chapters: many, at: 65);
+      await _pump(tester, chapters: many, at: 3 * 60 + 5);
       expect(position(tester).pixels, 0);
-      expect(_colour(tester, '第2章'), ChapterPanelTheme.playing);
+      expect(_colour(tester, '第4章'), ChapterPanelTheme.playing);
+      expect(frameTop(tester, '第1章'), closeTo(57, 0.01));
+    });
+
+    testWidgets('scrolled by hand, the rows pass under the header and its switch still answers', (tester) async {
+      final rig = await _pump(tester, chapters: many, at: 5);
+      await tester.drag(find.text('第3章'), const Offset(0, -150));
+      await tester.pumpAndSettle();
+      expect(position(tester).pixels, greaterThan(100));
+      expectHeader(tester);
+      await tester.tap(_switch);
+      await tester.pumpAndSettle();
+      expect(rig.session.calls, ['setChapterBar false']);
     });
   });
 
@@ -283,7 +477,7 @@ void main() {
     expect(tester.getSemantics(_rowOf('1')), isSemantics(label: '1', isButton: true, isSelected: false));
     tester.semantics.tap(find.semantics.byLabel('尾声'));
     await tester.pumpAndSettle();
-    expect(rig.session.calls, ['setChapterBar false', 'commitSeek 241.0']);
+    expect(rig.session.calls, ['setChapterBar false', 'commitSeek 241.0 precise']);
     expect(rig.panels.value, isNull);
     handle.dispose();
   });
