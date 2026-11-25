@@ -10570,4 +10570,60 @@ abstract final class PlayerNotesTheme {
 /// 章节's panel at the right (273), and the chapters' strip along the bottom while it is open.
 abstract final class ChapterPanelTheme {
   static const title = '章节';
+
+  /// 273: a hard edge 382 of 956 pt from the right, as 弹幕设置's strip, letting 16% of the video through.
+  static const width = 382 / 956;
+  static const shade = Color(0xD6000000);
+
+  /// 273: 章节, the frames and the hairlines start 12 in from the strip's edge.
+  static const lead = 12.0;
+
+  /// 273's header, past the safe area: 章节 14 pt white and 章节进度条 12 pt #9499A0, their glyphs' middles 28.33 down,
+  /// each centred in a [labelBox]; the first row starts 47 down, its frame at 57.
+  static const headerCentre = 28.33;
+  static const titleText = 14.0;
+  static const barLabelText = 12.0;
+  static const labelBox = 20.0;
+  static const listTop = 47.0;
+
+  /// 273's switch: a 121 × 52 px pill centred 82 px down, ending 10 px short of the screen's edge and 8 pt after its
+  /// label, its knob a white pill 71 px wide inset 4.3 px. Off has no screenshot: 21's track.
+  static const switchWidth = 121 / 3;
+  static const switchHeight = 52 / 3;
+  static const switchKnobWidth = 71 / 3;
+  static const switchInset = 4.3 / 3;
+  static const switchCentre = 82 / 3;
+  static const switchRight = 10 / 3;
+  static const switchGap = 8.0;
+  static const switchOn = BiliColors.videoPink;
+  static const switchOff = BiliColors.panelTrackOff;
+  static const switchKnob = BiliColors.panelKnob;
+
+  /// 273's rows, 92 pt apart: the frame 10 under the row's top and 9.67 over the next row's 1 px #484C52 hairline,
+  /// which ends at the safe area. The frame is 128 × 72 (16:9) with 4 pt corners.
+  static const rowTop = 10.0;
+  static const rowBottom = 29 / 3;
+  static const frameWidth = 128.0;
+  static const frameHeight = 72.0;
+  static const frameRadius = 4.0;
+
+  /// 273: the text 10 after the frame; the title 14 pt white, its digits' middle 28 under the frame's top; the range
+  /// 12 pt #9499A0, 48.1 under. Each line is centred in a [lineBox] where SF's digits land on 273's pixels.
+  static const textGap = 10.0;
+  static const rowTitleText = 14.0;
+  static const rowTitleCentre = 28.5;
+  static const rangeText = 12.0;
+  static const rangeCentre = 48.33;
+  static const lineBox = 20.0;
+
+  /// 273: the playing chapter's title #FF6699 after Bilibili's #FB7299 bars, 3.5 apart (the 简介's 4.2 scaled) and
+  /// their middle 27 under the frame's top, a point over the title's digits; the first bar's edge 1.77 into the text
+  /// and the title 8.2 after the last's, which puts 2.3's ink where 273's is.
+  static const playing = BiliColors.videoPink;
+  static const barsInk = BiliColors.verticalPink;
+  static const barPitch = 3.5;
+  static const barsHeight = IntroListTheme.barsHeight * barPitch / IntroListTheme.barStep;
+  static const barsCentre = 27.0;
+  static const barsLead = 1.77;
+  static const barsGap = 8.2;
 }
