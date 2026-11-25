@@ -10578,7 +10578,7 @@ abstract final class HiResButtonTheme {
   static const tag = '大会员';
 
   /// 274: Bilibili's #FB7299 on the words and the tag alike, the tag's line as faint as the white one's.
-  static const on = Color(0xFFFB7299);
+  static const on = BiliColors.verticalPink;
   static const tagLineOn = Color(0xCCFB7299);
 
   /// 274: iOS sets Hi-Res's s 1.67 pt further from 无 than the fonts do, on the button and in the notes alike.
@@ -10587,15 +10587,16 @@ abstract final class HiResButtonTheme {
   /// 274: the tag is 60帧's but 0.67 pt narrower inside each end.
   static const tagPad = BiliMetrics.chromeTagPad - 2 / 3;
 
-  /// 274: 倍速's words end 35 pt of ink before Hi-Res's; from Hi-Res on, the row is 04's from 倍速 on, and its tag sits
-  /// as 60帧 does over 1080P.
+  /// 274: 倍速's words end 35 pt of ink before Hi-Res's, and its tag sits as 60帧 does over 1080P.
   static const gap = 17.0;
+
+  /// 274: 无损's centre 61.33 pt before 4K's, where 04's 倍速 is 62.17 before it, so the button sits 1 pt nearer the
+  /// quality than 倍速 does without it.
+  static const qualityGap = BiliMetrics.chromeQualityGap - 1;
 }
 
 /// A video's notes at full screen's bottom left (274), as the live room's (210).
 abstract final class PlayerNotesTheme {
-  static const shown = LivePlayerTheme.noteShown;
-
   /// 274: each 34.33 pt tall on 80% black with 4 pt corners, 8 apart, flush with the safe area's left, the newest
   /// lowest and ending 131 pt above the screen's bottom (7 over the time line's box); 12 pt white, 12 pt in.
   static const left = 0.0;
@@ -10628,6 +10629,9 @@ abstract final class ChapterStripTheme {
   /// The title's box centred here puts its digits' middle 11.33 pt up, as 273's.
   static const titleCentre = 10.5;
   static const titlePad = 4.0;
+
+  /// 273: the corner's N人正在看 stands 22 pt above 25's place, clear of the strip.
+  static const cornerLift = height;
 }
 
 /// 章节's panel at the right (273), and the chapters' strip along the bottom while it is open.

@@ -1,6 +1,7 @@
 import 'package:bili_core/api.dart'
     show
         BiliClient,
+        Chapter,
         CookieJar,
         HTTPRequest,
         HTTPResponse,
@@ -860,9 +861,13 @@ void main() {
     expect(find.byKey(const ValueKey('landscape-online')), findsNothing);
   });
 
-  testWidgets('while the controls are hidden a faint N人正在看 stays at the bottom left, as on 25', (tester) async {
+  testWidgets("while the controls are hidden a faint N人正在看 stays at the bottom left, as on 25, and over 章节's "
+      'strip, lifted clear of it, as on 273', (tester) async {
     final details = FakePageDetails(online: '1');
     final rig = Rig(details: details);
+    rig.session
+      ..duration.value = 241
+      ..chapters = const [Chapter(from: 0, to: 108, title: '1'), Chapter(from: 108, to: 241, title: '2.3')];
     await rig.mount(tester);
     final corner = find.byKey(const ValueKey('landscape-corner-online'));
     expect(corner, findsNothing, reason: 'not while the controls show');
@@ -895,6 +900,36 @@ void main() {
     rig.panels.close();
     await tester.pumpAndSettle();
     expect(corner, findsOneWidget);
+
+    // As the 章节 part opens it: the controls show, then the panel.
+    rig.chrome.show();
+    rig.panels.open(PlayerPanel.chapters);
+    await tester.pumpAndSettle();
+    expect(corner, findsOneWidget, reason: '273 keeps it over the strip');
+    expect(tester.getTopLeft(corner).dx, closeTo(95.3, 0.5));
+    expect(tester.getCenter(corner).dy, closeTo(408.3, 0.5));
+    expect(
+      tester.getRect(corner).bottom,
+      lessThan(tester.getTopLeft(find.byKey(const ValueKey('chapter-strip'))).dy),
+    );
+    rig.session
+      ..chapterBar = false
+      ..changed();
+    await tester.pumpAndSettle();
+    expect(corner, findsNothing, reason: 'with no strip, 章节 is a panel like the rest');
+    rig.session
+      ..chapterBar = true
+      ..changed();
+    await tester.pumpAndSettle();
+    expect(corner, findsOneWidget);
+    rig.panels.open(PlayerPanel.speed);
+    await tester.pumpAndSettle();
+    expect(corner, findsNothing);
+    rig.panels.open(PlayerPanel.chapters);
+    rig.chrome.hide();
+    rig.panels.close();
+    await tester.pumpAndSettle();
+    expect(tester.getCenter(corner).dy, closeTo(430.3, 0.5), reason: 'back down with the strip gone');
 
     details.online.value = null;
     await tester.pumpAndSettle();

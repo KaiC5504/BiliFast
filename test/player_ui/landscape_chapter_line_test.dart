@@ -125,6 +125,21 @@ void main() {
     semantics.dispose();
   });
 
+  testWidgets('with 章节进度条 off the part still shows and opens the panel, the only way back to the switch', (
+    tester,
+  ) async {
+    final rig = await mountAt(tester, 108);
+    rig.session
+      ..chapterBar = false
+      ..changed();
+    await tester.pump();
+
+    expect(find.descendant(of: _chapters, matching: find.text('章节')), findsOne);
+    expect(titleOf(tester), '2.3');
+    await tester.tap(_chapters);
+    expect(rig.panels.value, PlayerPanel.chapters);
+  });
+
   testWidgets("the part's target runs from the line down to the bar, and the bar and time stay where 04 has them", (
     tester,
   ) async {
