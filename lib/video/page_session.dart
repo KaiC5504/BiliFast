@@ -167,6 +167,8 @@ class PagePlayerSession extends ChangeNotifier with WidgetsBindingObserver imple
     _endings = controller.endings.listen((_) => unawaited(_handleEnd()));
     _commands = controller.remoteCommands.listen(_remoteCommand);
     _interruptions = controller.interruptions.listen(_interrupted);
+    _flacRefusals = controller.hiResRefusals.listen((_) => _flacRefused());
+    scheduleMicrotask(() => _justMade = false);
     _applyPrefs();
     _applyBackgroundListen();
     _controllerChanged();
@@ -204,6 +206,7 @@ class PagePlayerSession extends ChangeNotifier with WidgetsBindingObserver imple
   late final StreamSubscription<void> _endings;
   late final StreamSubscription<RemoteCommand> _commands;
   late final StreamSubscription<AudioInterruption> _interruptions;
+  late final StreamSubscription<void> _flacRefusals;
 
   @override
   late final PlayerReadout readout;
@@ -269,6 +272,18 @@ class PagePlayerSession extends ChangeNotifier with WidgetsBindingObserver imple
   /// It was playing, or the player had paused by itself within [interruptionPause], when the interruption under way
   /// began.
   bool _resumeAfterInterruption = false;
+
+  /// Until the microtask after it was made: a session set inactive by then is 推荐's card's (or a page's made under
+  /// another), which plays AAC until a page shows it ([_hiResHeld]).
+  bool _justMade = true;
+  bool _hiResHeld = false;
+
+  /// The controller's open whose picks last took the pref ([PlaybackController.opens]).
+  int? _hiResOpen;
+
+  /// Hi-Res无损音质开启中 is up, waiting for the FLAC stream to play.
+  bool _hiResPending = false;
+  bool? _hiResOfferSeen;
 
   /// What a new page starts with: the saved settings, at 1× and unmirrored (Swift kept those per page). Before the
   /// part is chosen none of these restarts anything.
@@ -494,7 +509,9 @@ class PagePlayerSession extends ChangeNotifier with WidgetsBindingObserver imple
     // Kept while covered too: the page can be shown again mid-open.
     if (videoShape != null) _shapeVertical = isVertical;
     if (_disposed) return;
+    final offerChanged = _followHiRes();
     if (!_active) {
+      if (offerChanged) notifyListeners();
       // Only the lock screen follows it now, so it is taken off once a closed page's player lets its video go.
       _updateNowPlaying();
       return;
@@ -891,17 +908,58 @@ class PagePlayerSession extends ChangeNotifier with WidgetsBindingObserver imple
     return _attempt(() => _controller.setCodec(codec), 'codec', '切换编码失败');
   }
 
+  /// Only 大会员 see it, whatever an answer carried.
   @override
-  bool get hiResOffered => false;
+  bool get hiResOffered => !offline && _isVip() && _controller.hiResOffered;
 
   @override
   bool get hiResOn => _prefs.hiRes;
 
+  /// What this page's picks take: the pref, for an account with 大会员; never for a card's playback or a cached part.
+  bool get _hiResWanted => !offline && !_hiResHeld && _prefs.hiRes && _isVip();
+
   @override
   Future<String?> setHiRes(bool on) async {
     _prefs.hiRes = on;
+    final offered = hiResOffered;
+    _hiResPending = offered && on;
+    if (offered) notes.add(on ? 'Hi-Res无损音质开启中，请稍候' : 'Hi-Res无损音质已关闭');
     notifyListeners();
-    return null;
+    final failure = await _attempt(
+      () => _controller.setHiRes(_hiResWanted, reopen: offered),
+      'hi-res',
+      '切换音质失败',
+    );
+    // The stream may already have been the FLAC one, with nothing to reopen.
+    if (!_disposed) _followHiRes();
+    return failure;
+  }
+
+  /// Every open picks by the pref as it stands then (another page may have changed it), and 开启中 is answered once
+  /// the FLAC stream plays. Says whether the offer changed.
+  bool _followHiRes() {
+    final controller = _controller;
+    if (controller.opens != _hiResOpen) {
+      _hiResOpen = controller.opens;
+      _hiResPending = false;
+      unawaited(controller.setHiRes(_hiResWanted, reopen: false));
+    }
+    if (controller.phase == PlaybackPhase.failed) _hiResPending = false;
+    if (_hiResPending && controller.playingFlac && controller.hasPlayed && controller.phase == PlaybackPhase.playing) {
+      _hiResPending = false;
+      notes.add('Hi-Res无损音质已开启');
+    }
+    final offered = hiResOffered;
+    final changed = offered != _hiResOfferSeen;
+    _hiResOfferSeen = offered;
+    return changed;
+  }
+
+  /// The wording is ours: no reference shows a refusal.
+  void _flacRefused() {
+    if (_disposed) return;
+    _hiResPending = false;
+    notes.add('Hi-Res无损音质开启失败');
   }
 
   @override
@@ -1063,6 +1121,14 @@ class PagePlayerSession extends ChangeNotifier with WidgetsBindingObserver imple
   set active(bool value) {
     if (_disposed || value == _active) return;
     _active = value;
+    if (!value && _justMade && !_hiResHeld) {
+      _hiResHeld = true;
+      unawaited(_controller.setHiRes(false, reopen: false));
+    } else if (value && _hiResHeld) {
+      // The stream picked for the card plays on; the next pick takes the pref.
+      _hiResHeld = false;
+      unawaited(_controller.setHiRes(_hiResWanted, reopen: false));
+    }
     if (!value) {
       _pauseSleepTimer();
       _stopBackgroundChecks();
@@ -1382,6 +1448,7 @@ class PagePlayerSession extends ChangeNotifier with WidgetsBindingObserver imple
     unawaited(_endings.cancel());
     unawaited(_commands.cancel());
     unawaited(_interruptions.cancel());
+    unawaited(_flacRefusals.cancel());
     _sleepTicker?.cancel();
     _stopBackgroundChecks();
     if (_speedingUp) _quietly(() => player.setRate(_controller.rate), 'speed up');

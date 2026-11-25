@@ -20,8 +20,10 @@ RangeTransport createIoTransport({int connectionsPerHost = 8}) =>
 
 /// The engine as the app runs it: Swift's defaults plus BiliFast's own startup and seek speed-ups. 8K runs
 /// 15-25 MB per 5 s segment, so prefetch may hold up to 256 MiB of video ahead and 96 MiB of it behind the playhead,
-/// which a memory warning trims to what is near the playhead. The last five came from 1.0.0 (1)'s phone log and won
-/// the speed tests on warm 8K seeks (variant B in 1.0.0 (2) and (3)).
+/// which a memory warning trims to what is near the playhead. Audio's cap follows its bitrate too: AAC stays at the
+/// 8 MiB floor, and 96 MiB lets Hi-Res 无损's FLAC (24-bit/96 kHz runs about 4 Mbps) look as far ahead as the video,
+/// 45 s at up to 3×, where 16 MiB reached about 33 s. The last five came from 1.0.0 (1)'s phone log and won the speed
+/// tests on warm 8K seeks (variant B in 1.0.0 (2) and (3)).
 const appRipperConfig = RipperConfig(
   primeStart: true,
   prefetchOnPrime: true,
@@ -30,7 +32,7 @@ const appRipperConfig = RipperConfig(
   audioFirst: true,
   prefetchFollowsRate: true,
   prefetchVideoMaxBytes: 256 * 1024 * 1024,
-  prefetchAudioMaxBytes: 16 * 1024 * 1024,
+  prefetchAudioMaxBytes: 96 * 1024 * 1024,
   keepBehindSeconds: 30,
   keepBehindBytes: 96 * 1024 * 1024,
   exploreInHurry: false,
