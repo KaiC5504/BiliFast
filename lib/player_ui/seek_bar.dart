@@ -5,7 +5,6 @@ import 'dart:ui' show lerpDouble;
 import 'package:bili_core/api.dart' show Chapter;
 import 'package:bili_core/logic.dart' show TimeFormat;
 import 'package:flutter/foundation.dart' show listEquals;
-import 'package:flutter/services.dart' show HapticFeedback;
 import 'package:flutter/widgets.dart';
 import 'package:lottie/lottie.dart';
 
@@ -132,7 +131,7 @@ class SeekBar extends StatefulWidget {
   /// True once a drag starts moving the position, false when it lifts or gives way.
   final ValueChanged<bool>? onHold;
 
-  /// 章节: a dot at each start but the first; none draws no dots and ticks no hand.
+  /// 章节: a dot (the iPad: a tick) at each start but the first; empty, nothing is drawn or ticked.
   final List<Chapter> chapters;
   final SeekBarStyle style;
 
@@ -164,6 +163,8 @@ class SeekBarState extends State<SeekBar> with TickerProviderStateMixin {
 
   /// The latest scrubbed position, committed when the finger lifts.
   double _scrubbed = 0;
+
+  final _ticker = ChapterTicker();
 
   /// The eyes in steps from the centre, and the position they last moved for.
   int _look = 0;
@@ -355,8 +356,8 @@ class SeekBarState extends State<SeekBar> with TickerProviderStateMixin {
               final from = _from ?? widget.position();
               final was = _scrubbed;
               _scrubbed = (from + (local.dx - _fromX) / travel * duration).clamp(0.0, duration);
-              if (!pad && ChapterCrossing.crossed(widget.chapters, was, _scrubbed)) {
-                unawaited(HapticFeedback.selectionClick());
+              if (!pad && _ticker.moved(widget.chapters, was, _scrubbed, secondsPerPoint: duration / travel)) {
+                ChapterCrossing.tick();
               }
               _looked(_scrubbed);
               widget.onScrub(_scrubbed);
@@ -371,6 +372,7 @@ class SeekBarState extends State<SeekBar> with TickerProviderStateMixin {
                 _from = from;
                 _fromX = details.localPosition.dx;
                 _scrubbed = from;
+                _ticker.reset();
                 _touched(from);
                 _drag.forward();
               },
@@ -588,9 +590,10 @@ class _SeekBarPainter extends CustomPainter {
     } else if (duration > 0) {
       final dot = Paint()..color = ChapterDotTheme.color;
       final radius = barHeight * ChapterDotTheme.barShare / 2;
+      // 272 places them along the whole bar, not the thumb's travel: 108 s of 241 sits at 434.7 pt, not 435.7.
       for (final chapter in chapters.skip(1)) {
         if (chapter.from <= 0 || chapter.from >= duration) continue;
-        final x = travel * _fraction(chapter.from, duration) + thumbWidth / 2;
+        final x = width * _fraction(chapter.from, duration);
         canvas.drawCircle(Offset(x, top + barHeight / 2), radius, dot);
       }
     }

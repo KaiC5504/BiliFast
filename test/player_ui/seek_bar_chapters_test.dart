@@ -17,7 +17,8 @@ const _pad = Size(1194, 834);
 
 const _tick = 'HapticFeedbackType.selectionClick';
 
-/// A 218 pt bar over a 100 s video: the TV's centre travels 200 pt, 2 pt a second, so the dots sit at 69 and 149.
+/// A 218 pt bar over a 100 s video: the TV's centre travels 200 pt, 2 pt a second, from 9 to 209; the dots go along
+/// the whole bar (272), at 65.4 and 152.6.
 final class _Bar {
   double position = 0;
   final repaint = ValueNotifier(0);
@@ -69,6 +70,9 @@ final class _Bar {
   }
 }
 
+/// Where a dot for [seconds] goes along the 218 pt bar.
+double _along(double seconds) => 218 * (seconds / 100);
+
 /// A chapter dot of [radius] at [x] on the bar's middle.
 PaintPattern _dot(PaintPattern pattern, double x, double radius) =>
     pattern..circle(x: x, y: BiliMetrics.barTouchHeight / 2, radius: radius, color: ChapterDotTheme.color);
@@ -95,14 +99,13 @@ void main() {
   );
 
   group('the dots (272)', () {
-    testWidgets('each chapter start but the first is a light round dot as thick as the bar: 2 pt at rest', (
-      tester,
-    ) async {
+    testWidgets('each chapter start but the first is a light round dot as thick as the bar, along the whole bar: 2 pt '
+        'at rest', (tester) async {
       final bar = _Bar();
       await bar.mount(tester);
       const rest = BiliMetrics.barHeight * ChapterDotTheme.barShare / 2;
       expect(rest, 1);
-      expect(bar.painter(tester), _dot(_dot(paints, 69, rest), 149, rest));
+      expect(bar.painter(tester), _dot(_dot(paints, _along(30), rest), _along(70), rest));
       expect(bar.painter(tester), paintsExactlyCountTimes(#drawCircle, 2));
       expect(bar.painter(tester), paintsExactlyCountTimes(#drawRect, 0), reason: 'no dark ticks');
     });
@@ -124,11 +127,11 @@ void main() {
       await tester.pumpAndSettle();
       const held = BiliMetrics.tvBarDragHeight * ChapterDotTheme.barShare / 2;
       expect(held * 2, 12 / 3, reason: "272: 12 px across, the held bar's thickness");
-      expect(bar.painter(tester), _dot(_dot(paints, 69, held), 149, held));
+      expect(bar.painter(tester), _dot(_dot(paints, _along(30), held), _along(70), held));
 
       await finger.up();
       await tester.pumpAndSettle();
-      expect(bar.painter(tester), _dot(_dot(paints, 69, 1), 149, 1));
+      expect(bar.painter(tester), _dot(_dot(paints, _along(30), 1), _along(70), 1));
     });
 
     testWidgets('no dots without chapters, nor for a lone chapter starting the bar', (tester) async {
@@ -181,6 +184,35 @@ void main() {
       await tester.pumpAndSettle();
       expect(bar.commits, [28]);
       expect(haptics, hasLength(2), reason: 'the lift ticks nothing');
+    });
+
+    testWidgets("a finger jittering on a dot ticks once; leaving it back past the bar's 1 pt ticks again", (tester) async {
+      final bar = _Bar()..position = 10;
+      await bar.mount(tester);
+      final finger = await bar.hold(tester);
+      await finger.moveBy(const Offset(21, 0));
+      expect(bar.position, closeTo(30.5, 1e-9));
+      expect(haptics, [_tick]);
+      for (final step in [-1.4, 0.8, -0.8, 0.8, -0.6]) {
+        await finger.moveBy(Offset(step, 0));
+      }
+      expect(bar.position, closeTo(29.9, 1e-9), reason: 'back and forth across 30 s, within a point of it');
+      expect(haptics, [_tick]);
+      await finger.moveBy(const Offset(-0.4, 0));
+      expect(bar.position, closeTo(29.7, 1e-9));
+      expect(haptics, [_tick], reason: 'still within a point');
+      await finger.moveBy(const Offset(-0.6, 0));
+      expect(bar.position, closeTo(29.4, 1e-9));
+      expect(haptics, [_tick, _tick]);
+      await finger.moveBy(const Offset(-0.4, 0));
+      expect(haptics, hasLength(2));
+
+      await finger.moveBy(const Offset(2, 0));
+      expect(bar.position, closeTo(30.2, 1e-9));
+      expect(haptics, hasLength(3), reason: 'a dot left behind ticks again when crossed');
+      await finger.up();
+      await tester.pumpAndSettle();
+      expect(haptics, hasLength(3));
     });
 
     testWidgets('several dots in one move tick once', (tester) async {
